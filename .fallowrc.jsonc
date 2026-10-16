@@ -1,5 +1,6 @@
 {
   // Project-wide fallow config; `q9gate` runs `fallow audit` through the fallow lane.
+  "entry": ["gate.config.ts"],
   "ignorePatterns": [
     "**/dist/**",
     "**/coverage/**",

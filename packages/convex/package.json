@@ -29,7 +29,6 @@
     "deploy": "pnpm -w run convex:deploy",
     "codegen": "pnpm -w run convex:codegen",
     "typecheck": "pnpm -w run convex:codegen && pnpm -w run typecheck:convex",
-    "test": "pnpm -w run convex:codegen && pnpm -w run test:convex",
     "build": "pnpm -w run convex:codegen && tsdown"
   },
   "dependencies": {
@@ -39,7 +38,6 @@
     "@q9labsai/config-tsconfig": "catalog:",
     "@types/node": "catalog:",
     "tsdown": "catalog:",
-    "typescript": "catalog:",
-    "vitest": "catalog:"
+    "typescript": "catalog:"
   }
 }

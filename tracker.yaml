@@ -12,24 +12,26 @@ outcomes:
       - convex/schema.ts
     priority: P0
     size: S
-    size_reason: One membership helper that every chat query and mutation uses, plus removing the scaffold samples.
+    size_reason: One membership helper that every chat query and mutation uses.
     remaining:
       - Add the membership check every chat query and mutation goes through.
-      - Remove the scaffold sample table, functions, screens and seeds.
 
   - id: chat.sign_in_groups
     title: Sign in and land in your groups
     area: groups
     state: planned
-    summary: Better Auth sign-in exists from the scaffold. There is no groups list to land in.
+    summary: The web app signs in through WorkOS AuthKit and Convex verifies its tokens, but no WorkOS environment is connected yet and there is no groups list to land in.
     theory: theory.md#version-1-journeys
     code:
-      - convex/auth.ts
+      - convex/auth.config.ts
+      - apps/web/src/lib/convex.ts
     priority: P0
     size: M
-    size_reason: Sign-in providers plus the groups list on web and phone.
+    size_reason: WorkOS setup, profile creation on first sign-in, phone sign-in and the groups list on both apps.
     remaining:
-      - Sign in with email, Google and Apple on web and phone.
+      - Connect a WorkOS environment and enable email, Google and Apple sign-in.
+      - Create a person's profile on first sign-in.
+      - Sign in on the phone.
       - Show the person's groups sorted by latest activity with unread counts.
 
   - id: chat.create_groups
@@ -168,5 +170,5 @@ outcomes:
     size_reason: Production setup across Convex, Cloudflare, sign-in providers and EAS, each needing Hasan's approval.
     remaining:
       - Create the Convex production and set its settings.
-      - Deploy the web app to chat.q9labs.ai and allow it in the Google and Apple sign-in setups.
+      - Deploy the web app to chat.q9labs.ai and allow it in the production WorkOS environment.
       - Build with EAS and submit to TestFlight and Play internal testing.

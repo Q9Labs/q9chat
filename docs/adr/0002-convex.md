@@ -1,30 +1,31 @@
-# ADR 0002: Convex backend
+# ADR 0002: Convex backend and WorkOS sign-in
 
 - Status: accepted
-- Date: `2026`
+- Date: 2026-10-16
 
 ## Context
 
-The generated `q9chat` application needs a typed backend that supports
-the sample domain, authentication, local development, and Cloudflare Workers
-deployment without a second persistence layer.
+Q9 Chat needs a typed, live backend and a sign-in service that works the same on
+the web and on the phone without a second persistence layer.
 
 ## Decision
 
 Use Convex's native `v.*` validators for the schema, including discriminated
-unions, `v.id()` references, and declared indexes. Use the
-`@convex-dev/better-auth` component for Better Auth so authentication routes
-and persistence stay inside the Convex deployment. Keep deployable backend
-functions in the repository's top-level `convex/` directory. Run `convex codegen`
-from the repository root before quality checks and expose the generated API
-through the workspace-only Convex package.
+unions, `v.id()` references and declared indexes. Keep backend functions in the
+repository's top-level `convex/` directory and expose the generated API through
+the workspace-only `@q9chat/convex` package.
+
+Use WorkOS AuthKit for sign-in. `convex/auth.config.ts` trusts the two WorkOS
+token issuers for `WORKOS_CLIENT_ID` and verifies them against the WorkOS keys.
+The web app signs in with `@workos-inc/authkit-react` and hands its access token
+to Convex. A person's profile row links to their WorkOS user by the token's
+subject.
+
 Deploy Convex from the web deployment workflow with `CONVEX_DEPLOY_KEY`, then
 deploy the web Worker.
 
 ## Consequences
 
-The overlay has one typed backend contract and one deployment sequence. The
-Convex package remains the stable import boundary for application code, while
-the backend and its generated files stay at the repository root. Convex
-generated files remain local build output, while the deployment workflow needs
-an explicitly configured Convex deploy key in its repository secrets.
+Sign-in has no tables or secrets inside Convex. Each Convex deployment needs its
+own `WORKOS_CLIENT_ID`, and the WorkOS dashboard must list each web address as a
+redirect URI and allowed origin.

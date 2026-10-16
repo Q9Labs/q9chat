@@ -1,22 +1,40 @@
-import { appEnv } from "@q9chat/env";
+import { useAuth } from "@workos-inc/authkit-react";
 import { ConvexReactClient } from "convex/react";
+import { useCallback, useMemo } from "react";
 
-import { parseAppEnvironment, readRuntimeSource } from "../env.js";
+const requireBrowserValue = (key: "VITE_CONVEX_URL" | "VITE_WORKOS_CLIENT_ID"): string => {
+  const value: unknown = import.meta.env[key];
+  if (typeof value !== "string" || value === "") {
+    throw new Error(`${key} must be set for the web app`);
+  }
+  return value;
+};
 
-const parsedEnvironment = appEnv.client().parse(readRuntimeSource());
-if (parsedEnvironment._tag === "Left") {
-  throw parsedEnvironment.left;
-}
+export const workosClientId = requireBrowserValue("VITE_WORKOS_CLIENT_ID");
 
-const convexAddress = new URL(parsedEnvironment.right.VITE_CONVEX_URL);
-const appAddress = parseAppEnvironment(readRuntimeSource()).APP_URL;
-if (
-  (convexAddress.hostname === "127.0.0.1" || convexAddress.hostname === "localhost") &&
-  (appAddress.hostname === "127.0.0.1" || appAddress.hostname === "localhost")
-) {
-  // Same-site loopback hosts let Better Auth's session cookie reach the HTTP actions endpoint.
-  convexAddress.hostname = appAddress.hostname;
-}
 // Convex's WebSocket client appends /api/... directly; a trailing slash breaks the path.
-export const convexUrl = convexAddress.origin;
-export const convexClient = new ConvexReactClient(convexUrl);
+export const convexClient = new ConvexReactClient(
+  new URL(requireBrowserValue("VITE_CONVEX_URL")).origin,
+);
+
+// Hands Convex the WorkOS access token so every query and mutation runs as
+// the signed-in person.
+export function useWorkosAuthForConvex() {
+  const { isLoading, user, getAccessToken } = useAuth();
+  const isAuthenticated = user !== null;
+
+  const fetchAccessToken = useCallback(
+    async ({ forceRefreshToken }: { forceRefreshToken: boolean }): Promise<string | null> => {
+      if (!isAuthenticated) {
+        return null;
+      }
+      return await getAccessToken({ forceRefresh: forceRefreshToken });
+    },
+    [isAuthenticated, getAccessToken],
+  );
+
+  return useMemo(
+    () => ({ isLoading, isAuthenticated, fetchAccessToken }),
+    [isLoading, isAuthenticated, fetchAccessToken],
+  );
+}

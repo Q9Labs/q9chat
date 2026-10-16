@@ -9,7 +9,7 @@
       "summary": "braces vulnerable to stack-exhaustion denial of service through deeply nested patterns",
       "version": "3.0.3",
       "acceptedAt": "2026-10-16T13:35:15.024Z",
-      "message": "braces@3.0.3 (GHSA-vfj7-8cjw-p6xm) has no fixed release; it is a development-only dependency of the Lingui CLI and q9 gates through micromatch and never ships in the web or Convex bundles. Remove when braces publishes a fix."
+      "message": "braces@3.0.3 (GHSA-vfj7-8cjw-p6xm) has no fixed release; it is a development-only dependency of the q9 gates through micromatch and never ships in the web or Convex bundles. Remove when braces publishes a fix."
     }
   ]
 }

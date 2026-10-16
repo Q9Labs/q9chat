@@ -8,12 +8,7 @@ coverage/
 reports/
 playwright-report/
 test-results/
-.stryker-tmp/
 .wrangler/
-**/.terraform/
-*.tfstate
-*.tfstate.*
-*.tfvars
 *.tsbuildinfo
 gate.report.json
 .env
@@ -23,4 +18,3 @@ gate.report.json
 .DS_Store
 *.log
 .logs/
-/apps/web/src/generated/changelog.json

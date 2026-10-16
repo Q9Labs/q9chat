@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  mutation-and-full-gate:
+  full-gate:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -28,9 +28,6 @@ jobs:
 
       - name: Install
         run: pnpm install --frozen-lockfile
-
-      - name: Run core mutation tests
-        run: pnpm exec stryker run stryker.config.mjs
 
       - name: Run full gate
         run: pnpm gate:full

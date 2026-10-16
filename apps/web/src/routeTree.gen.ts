@@ -10,11 +10,6 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as Char91__previewChar93RouteRouteImport } from './routes/[__preview]/route'
-import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
-import { Route as SignInRouteImport } from './routes/sign-in'
-import { Route as SignUpRouteImport } from './routes/sign-up'
-import { Route as Char91__previewChar93IndexRouteImport } from './routes/[__preview]/index'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
 
 const IndexRoute = IndexRouteImport.update({
@@ -22,33 +17,6 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const Char91__previewChar93RouteRoute =
-  Char91__previewChar93RouteRouteImport.update({
-    id: '/__preview',
-    path: '/__preview',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
-  id: '/forgot-password',
-  path: '/forgot-password',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SignInRoute = SignInRouteImport.update({
-  id: '/sign-in',
-  path: '/sign-in',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SignUpRoute = SignUpRouteImport.update({
-  id: '/sign-up',
-  path: '/sign-up',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const Char91__previewChar93IndexRoute =
-  Char91__previewChar93IndexRouteImport.update({
-    id: '/',
-    path: '/',
-    getParentRoute: () => Char91__previewChar93RouteRoute,
-  } as any)
 const ApiHealthRoute = ApiHealthRouteImport.update({
   id: '/api/health',
   path: '/api/health',
@@ -57,66 +25,27 @@ const ApiHealthRoute = ApiHealthRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/__preview': typeof Char91__previewChar93RouteRouteWithChildren
-  '/forgot-password': typeof ForgotPasswordRoute
-  '/sign-in': typeof SignInRoute
-  '/sign-up': typeof SignUpRoute
   '/api/health': typeof ApiHealthRoute
-  '/__preview/': typeof Char91__previewChar93IndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/forgot-password': typeof ForgotPasswordRoute
-  '/sign-in': typeof SignInRoute
-  '/sign-up': typeof SignUpRoute
   '/api/health': typeof ApiHealthRoute
-  '/__preview': typeof Char91__previewChar93IndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/__preview': typeof Char91__previewChar93RouteRouteWithChildren
-  '/forgot-password': typeof ForgotPasswordRoute
-  '/sign-in': typeof SignInRoute
-  '/sign-up': typeof SignUpRoute
   '/api/health': typeof ApiHealthRoute
-  '/__preview/': typeof Char91__previewChar93IndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths:
-    | '/'
-    | '/__preview'
-    | '/forgot-password'
-    | '/sign-in'
-    | '/sign-up'
-    | '/api/health'
-    | '/__preview/'
+  fullPaths: '/' | '/api/health'
   fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/'
-    | '/forgot-password'
-    | '/sign-in'
-    | '/sign-up'
-    | '/api/health'
-    | '/__preview'
-  id:
-    | '__root__'
-    | '/'
-    | '/__preview'
-    | '/forgot-password'
-    | '/sign-in'
-    | '/sign-up'
-    | '/api/health'
-    | '/__preview/'
+  to: '/' | '/api/health'
+  id: '__root__' | '/' | '/api/health'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  Char91__previewChar93RouteRoute: typeof Char91__previewChar93RouteRouteWithChildren
-  ForgotPasswordRoute: typeof ForgotPasswordRoute
-  SignInRoute: typeof SignInRoute
-  SignUpRoute: typeof SignUpRoute
   ApiHealthRoute: typeof ApiHealthRoute
 }
 
@@ -129,41 +58,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/__preview': {
-      id: '/__preview'
-      path: '/__preview'
-      fullPath: '/__preview'
-      preLoaderRoute: typeof Char91__previewChar93RouteRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/forgot-password': {
-      id: '/forgot-password'
-      path: '/forgot-password'
-      fullPath: '/forgot-password'
-      preLoaderRoute: typeof ForgotPasswordRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/sign-in': {
-      id: '/sign-in'
-      path: '/sign-in'
-      fullPath: '/sign-in'
-      preLoaderRoute: typeof SignInRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/sign-up': {
-      id: '/sign-up'
-      path: '/sign-up'
-      fullPath: '/sign-up'
-      preLoaderRoute: typeof SignUpRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/__preview/': {
-      id: '/__preview/'
-      path: '/'
-      fullPath: '/__preview/'
-      preLoaderRoute: typeof Char91__previewChar93IndexRouteImport
-      parentRoute: typeof Char91__previewChar93RouteRoute
-    }
     '/api/health': {
       id: '/api/health'
       path: '/api/health'
@@ -174,26 +68,8 @@ declare module '@tanstack/react-router' {
   }
 }
 
-interface Char91__previewChar93RouteRouteChildren {
-  Char91__previewChar93IndexRoute: typeof Char91__previewChar93IndexRoute
-}
-
-const Char91__previewChar93RouteRouteChildren: Char91__previewChar93RouteRouteChildren =
-  {
-    Char91__previewChar93IndexRoute: Char91__previewChar93IndexRoute,
-  }
-
-const Char91__previewChar93RouteRouteWithChildren =
-  Char91__previewChar93RouteRoute._addFileChildren(
-    Char91__previewChar93RouteRouteChildren,
-  )
-
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  Char91__previewChar93RouteRoute: Char91__previewChar93RouteRouteWithChildren,
-  ForgotPasswordRoute: ForgotPasswordRoute,
-  SignInRoute: SignInRoute,
-  SignUpRoute: SignUpRoute,
   ApiHealthRoute: ApiHealthRoute,
 }
 export const routeTree = rootRouteImport

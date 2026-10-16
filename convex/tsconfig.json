@@ -2,15 +2,8 @@
   "$schema": "https://json.schemastore.org/tsconfig",
   "extends": "@q9labsai/config-tsconfig/tsconfig.node.json",
   "compilerOptions": {
-    "rootDir": "..",
-    "types": ["node", "vite/client", "vitest/globals"]
+    "types": ["node"]
   },
-  "include": [
-    "*.ts",
-    "../seeds/accounts.ts",
-    "../seeds/faker.ts",
-    "../seeds/sample.ts",
-    "../packages/core/src/**/*.ts"
-  ],
+  "include": ["*.ts"],
   "exclude": ["_generated"]
 }

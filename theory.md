@@ -83,7 +83,9 @@ Convex owns data, authorization and live updates. Queries and mutations use
 plain Convex: they are already transactional, typed by validators and live.
 Effect is used where it earns its place: actions and HTTP endpoints that call
 outside services such as push providers, email and media processing, where
-retries, timeouts, typed errors and schema decoding matter. The web app is
+retries, timeouts, typed errors and schema decoding matter. WorkOS AuthKit
+handles sign-in, so Q9 Chat stores no passwords and gets Google, Apple and email
+sign-in from one service. The web app is
 TanStack Start on Cloudflare Workers; the phone app is Expo. Both use only the
 public Convex API, so later clients and agents need no second system.
 

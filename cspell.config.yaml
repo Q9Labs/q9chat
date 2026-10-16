@@ -10,12 +10,13 @@ ignorePaths:
   - .turbo/**
   - .wrangler/**
   - .output/**
-  - apps/web/src/locales/**/*.po
   - pnpm-lock.yaml
   - cspell-baseline.txt
   - .worktrees/**
 words:
   - APP
+  - AuthKit
+  - WorkOS
   - chdir
   - Cloudflare
   - codegen
@@ -27,13 +28,9 @@ words:
   - fast-check
   - fontsource
   - Geist
-  - hugeicons
   - labsai
   - lefthook
-  - lingui
   - Millis
-  - OpenRouter
-  - OpenTofu
   - oxfmt
   - oxlint
   - pnpm
@@ -43,7 +40,6 @@ words:
   - semgrep
   - shellcheck
   - sonner
-  - Stryker
   - syncpack
   - TanStack
   - timestamptz
@@ -57,4 +53,3 @@ words:
   - workerd
   - worktree
   - Wrangler
-  - العربية

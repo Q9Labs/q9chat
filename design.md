@@ -51,5 +51,6 @@ green marks someone online. Generated portrait avatars come after launch.
 ## Layout and language
 
 Use the shared AppShell and exported primitives. Keep layouts responsive and
-use CSS logical properties so English and Arabic work in both directions.
+use CSS logical properties so a right-to-left language can be added without
+rewriting layouts.
 Respect reduced motion and preserve visible keyboard focus.

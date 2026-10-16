@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
 
-test("home page exposes the starter heading and primary action", async ({ page }) => {
+test("signed-out visitors see the sign-in button", async ({ page }) => {
   await page.goto("/");
 
-  await expect(page.getByRole("heading", { name: "q9chat" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Explore the starter" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Q9 Chat" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
 });

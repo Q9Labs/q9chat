@@ -2,14 +2,13 @@
 import "@fontsource-variable/geist/index.css";
 import "@fontsource-variable/geist-mono/index.css";
 import "@q9labsai/ui/tokens.css";
-import { ConvexBetterAuthProvider } from "@convex-dev/better-auth/react";
-import { createRootRoute } from "@tanstack/react-router";
+import { ThemeProvider } from "@q9labsai/ui";
+import { createRootRoute, Outlet } from "@tanstack/react-router";
+import { AuthKitProvider } from "@workos-inc/authkit-react";
+import { ConvexProviderWithAuth } from "convex/react";
 
-import { LocalizedShell } from "../components/localized-shell.js";
 import { RootDocument } from "../components/root-document.js";
-import { LocaleProvider } from "../i18n/locale-provider.js";
-import { authClient } from "../lib/auth-client.js";
-import { convexClient } from "../lib/convex.js";
+import { convexClient, useWorkosAuthForConvex, workosClientId } from "../lib/convex.js";
 
 import "../styles.css";
 
@@ -18,9 +17,9 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "q9chat" },
-      { name: "application-name", content: "q9chat" },
-      { name: "description", content: "A q9labs project starter." },
+      { title: "Q9 Chat" },
+      { name: "application-name", content: "Q9 Chat" },
+      { name: "description", content: "A calm, fast, reliable team chat." },
     ],
   }),
   shellComponent: RootDocument,
@@ -29,10 +28,13 @@ export const Route = createRootRoute({
 
 function RootComponent() {
   return (
-    <ConvexBetterAuthProvider client={convexClient} authClient={authClient}>
-      <LocaleProvider>
-        <LocalizedShell />
-      </LocaleProvider>
-    </ConvexBetterAuthProvider>
+    <AuthKitProvider clientId={workosClientId}>
+      {/* oxlint-disable-next-line react/rules-of-hooks -- intentional: ConvexProviderWithAuth takes the auth hook and calls it as a hook itself. */}
+      <ConvexProviderWithAuth client={convexClient} useAuth={useWorkosAuthForConvex}>
+        <ThemeProvider defaultProductTheme="q9chat">
+          <Outlet />
+        </ThemeProvider>
+      </ConvexProviderWithAuth>
+    </AuthKitProvider>
   );
 }

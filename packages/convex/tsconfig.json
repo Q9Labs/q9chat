@@ -9,14 +9,6 @@
     "rootDir": "../..",
     "types": ["node"]
   },
-  "include": [
-    "src",
-    "*.config.ts",
-    "../../seeds/accounts.ts",
-    "../../seeds/faker.ts",
-    "../../seeds/sample.ts",
-    "../core/src/**/*.ts",
-    "../../convex/_generated/**/*.ts"
-  ],
+  "include": ["src", "*.config.ts", "../../convex/_generated/**/*.ts"],
   "exclude": ["dist"]
 }

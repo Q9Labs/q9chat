@@ -44,6 +44,10 @@ jobs:
 
       - name: Build workspace
         run: pnpm build
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+          VITE_CONVEX_URL: ${{ vars.VITE_CONVEX_URL }}
+          VITE_WORKOS_CLIENT_ID: ${{ vars.VITE_WORKOS_CLIENT_ID }}
 
       - name: Deploy Convex
         run: pnpm convex:deploy

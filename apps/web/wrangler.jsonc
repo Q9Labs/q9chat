@@ -7,12 +7,4 @@
   "observability": {
     "enabled": true,
   },
-  "vars": {
-    "APP_ENV": "dev",
-    "APP_URL": "http://localhost:3000",
-    "LOG_LEVEL": "info",
-    "OPENROUTER_API_KEY": "",
-    "SENTRY_DSN": "",
-    "VITE_CONVEX_URL": "",
-  },
 }

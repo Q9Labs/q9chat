@@ -6,17 +6,20 @@ The web Worker is named `q9chat-web` and is configured in
 ## Preconditions
 
 - Confirm the target environment and branch.
-- Set `CLOUDFLARE_API_TOKEN` in the deployment environment.
-- Set the five documented environment keys through the approved runtime secret
-  and variable mechanism. Keep credential values out of Git.
+- Set `CLOUDFLARE_API_TOKEN` and `CONVEX_DEPLOY_KEY` in the deployment
+  environment.
+- Set `WORKOS_CLIENT_ID` on the Convex deployment, and `VITE_CONVEX_URL` plus
+  `VITE_WORKOS_CLIENT_ID` for the web build. Keep credential values out of Git.
+- List the web address as a redirect URI and allowed origin in WorkOS.
 
 ## Deploy
 
 ```sh
 pnpm install
-pnpm --filter @q9chat/web run build
+pnpm build
+pnpm convex:deploy
 pnpm deploy:web
 ```
 
-The CI workflow deploys only from `main`. Verify the health route after deploy
-and record the live revision in the release notes.
+The CI workflow deploys only from `main`. Check `/api/health` and sign in after
+deploying.
