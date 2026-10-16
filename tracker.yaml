@@ -5,17 +5,17 @@ outcomes:
   - id: chat.data_model
     title: Groups, members and messages exist in Convex
     area: foundation
-    state: planned
-    summary: The scaffold has a sample table only. Groups, memberships, messages, attachments, read state, invitations and notification settings are not modeled yet.
+    state: in_progress
+    summary: The schema models profiles, groups and pairs, memberships, read state, messages with quote replies and attachments, invite links, push devices and reports. No function uses it yet.
     theory: theory.md#groups
     code:
       - convex/schema.ts
     priority: P0
-    size: M
-    size_reason: One schema plus the membership rule every query and mutation relies on.
+    size: S
+    size_reason: One membership helper that every chat query and mutation uses, plus removing the scaffold samples.
     remaining:
-      - Model groups, memberships, messages with quote replies, attachments, read state, invitations and notification settings.
-      - Enforce membership on every query and mutation.
+      - Add the membership check every chat query and mutation goes through.
+      - Remove the scaffold sample table, functions, screens and seeds.
 
   - id: chat.sign_in_groups
     title: Sign in and land in your groups
