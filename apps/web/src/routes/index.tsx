@@ -1,5 +1,5 @@
-import { api } from "@q9chat/convex";
 import { useLingui } from "@lingui/react/macro";
+import { api } from "@q9chat/convex";
 import { diagnosticCodeSchema } from "@q9labsai/diagnostics";
 import { Badge, Button, Card } from "@q9labsai/ui";
 import { createFileRoute } from "@tanstack/react-router";

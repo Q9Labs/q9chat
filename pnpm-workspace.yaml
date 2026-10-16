@@ -20,8 +20,8 @@ catalog:
   react-doctor: 0.9.14
   react-dom: 19.3.0
   effect: 3.22.2
-  "@tanstack/react-router": 1.170.39
-  "@tanstack/react-start": 1.168.58
+  "@tanstack/react-router": 1.170.42
+  "@tanstack/react-start": 1.168.61
   tailwindcss: 4.3.3
   "@tailwindcss/vite": 4.3.3
   "@fontsource-variable/geist": 5.3.0
@@ -55,14 +55,15 @@ catalog:
   cspell: 10.3.3
   lefthook: 2.1.14
   typescript: 7.0.2
-  "@q9labsai/config-depcruise": ^0.3.0
-  "@q9labsai/config-oxlint": ^0.3.0
-  "@q9labsai/config-semgrep": ^0.3.0
-  "@q9labsai/config-tsconfig": ^0.3.0
-  "@q9labsai/cli": ^0.4.0
-  "@q9labsai/env": ^0.3.0
-  "@q9labsai/gates": ^0.3.0
-  "@q9labsai/ui": ^0.3.0
+  "@q9labsai/config-depcruise": https://github.com/Q9Labs/q9stack/releases/download/v0.3.0/q9labsai-config-depcruise-0.3.0.tgz
+  "@q9labsai/config-oxlint": https://github.com/Q9Labs/q9stack/releases/download/v0.3.0/q9labsai-config-oxlint-0.3.0.tgz
+  "@q9labsai/config-semgrep": https://github.com/Q9Labs/q9stack/releases/download/v0.3.0/q9labsai-config-semgrep-0.3.0.tgz
+  "@q9labsai/config-tsconfig": https://github.com/Q9Labs/q9stack/releases/download/v0.3.0/q9labsai-config-tsconfig-0.3.0.tgz
+  "@q9labsai/cli": https://github.com/Q9Labs/q9stack/releases/download/v0.4.3/q9labsai-cli-0.4.3.tgz
+  "@q9labsai/env": https://github.com/Q9Labs/q9stack/releases/download/v0.3.0/q9labsai-env-0.3.0.tgz
+  "@q9labsai/gates": https://github.com/Q9Labs/q9stack/releases/download/v0.3.1/q9labsai-gates-0.3.1.tgz
+  "@q9labsai/ui": https://github.com/Q9Labs/q9stack/releases/download/v0.3.0/q9labsai-ui-0.3.0.tgz
+  "@q9labsai/diagnostics": https://github.com/Q9Labs/q9stack/releases/download/v0.4.0/q9labsai-diagnostics-0.4.0.tgz
 
 peerDependencyRules:
   allowedVersions:
@@ -75,9 +76,26 @@ packageExtensions:
     dependencies:
       typescript: 6.0.3
 
+# q9stack packages depend on each other through GitHub release tarball URLs.
+blockExoticSubdeps: false
+
 overrides:
   # Fix qs advisories GHSA-q8mj-m7cp-5q26, GHSA-4mjr-xmp4-gh2g, and
   # GHSA-x5fp-wj9c-mxmx in the transitive Stryker typed-rest-client dependency.
   qs: 6.16.0
   # Keep the Effect type identity shared with the currently published q9 packages.
   effect: "catalog:"
+  # q9stack packages are GitHub release tarballs (see catalog), also for their own dependencies.
+  "@q9labsai/cli": "catalog:"
+  "@q9labsai/diagnostics": "catalog:"
+  "@q9labsai/gates": "catalog:"
+  "@q9labsai/config-depcruise": "catalog:"
+  "@q9labsai/config-oxlint": "catalog:"
+  "@q9labsai/config-semgrep": "catalog:"
+  "@q9labsai/config-tsconfig": "catalog:"
+  "@q9labsai/env": "catalog:"
+  "@q9labsai/ui": "catalog:"
+  # Security fixes: undici and sharp advisories in wrangler/miniflare; one TanStack Start for GHSA-qx66-fv34-fjm8.
+  undici: 7.30.0
+  sharp: 0.35.5
+  "@tanstack/react-start": "catalog:"

@@ -1,12 +1,12 @@
 {
   "name": "@q9chat/core",
   "version": "0.1.0",
-  "homepage": "https://github.com/Q9Labs/q9stack/tree/main/templates/base/packages/core#readme",
-  "bugs": "https://github.com/Q9Labs/q9stack/issues",
+  "homepage": "https://github.com/Q9Labs/q9chat/tree/main/packages/core#readme",
+  "bugs": "https://github.com/Q9Labs/q9chat/issues",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Q9Labs/q9stack",
-    "directory": "templates/base/packages/core"
+    "url": "https://github.com/Q9Labs/q9chat",
+    "directory": "packages/core"
   },
   "files": [
     "dist",

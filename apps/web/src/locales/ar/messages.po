@@ -68,11 +68,6 @@ msgid "shell.account"
 msgstr "الحساب الحالي"
 
 #. js-lingui-explicit-id
-#: src/routes/index.tsx
-msgid "home.title"
-msgstr "q9chat"
-
-#. js-lingui-explicit-id
 #: src/components/changelog-menu-item.tsx
 msgid "changelog.type.fixed"
 msgstr "تم الإصلاح"
@@ -116,6 +111,11 @@ msgstr "يرجى المحاولة مرة أخرى. رمز التشخيص غير 
 #: src/routes/index.tsx
 msgid "home.samples.published"
 msgstr "منشور"
+
+#. js-lingui-explicit-id
+#: src/routes/index.tsx
+msgid "home.title"
+msgstr "q9chat"
 
 #. js-lingui-explicit-id
 #: src/components/localized-shell.tsx

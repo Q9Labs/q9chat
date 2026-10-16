@@ -61,11 +61,7 @@
     },
     "@q9chat/web#dev:server": {
       "dependsOn": ["^dev:prepare"],
-      "with": [
-        "@q9chat/auth#dev:watch",
-        "@q9chat/convex#dev:watch",
-        "@q9chat/env#dev:watch"
-      ],
+      "with": ["@q9chat/auth#dev:watch", "@q9chat/convex#dev:watch", "@q9chat/env#dev:watch"],
       "cache": false,
       "persistent": true
     },

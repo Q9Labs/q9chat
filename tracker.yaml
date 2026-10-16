@@ -1,17 +1,172 @@
 schema_version: 7
-principle: Track observable outcomes for q9chat, not completed setup.
+principle: Track observable outcomes for Q9 Chat, not completed setup.
 sizing: Estimate remaining work; use S for one focused change, M for connected work, and L for substantial work.
 outcomes:
-  - id: product.first_slice
-    title: q9chat delivers its first useful product outcome
+  - id: chat.data_model
+    title: Groups, members and messages exist in Convex
     area: foundation
     state: planned
-    summary: Replace this seed with an outcome a user can observe end to end.
-    theory: theory.md#scope-boundaries
+    summary: The scaffold has a sample table only. Groups, memberships, messages, attachments, read state, invitations and notification settings are not modeled yet.
+    theory: theory.md#groups
     code:
-      - apps/web/src/routes/index.tsx
+      - convex/schema.ts
+    priority: P0
+    size: M
+    size_reason: One schema plus the membership rule every query and mutation relies on.
+    remaining:
+      - Model groups, memberships, messages with quote replies, attachments, read state, invitations and notification settings.
+      - Enforce membership on every query and mutation.
+
+  - id: chat.sign_in_groups
+    title: Sign in and land in your groups
+    area: groups
+    state: planned
+    summary: Better Auth sign-in exists from the scaffold. There is no groups list to land in.
+    theory: theory.md#version-1-journeys
+    code:
+      - convex/auth.ts
+    priority: P0
+    size: M
+    size_reason: Sign-in providers plus the groups list on web and phone.
+    remaining:
+      - Sign in with email, Google and Apple on web and phone.
+      - Show the person's groups sorted by latest activity with unread counts.
+
+  - id: chat.create_groups
+    title: Create a group or start a group of two
+    area: groups
+    state: planned
+    summary: Not built.
+    theory: theory.md#groups
+    code: []
+    priority: P0
+    size: M
+    size_reason: Group creation, invitations by email and the group-of-two shortcut on both apps.
+    remaining:
+      - Create a group and add people by email invitation.
+      - Start a group of two from someone's name; reopen the existing one for the same pair.
+
+  - id: chat.send_messages
+    title: Send text, images, files and voice notes
+    area: messages
+    state: planned
+    summary: Not built.
+    theory: theory.md#messages
+    code: []
+    priority: P0
+    size: L
+    size_reason: Live timeline, retry-safe sending, uploads, previews and voice recording on two clients; split by attachment type when started.
+    remaining:
+      - Live timeline that opens on the newest messages and pages older history.
+      - Send text that appears immediately and never duplicates on retry; keep drafts per group.
+      - Upload images, files and voice notes with previews.
+
+  - id: chat.quote_replies
+    title: Reply by quoting and jump to the original
+    area: messages
+    state: planned
+    summary: Not built.
+    theory: theory.md#messages
+    code: []
+    priority: P0
+    size: M
+    size_reason: Quote rendering plus jumping to an original outside the loaded page and back to the latest.
+    remaining:
+      - Quote a message inline when replying.
+      - Jump to the original even far back, and return to the latest messages on send, receive or request.
+
+  - id: chat.unread_and_read_state
+    title: See what is new since you last looked
+    area: messages
+    state: planned
+    summary: Not built.
+    theory: theory.md#calm
+    code: []
+    priority: P0
+    size: M
+    size_reason: Read cursors that move only for viewed messages, shared across devices.
+    remaining:
+      - Record what a person actually viewed and show unread counts and the first unread message.
+
+  - id: chat.search
+    title: Find an old message with search
+    area: messages
+    state: planned
+    summary: Not built.
+    theory: theory.md#version-1-journeys
+    code: []
     priority: P1
     size: S
-    size_reason: The seed describes one focused product outcome.
+    size_reason: Convex full-text search limited to the person's groups.
     remaining:
-      - Define and implement the first product outcome.
+      - Search message text across the person's groups and open the result in place.
+
+  - id: chat.calm_notifications
+    title: Get notified only when something needs you
+    area: notifications
+    state: planned
+    summary: Not built.
+    theory: theory.md#calm
+    code: []
+    priority: P0
+    size: L
+    size_reason: Web push, APNs and FCM delivery plus per-group settings and deep links.
+    remaining:
+      - Notify on mentions and replies by default; let a person choose every message per group.
+      - Deliver through web push, APNs and FCM, and open the notification at the message.
+      - Mute a group.
+
+  - id: chat.leave_group
+    title: Leave a group
+    area: groups
+    state: planned
+    summary: Not built.
+    theory: theory.md#groups
+    code: []
+    priority: P1
+    size: S
+    size_reason: One mutation and one control on each app.
+    remaining:
+      - Let a member leave a group, ending their access.
+
+  - id: chat.store_requirements
+    title: Delete your account and report a message
+    area: foundation
+    state: planned
+    summary: Not built. Both are App Store requirements.
+    theory: theory.md#version-1-journeys
+    code: []
+    priority: P1
+    size: M
+    size_reason: Account deletion across data and storage, plus a simple report flow.
+    remaining:
+      - Delete an account and its personal data from both apps.
+      - Report a message for review.
+
+  - id: mobile.app
+    title: The phone app offers every journey
+    area: mobile
+    state: planned
+    summary: The scaffold has no mobile app.
+    theory: theory.md#fast-and-reliable
+    code: []
+    priority: P0
+    size: L
+    size_reason: A new Expo app sharing the Convex API and domain package.
+    remaining:
+      - Add an Expo app that signs in and offers the version 1 journeys.
+
+  - id: release.first_live
+    title: Q9's team uses Q9 Chat on chat.q9labs.ai and TestFlight
+    area: release
+    state: planned
+    summary: Nothing is deployed. A fresh Convex production, the web Worker on chat.q9labs.ai and EAS builds are needed.
+    theory: theory.md#stack
+    code: []
+    priority: P0
+    size: M
+    size_reason: Production setup across Convex, Cloudflare, sign-in providers and EAS, each needing Hasan's approval.
+    remaining:
+      - Create the Convex production and set its settings.
+      - Deploy the web app to chat.q9labs.ai and allow it in the Google and Apple sign-in setups.
+      - Build with EAS and submit to TestFlight and Play internal testing.

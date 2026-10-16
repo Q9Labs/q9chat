@@ -1,8 +1,20 @@
-# `q9chat`
+# Q9 Chat
 
-This is the `q9chat` application scaffold. It uses TanStack Start on
-Cloudflare Workers, a typed environment contract, a pure domain package, and the
-`q9chat` UI theme.
+A calm, fast, reliable team chat for the web and the phone.
+
+Team chat apps grow into noisy work hubs. Q9 Chat does one job: groups where a
+team talks, replies that quote, notifications only when something needs you,
+and nothing a team has to manage. It is built by [Q9 Labs](https://q9labs.ai) on
+Convex, TanStack Start on Cloudflare Workers, and Expo. Read
+[theory.md](theory.md) for what it is and why.
+
+```sh
+pnpm install
+CONVEX_AGENT_MODE=anonymous pnpm exec convex dev --once
+pnpm dev
+```
+
+The full first-time setup is below.
 
 ## Local development
 

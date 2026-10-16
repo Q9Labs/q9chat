@@ -68,11 +68,6 @@ msgid "shell.account"
 msgstr "Current account"
 
 #. js-lingui-explicit-id
-#: src/routes/index.tsx
-msgid "home.title"
-msgstr "q9chat"
-
-#. js-lingui-explicit-id
 #: src/components/changelog-menu-item.tsx
 msgid "changelog.type.fixed"
 msgstr "Fixed"
@@ -116,6 +111,11 @@ msgstr "Please try again. A diagnostic code is not available right now."
 #: src/routes/index.tsx
 msgid "home.samples.published"
 msgstr "Published"
+
+#. js-lingui-explicit-id
+#: src/routes/index.tsx
+msgid "home.title"
+msgstr "q9chat"
 
 #. js-lingui-explicit-id
 #: src/components/localized-shell.tsx

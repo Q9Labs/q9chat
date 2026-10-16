@@ -3,5 +3,6 @@
     "adapter": "convex",
     "convexDir": ".",
     "lookup": "diagnostics/lookup:trace"
-  }
+  },
+  "trackerAreas": ["groups", "messages", "notifications", "mobile", "release"]
 }

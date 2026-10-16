@@ -2,12 +2,13 @@
   "name": "q9chat",
   "version": "0.1.0",
   "private": true,
-  "homepage": "https://github.com/Q9Labs/q9stack/tree/main/templates/base#readme",
-  "bugs": "https://github.com/Q9Labs/q9stack/issues",
+  "description": "Q9 Chat: a calm, fast, reliable team chat.",
+  "homepage": "https://github.com/Q9Labs/q9chat#readme",
+  "bugs": "https://github.com/Q9Labs/q9chat/issues",
+  "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Q9Labs/q9stack",
-    "directory": "templates/base"
+    "url": "https://github.com/Q9Labs/q9chat"
   },
   "type": "module",
   "scripts": {
@@ -45,7 +46,7 @@
   "dependencies": {
     "@convex-dev/better-auth": "catalog:",
     "@faker-js/faker": "catalog:",
-    "@q9labsai/diagnostics": "^0.4.0",
+    "@q9labsai/diagnostics": "catalog:",
     "better-auth": "catalog:",
     "convex": "catalog:"
   },

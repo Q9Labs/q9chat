@@ -1,6 +1,6 @@
-import type { AuthAccount, DevAccount } from "@q9chat/auth";
 import { DashboardSquare01Icon, Shield01Icon, ViewIcon } from "@hugeicons/core-free-icons";
 import { useLingui } from "@lingui/react/macro";
+import type { AuthAccount, DevAccount } from "@q9chat/auth";
 import {
   AppShell,
   Sidebar,

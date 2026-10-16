@@ -2,12 +2,12 @@
   "name": "@q9chat/web",
   "version": "0.1.0",
   "description": "The q9chat TanStack Start web application",
-  "homepage": "https://github.com/Q9Labs/q9stack/tree/main/templates/base/apps/web#readme",
-  "bugs": "https://github.com/Q9Labs/q9stack/issues",
+  "homepage": "https://github.com/Q9Labs/q9chat/tree/main/apps/web#readme",
+  "bugs": "https://github.com/Q9Labs/q9chat/issues",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Q9Labs/q9stack",
-    "directory": "templates/base/apps/web"
+    "url": "https://github.com/Q9Labs/q9chat",
+    "directory": "apps/web"
   },
   "files": [
     ".output",
@@ -49,7 +49,7 @@
     "@q9chat/auth": "workspace:*",
     "@q9chat/convex": "workspace:*",
     "@q9chat/env": "workspace:*",
-    "@q9labsai/diagnostics": "^0.4.0",
+    "@q9labsai/diagnostics": "catalog:",
     "@q9labsai/ui": "catalog:",
     "@tanstack/react-router": "catalog:",
     "@tanstack/react-start": "catalog:",
