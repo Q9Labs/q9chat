@@ -16,10 +16,16 @@ const QueryChanges = Schema.Struct({
         type: Schema.Literal("Add"),
         queryId: Schema.Number,
         udfPath: Schema.String,
+        args: Schema.Array(Schema.Unknown),
       }),
       Schema.Struct({ type: Schema.Literal("Remove"), queryId: Schema.Number }),
     ),
   ),
+});
+const RangeRequest = Schema.Struct({
+  groupId: Schema.String,
+  fromSequence: Schema.Number,
+  toSequence: Schema.Number,
 });
 const ServerPing = Schema.Struct({ type: Schema.Literal("Ping") });
 const origin = "http://localhost:3000";
@@ -37,7 +43,7 @@ test(
     // Count the actual Convex wire subscriptions, not rendered messages or query declarations.
     let maximumSubscriptions = 0;
     let currentSubscriptions = 0;
-    let rangeAdds = 0;
+    const rangeRequests: (typeof RangeRequest.Type)[] = [];
     let connectionCount = 0;
     let holdResponses = false;
     const heldResponses: (string | Buffer)[] = [];
@@ -55,7 +61,7 @@ test(
             if (change.type === "Remove") ranges.delete(change.queryId);
             else if (change.udfPath === "messages:range") {
               ranges.add(change.queryId);
-              rangeAdds++;
+              rangeRequests.push(Schema.decodeUnknownSync(RangeRequest)(change.args[0]));
             }
           }
           currentSubscriptions = ranges.size;
@@ -713,14 +719,24 @@ test(
         if (detail?.status !== "member") throw new Error("Missing own-only group");
         expect(detail.firstUnreadSequence).toBe(null);
         expect(detail.lastReadSequence < detail.lastSequence).toBe(true);
-        const before = rangeAdds;
+        const before = rangeRequests.length;
         await app.open(`/?group=${own}`);
         await page.locator('[role=log][aria-busy="false"]').waitFor();
         await expect(browser.locator("[role=log]")).toContainText("Own-only 304");
         await expect(browser.locator(".newline")).toHaveCount(0);
-        expect(rangeAdds - before).toBe(2);
+        const requests = rangeRequests.slice(before).filter((request) => request.groupId === own);
+        process.stdout.write(`J3 own-only wire ranges: ${JSON.stringify(requests)}\n`);
+        // Development remounts can register the same range again; no other page may be read.
+        const pages = [...new Set(requests.map(({ fromSequence }) => fromSequence))].sort(
+          (left, right) => left - right,
+        );
+        expect(pages).toEqual([201, 301]);
+        expect(
+          requests.every(({ fromSequence, toSequence }) => toSequence === fromSequence + 99),
+        ).toBe(true);
+        expect(currentSubscriptions).toBe(2);
         process.stdout.write(
-          "J3 own-only history: 305 posts, no unread divider, 2 range adds, no page walk\n",
+          "J3 own-only history: 305 posts, no unread divider, exactly 2 distinct range pages, 2 live subscriptions, no page walk\n",
         );
       }
       await verifyOwnOnlyHistory();
