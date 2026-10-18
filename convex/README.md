@@ -48,3 +48,7 @@ Push previews stop at 200 Unicode code points. Each retry rechecks membership,
 notification preferences, device ownership and viewing before rebuilding its
 payload. Immediate dead-device responses remove only the unchanged subscription;
 v1 does not poll Expo receipts.
+
+The codegen drift gate uses `convex codegen --system-udfs --typecheck disable`
+to regenerate this component-free backend offline. Convex typechecking runs as a
+separate gate; generation needs no deployment credentials or deployment changes.
