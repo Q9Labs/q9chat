@@ -69,11 +69,12 @@ export function Composer(props: ComposerProps) {
     if (el === null) return;
     el.style.height = "36px";
     el.style.height = `${Math.min(140, el.scrollHeight)}px`;
-  }, [value]);
+  });
 
+  const inMode = mode !== null;
   useEffect(() => {
-    if (mode !== null) field.current?.focus({ preventScroll: true });
-  }, [mode]);
+    if (inMode) field.current?.focus({ preventScroll: true });
+  }, [inMode]);
 
   if (recording !== null) {
     return (

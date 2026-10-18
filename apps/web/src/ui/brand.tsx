@@ -1,10 +1,11 @@
 import { NINE_PATH, Q_PATH } from "./logo-paths.js";
 
 /** The Q9 Labs tile: white Q, Ocean 9, full-bleed near-black tile cut by its corners. */
-export function LogoMark({ label }: { readonly label?: string }) {
+export function LogoMark({ label, size }: { readonly label?: string; readonly size?: number }) {
   return (
     <svg
       className="mk wmk"
+      style={size === undefined ? undefined : { width: size, height: size }}
       viewBox="-1 0 355 355"
       role={label === undefined ? undefined : "img"}
       aria-label={label}

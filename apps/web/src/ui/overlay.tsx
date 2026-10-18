@@ -57,7 +57,7 @@ function trapTab(event: KeyboardEvent<HTMLElement>) {
   }
 }
 
-function InRoot({ children }: { readonly children: ReactNode }) {
+export function InRoot({ children }: { readonly children: ReactNode }) {
   const { root } = useRoot();
   return root === null ? null : createPortal(children, root);
 }

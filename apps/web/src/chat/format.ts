@@ -126,23 +126,26 @@ export function shortTitle(title: string): string {
   return title.length > 28 ? `${title.slice(0, 27)}…` : title;
 }
 
-/** Splits text around matches of `query`, case-insensitively, for highlighting. */
+const REGEX_SPECIALS = /[.*+?^${}()|[\]\\]/g;
+
+/** Splits text around each word of `query`, case-insensitively, for highlighting. */
 export function splitMatches(
   text: string,
   query: string,
 ): readonly { readonly text: string; readonly match: boolean }[] {
-  const needle = query.trim().toLowerCase();
-  if (needle === "") return [{ text, match: false }];
-  const out: { text: string; match: boolean }[] = [];
-  const lower = text.toLowerCase();
-  let at = 0;
-  for (let hit = lower.indexOf(needle); hit !== -1; hit = lower.indexOf(needle, at)) {
-    if (hit > at) out.push({ text: text.slice(at, hit), match: false });
-    out.push({ text: text.slice(hit, hit + needle.length), match: true });
-    at = hit + needle.length;
-  }
-  if (at < text.length) out.push({ text: text.slice(at), match: false });
-  return out;
+  const words = query.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return [{ text, match: false }];
+  const pattern = new RegExp(
+    `(${words.map((word) => word.replace(REGEX_SPECIALS, "\\$&")).join("|")})`,
+    "gi",
+  );
+  return text
+    .split(pattern)
+    .filter((part) => part !== "")
+    .map((part) => ({
+      text: part,
+      match: words.some((word) => word.toLowerCase() === part.toLowerCase()),
+    }));
 }
 
 /** "today at 10:44", "yesterday at 10:44" or "on 30 September at 10:44". */

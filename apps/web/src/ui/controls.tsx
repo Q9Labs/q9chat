@@ -90,7 +90,7 @@ interface TextInputProps {
   readonly icon?: IconName;
   readonly inputMode?: "email" | "numeric" | "text";
   /** Focus the field when its dialog opens. */
-  readonly autoFocus?: boolean;
+  readonly focusOnOpen?: boolean;
   readonly onEnter?: () => void;
 }
 
@@ -103,7 +103,7 @@ export function TextInput({
   placeholder,
   icon,
   inputMode,
-  autoFocus,
+  focusOnOpen,
   onEnter,
 }: TextInputProps) {
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -123,7 +123,7 @@ export function TextInput({
         inputMode={inputMode}
         autoComplete="off"
         spellCheck={false}
-        data-autofocus={autoFocus === true ? "" : undefined}
+        data-autofocus={focusOnOpen === true ? "" : undefined}
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={onKeyDown}
       />
@@ -168,7 +168,7 @@ export interface RadioOption<Value extends string> {
   readonly label: string;
   readonly description?: string;
   /** Muted text after the label, such as "· Default". */
-  readonly suffix?: string;
+  readonly suffix?: string | undefined;
 }
 
 interface RadioListProps<Value extends string> {

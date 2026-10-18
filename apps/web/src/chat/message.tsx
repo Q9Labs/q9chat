@@ -24,7 +24,7 @@ function Body({ text, mentions }: { readonly text: string; readonly mentions: re
   let at = 0;
   for (const hit of text.matchAll(TOKEN)) {
     const start = hit.index;
-    if (start > at) out.push(text.slice(at, start));
+    if (start > at) out.push(<Fragment key={`t${at}`}>{text.slice(at, start)}</Fragment>);
     const url = hit[1];
     const name = hit[2];
     if (url !== undefined) {
@@ -40,14 +40,12 @@ function Body({ text, mentions }: { readonly text: string; readonly mentions: re
         </span>,
       );
     } else {
-      out.push(hit[0]);
+      out.push(<Fragment key={start}>{hit[0]}</Fragment>);
     }
     at = start + hit[0].length;
   }
-  if (at < text.length) out.push(text.slice(at));
-  return out.map((part, index) =>
-    typeof part === "string" ? <Fragment key={`t${index}`}>{part}</Fragment> : part,
-  );
+  if (at < text.length) out.push(<Fragment key={`t${at}`}>{text.slice(at)}</Fragment>);
+  return out;
 }
 
 /** A thin accent bar with the original sender and a one-line summary. No box. */
@@ -206,12 +204,13 @@ export function Message({
           ) : null}
         </div>
       ) : null}
-      {message.attachments.map((attachment, index) => {
-        if (attachment.kind === "image") return <ImageTile key={index} image={attachment} />;
-        if (attachment.kind === "file") return <FileCard key={index} file={attachment} />;
+      {message.attachments.map((attachment) => {
+        if (attachment.kind === "image")
+          return <ImageTile key={attachment.url} image={attachment} />;
+        if (attachment.kind === "file") return <FileCard key={attachment.url} file={attachment} />;
         return (
           <VoiceRow
-            key={index}
+            key={attachment.url}
             voice={attachment}
             progress={playProgress}
             onTogglePlay={() => handlers.onTogglePlay(message)}
@@ -292,7 +291,7 @@ export function Message({
         >
           {compact ? (
             <>
-              <div className="memo" role="group" aria-label="React">
+              <fieldset className="memo" aria-label="React">
                 {EMOJIS.map((emoji) => (
                   <button
                     key={emoji}
@@ -304,7 +303,7 @@ export function Message({
                     {emoji}
                   </button>
                 ))}
-              </div>
+              </fieldset>
               <MenuSeparator />
             </>
           ) : null}

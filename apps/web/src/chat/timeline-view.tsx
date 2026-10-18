@@ -21,44 +21,32 @@ function Names({ people }: { readonly people: readonly Author[] }) {
 }
 
 function eventNodes(event: MemberEvent): ReactNode {
-  switch (event.type) {
-    case "created":
-      return (
-        <>
-          <b>{authorLabel(event.by)}</b> created this group
-        </>
-      );
-    case "added":
-      return (
-        <>
-          <b>{authorLabel(event.by)}</b> added <Names people={event.people} />
-        </>
-      );
-    case "removed":
-      return (
-        <>
-          <b>{authorLabel(event.by)}</b> removed <Names people={event.people} />
-        </>
-      );
-    case "joined":
-      return (
-        <>
-          <Names people={event.people} /> joined
-        </>
-      );
-    case "left":
-      return (
-        <>
-          <Names people={event.people} /> left
-        </>
-      );
-    case "start":
-      return (
-        <>
-          This is the start of your group with <Names people={event.people} />
-        </>
-      );
+  if (event.type === "created") {
+    return (
+      <>
+        <b>{authorLabel(event.by)}</b> created this group
+      </>
+    );
   }
+  if (event.type === "added" || event.type === "removed") {
+    return (
+      <>
+        <b>{authorLabel(event.by)}</b> {event.type} <Names people={event.people} />
+      </>
+    );
+  }
+  if (event.type === "joined" || event.type === "left") {
+    return (
+      <>
+        <Names people={event.people} /> {event.type}
+      </>
+    );
+  }
+  return (
+    <>
+      This is the start of your group with <Names people={event.people} />
+    </>
+  );
 }
 
 /** A quiet centered line for group events: "Shoaib removed Omar". */
@@ -134,10 +122,10 @@ export function Timeline({
   }, []);
 
   useEffect(() => {
-    const el = log.current;
-    if (el === null) return;
-    const measure = new ResizeObserver(() => setCompact(el.clientWidth < COMPACT_BELOW));
-    measure.observe(el);
+    const measure = new ResizeObserver(([entry]) => {
+      if (entry !== undefined) setCompact(entry.contentRect.width < COMPACT_BELOW);
+    });
+    if (log.current !== null) measure.observe(log.current);
     return () => measure.disconnect();
   }, []);
 
