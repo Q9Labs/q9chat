@@ -6,15 +6,17 @@ import { useEffect, useRef, useState } from "react";
 import { useSession } from "../lib/session.js";
 import { SetUpProfile } from "../screens/auth.js";
 import { Toast } from "../ui/overlay.js";
-import { uploadPhoto } from "./photos.js";
+import { isPhotoRejection, photoSelectionError, uploadPhoto } from "./photos.js";
 
 type SessionUser = NonNullable<ReturnType<typeof useSession>["user"]>;
 
 export function ProfileSetup({
   user,
+  onStarted,
   onFinished,
 }: {
   readonly user: SessionUser;
+  readonly onStarted: () => void;
   readonly onFinished: () => void;
 }) {
   const { fetchAccessToken } = useSession();
@@ -40,6 +42,7 @@ export function ProfileSetup({
       return;
     }
     working.current = true;
+    onStarted();
     setBusy(true);
     setNotice("");
     try {
@@ -57,8 +60,11 @@ export function ProfileSetup({
           : {}),
       });
       onFinished();
-    } catch {
-      setNotice("Couldn't save your profile. Try again.");
+    } catch (error) {
+      if (isPhotoRejection(error)) {
+        setPhoto(null);
+        setNotice("Couldn't use that photo. Choose another one.");
+      } else setNotice("Couldn't save your profile. Try again.");
     } finally {
       working.current = false;
       setBusy(false);
@@ -75,8 +81,11 @@ export function ProfileSetup({
         aria-label="Profile photo"
         onChange={(event) => {
           const file = event.target.files?.[0];
-          setPhoto(file ? { file, url: URL.createObjectURL(file) } : null);
           event.target.value = "";
+          if (working.current) return;
+          const error = file ? photoSelectionError(file) : null;
+          setNotice(error ?? "");
+          setPhoto(file && !error ? { file, url: URL.createObjectURL(file) } : null);
         }}
       />
       <SetUpProfile

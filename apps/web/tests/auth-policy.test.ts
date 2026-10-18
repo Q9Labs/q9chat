@@ -29,7 +29,9 @@ void test("final callback redirects cannot leave the origin through normalizatio
         const response = await call("callback", undefined, tx.query, tx.cookie);
         const destination = new URL(response.headers.get("location") ?? "", origin);
         assert.equal(destination.origin, origin, value);
-        if (value === "/safe?x=1#ok") assert.equal(destination.href, `${origin}${value}`);
+        if (value === "/safe?x=1#ok")
+          assert.equal(destination.href, `${origin}/safe?x=1&signedIn=1#ok`);
+        assert.equal(destination.searchParams.get("signedIn"), "1");
         assert.ok(response.headers.get("location")?.startsWith(origin));
         assert.match(response.headers.get("set-cookie") ?? "", /q9_oauth=;.*Max-Age=0/);
       }

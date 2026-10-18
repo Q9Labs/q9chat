@@ -2,7 +2,7 @@ import { api } from "@q9chat/convex";
 import { firstName, initials } from "@q9chat/domain";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { useEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 
 import type { GroupListRow, Me } from "../chat/types.js";
 import { useSession } from "../lib/session.js";
@@ -11,29 +11,61 @@ import { ChatShell, PickAGroup } from "../screens/shell.js";
 import { NoGroupsYet, Sidebar } from "../screens/sidebar.js";
 import { Toast } from "../ui/overlay.js";
 import { AppRoot } from "../ui/root.js";
-import { uploadPhoto, usePhotos } from "./photos.js";
+import { OAuthArrival } from "./oauth-arrival.js";
+import { isPhotoRejection, photoSelectionError, uploadPhoto, usePhotos } from "./photos.js";
 import { ProfileSetup } from "./setup.js";
 import { SignInJourney } from "./sign-in.js";
 
-export function Journey({ authError }: { readonly authError: boolean }) {
+const SignOutAction = createContext<(() => void) | null>(null);
+function useSignOutAction() {
+  const action = useContext(SignOutAction);
+  if (!action) throw new Error("Sign out requires Journey");
+  return action;
+}
+
+export function Journey({
+  authError,
+  oauthArrival,
+}: {
+  readonly authError: boolean;
+  readonly oauthArrival: boolean;
+}) {
   const session = useSession();
   const [now, setNow] = useState(Date.now);
-  const [hasSignedIn, setHasSignedIn] = useState(false);
-  if (session.status === "authenticated" && !hasSignedIn) setHasSignedIn(true);
+  const [signOutStatus, setSignOutStatus] = useState<"idle" | "pending" | "complete" | "failed">(
+    "idle",
+  );
+  const { signOut } = session;
+  const leave = useCallback(() => {
+    if (signOutStatus === "pending") return;
+    setSignOutStatus("pending");
+    void signOut().then(
+      () => setSignOutStatus("complete"),
+      () => setSignOutStatus("failed"),
+    );
+  }, [signOut, signOutStatus]);
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 30_000);
     return () => window.clearInterval(timer);
   }, []);
   return (
-    <AppRoot clock={{ now }}>
-      {session.status === "loading" ? (
-        <Loading />
-      ) : session.user === null ? (
-        <SignInJourney authError={authError} signedOut={hasSignedIn} />
-      ) : (
-        <ProfileGate key={session.user.id} />
-      )}
-    </AppRoot>
+    <SignOutAction.Provider value={leave}>
+      <AppRoot clock={{ now }}>
+        {session.status === "loading" ? (
+          <Loading />
+        ) : session.user === null ? (
+          <SignInJourney
+            authError={authError}
+            signOutStatus={signOutStatus}
+            onRetrySignOut={leave}
+            onSignInAttempt={() => setSignOutStatus("idle")}
+          />
+        ) : (
+          <ProfileGate key={session.user.id} />
+        )}
+        {session.user ? <OAuthArrival method={session.method} arrival={oauthArrival} /> : null}
+      </AppRoot>
+    </SignOutAction.Provider>
   );
 }
 
@@ -42,18 +74,13 @@ function Loading() {
 }
 
 function AccountUnavailable() {
-  const { signOut } = useSession();
-  const [notice, setNotice] = useState("");
+  const signOut = useSignOutAction();
   return (
     <div className="center">
       <p>We couldn't open your account. Please sign in again.</p>
-      <button
-        type="button"
-        onClick={() => void signOut().catch(() => setNotice("Couldn't sign out. Try again."))}
-      >
+      <button type="button" onClick={signOut}>
         Sign out
       </button>
-      {notice ? <Toast message={notice} /> : null}
     </div>
   );
 }
@@ -84,11 +111,15 @@ function CompleteProfile({
   readonly user: SessionUser;
   readonly me: Exclude<ProfileResult, { status: "unavailable" }>;
 }) {
-  // Keep setup mounted until its optional upload and update finish, not just setUp.
-  const [setup, setSetup] = useState(me.status === "needsSetup" ? "required" : "existing");
-  if (setup === "required")
-    return <ProfileSetup user={user} onFinished={() => setSetup("complete")} />;
-  if (me.status === "needsSetup") return <Loading />;
+  const [setup, setSetup] = useState<"idle" | "submitting" | "complete">("idle");
+  if (me.status === "needsSetup" || setup === "submitting")
+    return (
+      <ProfileSetup
+        user={user}
+        onStarted={() => setSetup("submitting")}
+        onFinished={() => setSetup("complete")}
+      />
+    );
   return <Groups profile={me.profile} welcome={setup === "complete"} />;
 }
 
@@ -187,13 +218,19 @@ function Account({
   readonly onNotice: (message: string) => void;
   readonly onPhotoChange: () => void;
 }) {
-  const { signOut, fetchAccessToken } = useSession();
+  const { fetchAccessToken } = useSession();
+  const signOut = useSignOutAction();
   const update = useMutation(api.profiles.update);
   const [name, setName] = useState(me.displayName);
   const busy = useRef(false);
   const picker = useRef<HTMLInputElement>(null);
   async function changePhoto(file: File | null) {
     if (busy.current) return;
+    const selectionError = file ? photoSelectionError(file) : null;
+    if (selectionError) {
+      onNotice(selectionError);
+      return;
+    }
     busy.current = true;
     try {
       await update({
@@ -203,8 +240,12 @@ function Account({
       });
       onPhotoChange();
       onNotice("");
-    } catch {
-      onNotice("Couldn't update your photo. Try again.");
+    } catch (error) {
+      onNotice(
+        isPhotoRejection(error)
+          ? "Couldn't use that photo. Choose another one."
+          : "Couldn't update your photo. Try again.",
+      );
     } finally {
       busy.current = false;
     }
@@ -220,13 +261,6 @@ function Account({
       onNotice("Enter a name of 1 to 60 characters.");
     } finally {
       busy.current = false;
-    }
-  }
-  async function leave() {
-    try {
-      await signOut();
-    } catch {
-      onNotice("Couldn't sign out. Try again.");
     }
   }
 
@@ -251,7 +285,7 @@ function Account({
         onUploadPhoto={() => picker.current?.click()}
         onRemovePhoto={() => void changePhoto(null)}
         onDeleteAccount={() => onNotice("This is coming in the next journey.")}
-        onSignOut={() => void leave()}
+        onSignOut={signOut}
         onClose={() => void closeAccount()}
       />
     </>

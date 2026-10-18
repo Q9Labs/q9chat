@@ -8,23 +8,26 @@ const emptyDigits = () => Array.from({ length: 6 }, () => "");
 
 export function SignInJourney({
   authError,
-  signedOut,
+  signOutStatus,
+  onRetrySignOut,
+  onSignInAttempt,
 }: {
   readonly authError: boolean;
-  readonly signedOut: boolean;
+  readonly signOutStatus: "idle" | "pending" | "complete" | "failed";
+  readonly onRetrySignOut: () => void;
+  readonly onSignInAttempt: () => void;
 }) {
   const { startEmail, verifyEmail } = useSession();
   const [email, setEmail] = useState("");
   const [codeEmail, setCodeEmail] = useState<string | null>(null);
   const [digits, setDigits] = useState<readonly string[]>(emptyDigits);
   const [codeError, setCodeError] = useState("");
-  const [notice, setNotice] = useState(
-    authError ? "Sign-in wasn't completed. Try again." : signedOut ? "Signed out" : "",
-  );
+  const [notice, setNotice] = useState(authError ? "Sign-in wasn't completed. Try again." : "");
   const busy = useRef(false);
 
   async function sendCode(resend = false) {
     if (busy.current) return;
+    onSignInAttempt();
     const target = resend ? codeEmail : email.trim();
     if (!target || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(target)) {
       setNotice("Enter your email address");
@@ -68,6 +71,7 @@ export function SignInJourney({
         <SignIn
           email={email}
           onEmailChange={(value) => {
+            onSignInAttempt();
             setEmail(value);
             setNotice("");
           }}
@@ -91,7 +95,16 @@ export function SignInJourney({
           }}
         />
       )}
-      {notice ? <Toast message={notice} /> : null}
+      {signOutStatus === "failed" ? (
+        <Toast
+          message="Couldn't sign out. Try again."
+          action={{ label: "Try again", onClick: onRetrySignOut }}
+        />
+      ) : signOutStatus === "complete" ? (
+        <Toast message="Signed out" />
+      ) : notice ? (
+        <Toast message={notice} />
+      ) : null}
     </>
   );
 }

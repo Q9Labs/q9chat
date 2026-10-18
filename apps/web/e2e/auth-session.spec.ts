@@ -113,8 +113,16 @@ test("real Worker rejects a late OAuth callback after sign-out consumes the tran
   const logout = await context.request.post("/api/auth/sign-out", { data: {} });
   expect(logout.ok()).toBe(true);
   expect((await context.cookies()).some((value) => value.name === "q9_oauth")).toBe(false);
-  await page.goto(`/api/auth/callback?code=late-code&state=${state}`);
-  await expect(page).toHaveURL(/\/auth\/error\?reason=invalid_state$/);
+  const callback = await context.request.get(`/api/auth/callback?code=late-code&state=${state}`, {
+    maxRedirects: 0,
+  });
+  expect(callback.status()).toBe(302);
+  expect(callback.headers()["location"]).toBe(
+    new URL("/auth/error?reason=invalid_state", callback.url()).href,
+  );
+  await page.goto("/auth/error?reason=invalid_state");
+  await expect(page).toHaveURL(new URL("/?authError=true", callback.url()).href);
+  await expect(page.locator(".toast")).toHaveText("Sign-in wasn't completed. Try again.");
   expect((await context.cookies()).some((value) => value.name === "q9_session")).toBe(false);
 });
 

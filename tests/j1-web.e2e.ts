@@ -1,8 +1,11 @@
-import { test } from "@e2e-dev/web";
+import { surfaceOf, test, type Browser } from "@e2e-dev/web";
 import { api } from "@q9chat/convex";
 import { ConvexHttpClient } from "convex/browser";
-import { expect } from "e2e";
+import { expect, type App, type Screen } from "e2e";
+import { Schema } from "effect";
 
+import { Session } from "../apps/web/src/lib/auth/contracts.js";
+import { browserEngine } from "./support/browser.js";
 import {
   magicCode,
   removeTestUser,
@@ -10,6 +13,60 @@ import {
   deletePhoneProfile,
   type PhoneSession,
 } from "./support/workos.js";
+
+type WebJourney = { readonly app: App; readonly browser: Browser; readonly screen: Screen };
+
+async function invalidEmail({ browser, screen }: WebJourney) {
+  await screen.getByLabel("Email").fill("not-an-email");
+  await screen.getByRole("button", "Email me a code").tap();
+  await expect(browser.locator(".toast")).toHaveText("Enter your email address");
+}
+
+async function failedSignOut({ browser, screen }: WebJourney) {
+  await screen.getByRole("button", "Account", { exact: true }).tap();
+  await screen.getByRole("button", "Sign out", { exact: true }).tap();
+  await expect(browser.locator(".toast span")).toHaveText("Couldn't sign out. Try again.");
+  await expect(screen.getByRole("button", "Try again", { exact: true })).toBeVisible();
+}
+
+async function checkSessionRecovery({ app, browser, screen }: WebJourney) {
+  const surface = surfaceOf(browserEngine);
+  if (!surface) throw new Error("Missing live e2e browser surface");
+  const page = surface.page();
+  // Change only the provider label on the real session response, not OAuth authentication.
+  for (const method of ["google", "apple"] as const) {
+    await page.route("**/api/auth/token", async (route) => {
+      const response = await route.fetch();
+      const session = Schema.decodeUnknownSync(Session)(await response.json());
+      await route.fulfill({ response, json: { ...session, method } });
+    });
+    await app.open("/?signedIn=1");
+    await expect(browser.locator(".toast")).toHaveText(
+      `Signed in with ${method === "google" ? "Google" : "Apple"}`,
+    );
+    await expect(screen.getByRole("button", "Account", { exact: true })).toBeVisible();
+    await page.unrouteAll({ behavior: "wait" });
+    await browser.reload();
+    await expect(screen.getByRole("button", "Account", { exact: true })).toBeVisible();
+    await expect(browser.locator(".toast")).toHaveCount(0);
+  }
+  await browser.route("**/api/auth/sign-out", (route) =>
+    route.fulfill({ status: 503, json: { error: "unavailable" } }),
+  );
+  await failedSignOut({ app, browser, screen });
+  await browser.reload();
+  await expect(screen.getByRole("button", "Account", { exact: true })).toBeVisible();
+  await expect(browser.locator(".account-button")).toContainText("Nadia Journey");
+  await failedSignOut({ app, browser, screen });
+  await browser.unroute("**/api/auth/sign-out");
+  await screen.getByRole("button", "Try again", { exact: true }).tap();
+  await expect(screen.getByRole("button", "Email me a code")).toBeVisible();
+  await expect(screen.getByRole("button", "Continue with Google")).toBeVisible();
+  await expect(browser.locator(".toast")).toHaveText("Signed out");
+  await invalidEmail({ app, browser, screen });
+  await browser.reload();
+  await expect(screen.getByRole("button", "Email me a code")).toBeVisible();
+}
 
 const convexUrl = "https://quixotic-crab-23.convex.cloud";
 
@@ -26,23 +83,34 @@ test(
     async function shot(name: string) {
       await app.screenshot(name);
     }
+    async function avatarColor(avatarSelector: string) {
+      return browser.evaluate((selector) => {
+        const avatar = document.querySelector(selector);
+        if (!(avatar instanceof HTMLElement)) throw new Error("Missing avatar");
+        return getComputedStyle(avatar).backgroundColor;
+      }, avatarSelector);
+    }
     try {
       await browser.setViewport({ width: 1280, height: 800 });
       await browser.emulateMedia({ colorScheme: "light" });
       await app.open("/");
       await expect(screen.getByRole("button", "Continue with Google")).toBeVisible();
       await expect(screen.getByRole("button", "Continue with Apple")).toBeVisible();
-      await screen.getByLabel("Email").fill("not-an-email");
-      await screen.getByRole("button", "Email me a code").tap();
-      await expect(browser.locator(".toast")).toHaveText("Enter your email address");
+      await invalidEmail({ app, browser, screen });
       await screen.getByLabel("Email").fill(email);
       await shot("01-sign-in");
       await screen.getByRole("button", "Email me a code").tap();
       await expect(screen.getByRole("heading", "Check your email")).toBeVisible();
+      await expect(screen.getByLabel("Digit 1")).toBeFocused();
       await expect(browser.locator(".auth-hero p")).toHaveText(
         `Enter the 6-digit code we sent to ${email}.`,
       );
       await shot("02-code");
+      await magicCode(email);
+      await screen.getByLabel("Digit 3").tap();
+      await screen.getByRole("button", "send a new code").tap();
+      await expect(browser.locator(".toast")).toHaveText("We sent a new code");
+      await expect(screen.getByLabel("Digit 1")).toBeFocused();
       const code = await magicCode(email);
       await screen.getByLabel("Digit 1").fill(code === "000000" ? "111111" : "000000");
       await expect(screen.getByRole("alert")).toHaveText(
@@ -59,7 +127,29 @@ test(
       await screen.getByLabel("Your name").fill("");
       await expect(screen.getByRole("button", "Continue", { exact: true })).toBeDisabled();
       await screen.getByLabel("Your name").fill("Nadia Journey");
+      const setupColor = await avatarColor(".profile-avatar .av");
       await shot("03-setup");
+      const surface = surfaceOf(browserEngine);
+      if (!surface) throw new Error("Missing live e2e browser surface");
+      const secondTab = await surface.context().newPage();
+      await secondTab.goto(await browser.url());
+      await secondTab.getByRole("heading", { name: "Set up your profile" }).waitFor();
+      await secondTab.getByLabel("Your name").fill("Stale second tab draft");
+      await browser.evaluate(() => {
+        const picker = document.querySelector('input[aria-label="Profile photo"]');
+        if (!(picker instanceof HTMLInputElement)) throw new Error("Missing photo input");
+        const transfer = new DataTransfer();
+        transfer.items.add(
+          new File([new Uint8Array(20_000_001)], "large.png", { type: "image/png" }),
+        );
+        picker.files = transfer.files;
+        picker.dispatchEvent(new Event("change", { bubbles: true }));
+        return null;
+      });
+      await expect(browser.locator(".toast")).toHaveText(
+        "That photo is over 20 MB. Choose a smaller one.",
+      );
+      await expect(browser.locator(".profile-avatar .av.photo")).toHaveCount(0);
       await browser.evaluate(() => {
         // Observe the real preview and protected-photo resources, including their cleanup.
         const urls = new Set<string>();
@@ -97,6 +187,10 @@ test(
       await expect(browser.locator(".profile-avatar .av.photo")).toBeVisible();
       await screen.getByRole("button", "Continue", { exact: true }).tap();
       await expect(screen.getByRole("heading", "No groups yet")).toBeVisible();
+      await secondTab.getByRole("heading", { name: "No groups yet" }).waitFor();
+      expect(await secondTab.locator(".account-button").innerText()).toContain("Nadia Journey");
+      expect(await secondTab.getByRole("heading", { name: "Set up your profile" }).count()).toBe(0);
+      await secondTab.close();
       await expect(browser.locator("nav[aria-label='Your groups']")).toHaveText(
         "Your groups show up here.",
       );
@@ -106,6 +200,8 @@ test(
       await browser.locator(".prow button").tap();
       await expect(browser.locator(".account-button .av.photo")).toHaveCount(0);
       await expect(browser.locator("html")).toHaveAttribute("data-photo-urls", "0");
+      expect(await avatarColor(".account-button .av")).toBe(setupColor);
+      expect(await avatarColor(".profile-avatar .av")).toBe(setupColor);
       await screen.getByRole("button", "Close", { exact: true }).tap();
       await shot("04-empty-groups");
       await screen.getByRole("button", "Account", { exact: true }).tap();
@@ -122,6 +218,7 @@ test(
       const firstUser = matches.find((person) => person.email === email);
       if (!firstUser)
         throw new Error("The public people API must find the first user's completed profile");
+      expect(firstUser.fullName).toBe("Nadia Journey");
       const groupId = await peer.mutation(api.groups.create, {
         name: "Journey live group",
         memberIds: [firstUser.id],
@@ -140,13 +237,7 @@ test(
       await expect(browser.locator(".row .pv")).toHaveText("Sara: Welcome to the live group");
       await expect(browser.locator(".row .badge")).toHaveText("1");
       await shot("05-live-groups");
-      await screen.getByRole("button", "Account", { exact: true }).tap();
-      await screen.getByRole("button", "Sign out", { exact: true }).tap();
-      await expect(screen.getByRole("button", "Email me a code")).toBeVisible();
-      await expect(screen.getByRole("button", "Continue with Google")).toBeVisible();
-      await expect(browser.locator(".toast")).toHaveText("Signed out");
-      await browser.reload();
-      await expect(screen.getByRole("button", "Email me a code")).toBeVisible();
+      await checkSessionRecovery({ app, browser, screen });
     } finally {
       if (peerSession) await deletePhoneProfile(peerSession);
       if (firstAuthenticated) await deletePhoneProfile(await signInPhone(email));

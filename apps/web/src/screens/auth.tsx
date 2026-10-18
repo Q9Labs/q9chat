@@ -78,8 +78,8 @@ export function EmailCode({
 }: EmailCodeProps) {
   const cells = useRef<(HTMLInputElement | null)[]>([]);
   useEffect(() => {
-    if (bad) cells.current[0]?.focus();
-  }, [bad]);
+    if (bad || digits.every((digit) => digit === "")) cells.current[0]?.focus();
+  }, [bad, digits]);
 
   const focusCell = (index: number) =>
     cells.current[Math.max(0, Math.min(index, CODE_LENGTH - 1))]?.focus();

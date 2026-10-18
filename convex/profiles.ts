@@ -1,4 +1,3 @@
-import { avatarColors } from "@q9chat/domain";
 import { v } from "convex/values";
 import { Effect } from "effect";
 
@@ -6,6 +5,7 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { action, mutation, query, internalQuery, internalMutation } from "./_generated/server";
 import { anyone, identity, active, fail } from "./lib/access";
+import { profileAvatarColors } from "./lib/presentation";
 import { consume, imageTypes } from "./lib/uploads";
 import { getUser } from "./lib/workos";
 export const byAuth = internalQuery({
@@ -50,7 +50,7 @@ export const me = query({
         displayName: profile.displayName,
         email: profile.email,
         photo: profile.photoStorageId ? `/photos/${profile._id}` : null,
-        ...avatarColors(profile._id),
+        ...profileAvatarColors(profile, profile._id),
       },
     };
   },

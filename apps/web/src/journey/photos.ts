@@ -1,5 +1,6 @@
 import type { Id } from "@q9chat/convex";
 import { useConvexConnectionState } from "convex/react";
+import { ConvexError } from "convex/values";
 import { Schema } from "effect";
 import { useEffect, useReducer, useState } from "react";
 
@@ -17,6 +18,17 @@ function httpActionOrigin(): string {
   );
 }
 const httpOrigin = httpActionOrigin();
+export function photoSelectionError(file: File) {
+  return file.size > 20_000_000 ? "That photo is over 20 MB. Choose a smaller one." : null;
+}
+class PhotoRejectedError extends Error {}
+export function isPhotoRejection(error: unknown) {
+  return (
+    error instanceof PhotoRejectedError ||
+    (error instanceof ConvexError &&
+      Schema.is(Schema.Struct({ code: Schema.Literal("bad_attachment") }))(error.data))
+  );
+}
 const uploadResponse = Schema.Struct({
   // Convex validates the table at profiles.update; check the encoded ID at this HTTP boundary.
   uploadId: Schema.String.pipe(
@@ -31,6 +43,7 @@ export async function uploadPhoto(file: File, token: string | null) {
     headers: { Authorization: `Bearer ${token}` },
     body: file,
   });
+  if ([400, 413, 415].includes(response.status)) throw new PhotoRejectedError();
   if (!response.ok) throw new Error("Couldn't upload your photo. Try again.");
   return Schema.decodeUnknownSync(uploadResponse)(await response.json()).uploadId;
 }

@@ -13,7 +13,7 @@ export function sniff(bytes: Uint8Array): Sniffed {
   if (text(4, 4) === "ftyp") {
     const brands = text(8, Math.min(bytes.length - 8, 64));
     if (/heic|heix|hevc|hevx|mif1|msf1/u.test(brands))
-      return { kind: "image", contentType: "image/heic" };
+      return { kind: "file", contentType: "image/heic" };
   }
   const voice = voiceType(prefix, starts, bytes);
   if (voice) return voice;
