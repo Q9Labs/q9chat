@@ -75,6 +75,7 @@
 }
 :where(.q9) input,
 :where(.q9) textarea {
+  padding: 1px 2px;
   font: inherit;
   color: var(--tx);
   background: none;
@@ -2420,7 +2421,7 @@
   border: 0;
   min-width: 0;
 }
-.photo {
+img.photo {
   display: block;
   width: 320px;
   max-width: 100%;
