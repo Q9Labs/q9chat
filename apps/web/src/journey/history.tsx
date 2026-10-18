@@ -110,35 +110,50 @@ function useTyping(group: Group) {
     .toSorted((a, b) => a.localeCompare(b));
 }
 
-function useHistoryRange(group: Group, latest: number, start: number) {
-  const queries = useMemo(() => {
-    const anchor = Math.max(1, latest - 99);
-    const ranges: { fromSequence: number; toSequence: number }[] = [];
-    for (let from = anchor; from <= Math.max(1, group.lastSequence); from += 100)
-      ranges.push({ fromSequence: from, toSequence: from + 99 });
-    for (let to = anchor - 1; to >= start; to -= 100)
-      ranges.push({ fromSequence: Math.max(1, to - 99), toSequence: to });
-    return Object.fromEntries(
-      ranges.map((range) => [
-        String(range.fromSequence),
-        {
-          query: api.messages.range,
-          args: { groupId: group.groupId, ...range },
-        },
-      ]),
-    );
-  }, [group.groupId, group.lastSequence, latest, start]);
+const HISTORY_PAGE_SIZE = 100;
+const MAX_LIVE_HISTORY_PAGES = 3;
+interface HistoryWindow {
+  readonly first: number;
+  readonly last: number;
+}
+function pageOf(sequence: number) {
+  return Math.floor(Math.max(0, sequence - 1) / HISTORY_PAGE_SIZE);
+}
+function useHistoryRange(group: Group, window: HistoryWindow) {
+  const queries = useMemo(
+    () =>
+      Object.fromEntries(
+        Array.from({ length: window.last - window.first + 1 }, (_, index) => {
+          const page = window.first + index;
+          return [
+            // Reuse slots: Convex replaces a slot before adding its new range.
+            String(page % MAX_LIVE_HISTORY_PAGES),
+            {
+              query: api.messages.range,
+              args: {
+                groupId: group.groupId,
+                fromSequence: page * HISTORY_PAGE_SIZE + 1,
+                toSequence: (page + 1) * HISTORY_PAGE_SIZE,
+              },
+            },
+          ];
+        }),
+      ),
+    [group.groupId, window.first, window.last],
+  );
   const pages: { readonly [page: string]: readonly Row[] | Error | undefined } =
     useQueries(queries);
-  const rows: Row[] = [];
-  let loading = false;
-  for (const page of Object.values(pages)) {
-    if (page instanceof Error) throw page;
-    if (page === undefined) loading = true;
-    else rows.push(...page);
-  }
-  rows.sort((a, b) => a.sequence - b.sequence);
-  return { rows, loading };
+  return useMemo(() => {
+    const rows: Row[] = [];
+    let loading = false;
+    for (const page of Object.values(pages)) {
+      if (page instanceof Error) throw page;
+      if (page === undefined) loading = true;
+      else rows.push(...page);
+    }
+    rows.sort((a, b) => a.sequence - b.sequence);
+    return { rows, loading };
+  }, [pages]);
 }
 
 function useRead(group: Group, initial: number, setError: (error: string) => void) {
@@ -228,22 +243,107 @@ interface Opening {
   readonly at: number;
 }
 
-function useHistory(group: Group, opened: Opening) {
-  const [start, setStart] = useState(() =>
-    Math.max(1, Math.min(opened.latest - 99, opened.read + 1)),
-  );
-  const { rows, loading } = useHistoryRange(group, opened.latest, start);
-  const incoming = rows.find(
+function useOpeningBoundary(range: ReturnType<typeof useHistoryRange>, opened: Opening) {
+  const [boundary, setBoundary] = useState<number | null>();
+  if (range.loading || boundary !== undefined) return boundary;
+  const incoming = range.rows.find(
     (row) =>
       row.sequence > opened.read &&
       row.sequence <= opened.latest &&
       row.kind !== "event" &&
       !row.author.isYou,
   );
-  const [ready, setReady] = useState(false);
-  if (!loading && !ready) setReady(true);
-  const sequence = incoming?.sequence ?? null;
-  return { rows, loading, start, setStart, ready, sequence };
+  if (incoming) {
+    setBoundary(incoming.sequence);
+    return incoming.sequence;
+  }
+  if ((range.rows.at(-1)?.sequence ?? 0) >= opened.latest) {
+    setBoundary(null);
+    return null;
+  }
+  return boundary;
+}
+
+function initialWindow(opened: Opening): HistoryWindow {
+  const page = pageOf(Math.min(opened.read + 1, opened.latest));
+  return { first: Math.max(0, page - 1), last: Math.min(pageOf(opened.latest), page + 1) };
+}
+function moveWindow(
+  window: HistoryWindow,
+  direction: "older" | "newer",
+  latestPage: number,
+): HistoryWindow {
+  return direction === "older"
+    ? {
+        first: Math.max(0, window.first - 1),
+        last: Math.min(window.last, Math.max(0, window.first - 1) + MAX_LIVE_HISTORY_PAGES - 1),
+      }
+    : {
+        first: Math.max(window.first, window.last + 2 - MAX_LIVE_HISTORY_PAGES),
+        last: Math.min(latestPage, window.last + 1),
+      };
+}
+function sequenceInWindow(rows: readonly Row[], boundary: number | null | undefined) {
+  return boundary !== undefined &&
+    boundary !== null &&
+    rows.some((row) => row.sequence === boundary)
+    ? boundary
+    : null;
+}
+function useLoadedRows(range: ReturnType<typeof useHistoryRange>) {
+  // Keep the current DOM until a replacement page is ready, so its visible anchor survives.
+  const [display, setDisplay] = useState<readonly Row[] | null>(null);
+  if (!range.loading && display !== range.rows) setDisplay(range.rows);
+  return display;
+}
+function historyControls({
+  window,
+  latestPage,
+  loading,
+  setWindow,
+}: {
+  readonly window: HistoryWindow;
+  readonly latestPage: number;
+  readonly loading: boolean;
+  readonly setWindow: (window: HistoryWindow) => void;
+}) {
+  const changePage = (direction: "older" | "newer") => {
+    if (!loading) setWindow(moveWindow(window, direction, latestPage));
+  };
+  return {
+    older: window.first > 0 ? () => changePage("older") : undefined,
+    newer: window.last < latestPage ? () => changePage("newer") : undefined,
+    latest: () => setWindow({ first: Math.max(0, latestPage - 1), last: latestPage }),
+  };
+}
+function useHistory(group: Group, opened: Opening) {
+  const latestPage = pageOf(group.lastSequence);
+  const [window, setWindow] = useState(() => initialWindow(opened));
+  const [atBottom, setAtBottom] = useState(false);
+  const [previousLatest, setPreviousLatest] = useState(latestPage);
+  if (previousLatest !== latestPage) {
+    setPreviousLatest(latestPage);
+    if (atBottom && window.last >= previousLatest)
+      setWindow({
+        first: Math.max(window.first, latestPage - MAX_LIVE_HISTORY_PAGES + 1),
+        last: latestPage,
+      });
+  }
+  const range = useHistoryRange(group, window);
+  const display = useLoadedRows(range);
+  const rows = display ?? [];
+  const boundary = useOpeningBoundary(range, opened);
+  if (!range.loading && boundary === undefined)
+    setWindow({ first: window.last + 1, last: window.last + 1 });
+  return {
+    rows,
+    loading: range.loading,
+    ready: boundary !== undefined,
+    start: window.first * HISTORY_PAGE_SIZE + 1,
+    sequence: sequenceInWindow(rows, boundary),
+    ...historyControls({ window, latestPage, loading: range.loading, setWindow }),
+    setAtBottom,
+  };
 }
 
 function historyPhotoPaths(rows: readonly Row[]) {
@@ -269,7 +369,10 @@ export function History({
     rows,
     loading,
     start,
-    setStart,
+    older,
+    newer,
+    latest,
+    setAtBottom,
     ready,
     sequence: newFromSequence,
   } = useHistory(group, opened);
@@ -293,8 +396,14 @@ export function History({
           highlightId={null}
           playing={null}
           readOnly
-          onVisible={(sequence) => void seen(sequence)}
-          onOlder={start > 1 ? () => setStart(Math.max(1, start - 100)) : undefined}
+          reading={{
+            onVisible: (sequence) => void seen(sequence),
+            onOlder: older,
+            onNewer: newer,
+            onLatest: latest,
+            onAtBottom: setAtBottom,
+            loading,
+          }}
         />
       ) : null}
       <HistoryComposer title={group.title} />

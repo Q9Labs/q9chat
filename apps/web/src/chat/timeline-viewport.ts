@@ -2,25 +2,50 @@ import { useEffect, useLayoutEffect, useRef } from "react";
 
 import type { MessageView } from "./types.js";
 
+interface Anchor {
+  readonly id: string;
+  readonly offset: number;
+}
 interface Position {
   readonly first: string | undefined;
-  readonly last: string | undefined;
-  readonly height: number;
-  readonly top: number;
   readonly bottom: boolean;
+  readonly anchor: Anchor | null;
+}
+function visibleAnchor(el: HTMLDivElement): Anchor | null {
+  const bounds = el.getBoundingClientRect();
+  for (const node of el.querySelectorAll<HTMLElement>(".msg")) {
+    const rect = node.getBoundingClientRect();
+    if (rect.bottom > bounds.top && rect.top < bounds.bottom)
+      return { id: node.id, offset: rect.top - bounds.top };
+  }
+  return null;
+}
+function restoreAnchor(el: HTMLDivElement, anchor: Anchor | null) {
+  if (!anchor) return;
+  const node = document.getElementById(anchor.id);
+  if (node)
+    el.scrollTop +=
+      node.getBoundingClientRect().top - el.getBoundingClientRect().top - anchor.offset;
+}
+function scrollToLatest(el: HTMLDivElement) {
+  el.focus({ preventScroll: true });
+  el.scrollTo({
+    top: el.scrollHeight,
+    behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+  });
 }
 function restorePosition(
   el: HTMLDivElement,
   previous: Position | null,
   first: string | undefined,
-  last: string | undefined,
+  paging: boolean,
 ) {
   if (!previous) {
     const divider = el.querySelector<HTMLElement>("[data-new]");
     el.scrollTop = divider ? Math.max(0, divider.offsetTop - 90) : el.scrollHeight;
-  } else if (first !== previous.first) {
-    el.scrollTop = previous.top + el.scrollHeight - previous.height;
-  } else if (previous.bottom && (last !== previous.last || el.scrollHeight !== previous.height)) {
+  } else if (paging || (first !== previous.first && !previous.bottom)) {
+    restoreAnchor(el, previous.anchor);
+  } else if (previous.bottom) {
     el.scrollTop = el.scrollHeight;
   }
 }
@@ -42,34 +67,51 @@ export function useTimelineViewport(
   messages: readonly MessageView[],
   setFar: (far: boolean) => void,
   onVisible: ((sequence: number) => void) | undefined,
+  loading: boolean,
+  onAtBottom: ((bottom: boolean) => void) | undefined,
 ) {
   const log = useRef<HTMLDivElement>(null);
   const position = useRef<Position | null>(null);
+  const paging = useRef(false);
+  const jumping = useRef(false);
+  const preserveAnchor = () => {
+    const el = log.current;
+    if (el && position.current)
+      position.current = { ...position.current, anchor: visibleAnchor(el) };
+    paging.current = true;
+  };
+  const jump = (onLatest: (() => void) | undefined) => {
+    jumping.current = true;
+    onLatest?.();
+    if (log.current) scrollToLatest(log.current);
+  };
   useLayoutEffect((): (() => void) | undefined => {
     const el = log.current;
     if (!el) return () => {};
     const previous = position.current;
     const first = messages[0]?.id;
-    const last = messages.at(-1)?.id;
-    restorePosition(el, previous, first, last);
+    if (!loading) {
+      if (jumping.current) scrollToLatest(el);
+      else restorePosition(el, previous, first, paging.current);
+      jumping.current = false;
+      paging.current = false;
+    }
     const remember = () => {
       const bottom = el.scrollHeight - el.scrollTop - el.clientHeight;
       position.current = {
         first,
-        last,
-        height: el.scrollHeight,
-        top: el.scrollTop,
         bottom: bottom <= 1,
+        anchor: visibleAnchor(el),
       };
       setFar(bottom > 240);
+      onAtBottom?.(bottom <= 1);
     };
     remember();
     el.addEventListener("scroll", remember);
     return () => el.removeEventListener("scroll", remember);
-  }, [messages, setFar]);
-
-  useVisibleMessages(() => log.current, messages, onVisible);
-  return log;
+  });
+  useVisibleMessages(() => log.current, messages, loading ? undefined : onVisible);
+  return { log, preserveAnchor, jump };
 }
 
 function useVisibleMessages(

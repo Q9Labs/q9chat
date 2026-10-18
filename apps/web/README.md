@@ -218,12 +218,16 @@ joining. Run it with journey 1 using `pnpm test:e2e` on the disposable cloud tes
 
 ## Journey 3
 
-Conversation history uses live `messages.range` pages of at most 100 sequences.
+Conversation history keeps at most three live `messages.range` pages of 100 sequences.
+The window opens around the captured read boundary, pages in either direction,
+and drops off-screen pages. Jump to latest replaces it with the newest page and preceding context.
 Opening captures the private read boundary once, places the unread divider before
 an incoming post, and positions it 90px below the list top (clamped). Without a
-divider, the list opens at the bottom. Earlier pages preserve the scroll position;
+divider, the list opens at the bottom. Paging preserves a visible message’s offset;
 Jump to latest appears over 240px from the bottom. Live arrivals follow only when
-already at the bottom.
+already at the bottom and the window reaches the latest page. Otherwise the jump
+control also indicates history outside the window. Keyboard activation focuses the
+message log; typing status is a separate live region.
 
 Visible posts advance `readStates.markRead` only in a focused, visible window.
 Typing subscriptions expire locally as well as on the backend. Pair headers omit
@@ -233,5 +237,5 @@ protected files; rendering and playback belong to journey 4.
 
 `tests/j3-web.e2e.ts` seeds fresh staging accounts and genuine dev history via the
 public APIs. Run it with J1 and J2 using `pnpm test:e2e` on test box. It writes its
-live flow screenshots to `artifacts/j3/` and deletes its profiles and WorkOS users
+live flow screenshots to `artifacts/j3-round2/` and deletes its profiles and WorkOS users
 in a cleanup, including on assertion failure.

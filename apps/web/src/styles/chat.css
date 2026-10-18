@@ -656,6 +656,14 @@
   overscroll-behavior: contain;
   container-type: inline-size;
 }
+.tl:focus-visible {
+  outline-offset: -3px;
+}
+.tl + .typing {
+  margin-inline: 64px 24px;
+  margin-block: 12px 8px;
+  flex-shrink: 0;
+}
 .tl > :first-child {
   margin-block-start: auto;
 }

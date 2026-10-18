@@ -1,11 +1,11 @@
-import { Fragment, useEffect, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useState, type ReactNode, type RefObject } from "react";
 
 import { Icon } from "../ui/icons.js";
 import { useRoot } from "../ui/root.js";
 import { authorLabel } from "./format.js";
 import { Message, MessageRun, type MessageHandlers } from "./message.js";
 import { useTimelineViewport } from "./timeline-viewport.js";
-import { buildTimeline } from "./timeline.js";
+import { buildTimeline, type TimelineItem } from "./timeline.js";
 import type { Author, EventView, MemberEvent, MessageView } from "./types.js";
 
 function Names({
@@ -90,10 +90,25 @@ function TypingLine({ names: people }: { readonly names: readonly string[] }) {
   );
 }
 
+interface TimelineReading {
+  readonly onVisible: ((sequence: number) => void) | undefined;
+  readonly onOlder: (() => void) | undefined;
+  readonly onNewer: (() => void) | undefined;
+  readonly onLatest: (() => void) | undefined;
+  readonly onAtBottom: ((bottom: boolean) => void) | undefined;
+  readonly loading: boolean;
+}
+const STATIC_READING: TimelineReading = {
+  onVisible: undefined,
+  onOlder: undefined,
+  onNewer: undefined,
+  onLatest: undefined,
+  onAtBottom: undefined,
+  loading: false,
+};
 export interface TimelineProps {
   readonly readOnly?: boolean;
-  readonly onVisible?: (sequence: number) => void;
-  readonly onOlder?: (() => void) | undefined;
+  readonly reading?: TimelineReading;
   readonly messages: readonly MessageView[];
   /** First unread sequence, captured when the group opened; null for no divider. */
   readonly newFromSequence: number | null;
@@ -107,8 +122,92 @@ export interface TimelineProps {
   readonly playing: { readonly messageId: string; readonly progress: number } | null;
 }
 
+type EntryProps = Pick<
+  TimelineProps,
+  "onOpenAuthor" | "highlightId" | "menuMessageId" | "playing" | "handlers" | "readOnly"
+> & {
+  readonly item: TimelineItem;
+  readonly timeZone: ReturnType<typeof useRoot>["clock"]["timeZone"];
+  readonly compact: boolean;
+};
+function TimelineEntry({
+  item,
+  timeZone,
+  compact,
+  onOpenAuthor,
+  highlightId,
+  menuMessageId,
+  playing,
+  handlers,
+  readOnly = false,
+}: EntryProps) {
+  if (item.type === "day") return <div className="day">{item.label}</div>;
+  if (item.type === "new")
+    return (
+      <div className="newline" data-new="">
+        New since you last looked
+      </div>
+    );
+  if (item.type === "event") return <SystemLine message={item.message} />;
+  return (
+    <MessageRun author={item.author} time={item.time} onOpenAuthor={onOpenAuthor}>
+      {item.messages.map((message) => (
+        <Message
+          key={message.id}
+          message={message}
+          timeZone={timeZone}
+          compact={compact}
+          highlighted={highlightId === message.id}
+          menuOpen={menuMessageId === message.id}
+          playProgress={playing?.messageId === message.id ? playing.progress : null}
+          handlers={handlers}
+          readOnly={readOnly}
+        />
+      ))}
+    </MessageRun>
+  );
+}
+
 const COMPACT_BELOW = 700;
 const FAR_FROM_BOTTOM = 240;
+
+function pageAtEdge(
+  el: HTMLDivElement,
+  {
+    loading,
+    onOlder,
+    onNewer,
+    setFar,
+    preserveAnchor,
+  }: {
+    readonly loading: boolean;
+    readonly onOlder: TimelineReading["onOlder"];
+    readonly onNewer: TimelineReading["onNewer"];
+    readonly setFar: (far: boolean) => void;
+    readonly preserveAnchor: () => void;
+  },
+) {
+  const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+  setFar(distance > FAR_FROM_BOTTOM);
+  if (loading) return;
+  const page = el.scrollTop < 40 ? onOlder : distance < 40 ? onNewer : undefined;
+  if (page) {
+    preserveAnchor();
+    page();
+  }
+}
+
+function useCompactTimeline(log: RefObject<HTMLDivElement | null>) {
+  const [compact, setCompact] = useState(false);
+  useEffect(() => {
+    const measure = new ResizeObserver(([entry]) => {
+      if (entry !== undefined) setCompact(entry.contentRect.width < COMPACT_BELOW);
+    });
+    if (log.current !== null) measure.observe(log.current);
+    return () => measure.disconnect();
+  }, [log]);
+  return compact;
+}
 
 /**
  * The scrolling message log: date separators, runs, system lines, the
@@ -125,32 +224,24 @@ export function Timeline({
   highlightId,
   playing,
   readOnly = false,
-  onVisible,
-  onOlder,
+  reading = STATIC_READING,
 }: TimelineProps) {
   const { clock } = useRoot();
   const [far, setFar] = useState(false);
-  const [compact, setCompact] = useState(false);
   const items = buildTimeline(messages, clock, newFromSequence);
 
-  const log = useTimelineViewport(messages, setFar, onVisible);
+  const { log, preserveAnchor, jump } = useTimelineViewport(
+    messages,
+    setFar,
+    reading.onVisible,
+    reading.loading,
+    reading.onAtBottom,
+  );
 
-  useEffect(() => {
-    const measure = new ResizeObserver(([entry]) => {
-      if (entry !== undefined) setCompact(entry.contentRect.width < COMPACT_BELOW);
-    });
-    if (log.current !== null) measure.observe(log.current);
-    return () => measure.disconnect();
-  }, [log]);
+  const compact = useCompactTimeline(log);
 
-  const toBottom = () => {
-    const el = log.current;
-    if (el !== null)
-      el.scrollTo({
-        top: el.scrollHeight,
-        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
-      });
-  };
+  const toBottom = () => jump(reading.onLatest);
+  const showJump = far || !!reading.onNewer;
 
   return (
     <>
@@ -159,55 +250,38 @@ export function Timeline({
         className="tl"
         role="log"
         aria-label="Messages"
-        onScroll={(event) => {
-          const el = event.currentTarget;
-          setFar(el.scrollHeight - el.scrollTop - el.clientHeight > FAR_FROM_BOTTOM);
-          if (el.scrollTop < 40) onOlder?.();
-        }}
+        tabIndex={-1}
+        aria-busy={reading.loading}
+        onScroll={(event) =>
+          pageAtEdge(event.currentTarget, {
+            loading: reading.loading,
+            onOlder: reading.onOlder,
+            onNewer: reading.onNewer,
+            setFar,
+            preserveAnchor,
+          })
+        }
       >
-        {items.map((item) => {
-          if (item.type === "day")
-            return (
-              <div key={item.key} className="day">
-                {item.label}
-              </div>
-            );
-          if (item.type === "new")
-            return (
-              <div key={item.key} className="newline" data-new="">
-                New since you last looked
-              </div>
-            );
-          if (item.type === "event") return <SystemLine key={item.key} message={item.message} />;
-          return (
-            <MessageRun
-              key={item.key}
-              author={item.author}
-              time={item.time}
-              onOpenAuthor={onOpenAuthor}
-            >
-              {item.messages.map((message) => (
-                <Message
-                  key={message.id}
-                  message={message}
-                  timeZone={clock.timeZone}
-                  compact={compact}
-                  highlighted={highlightId === message.id}
-                  menuOpen={menuMessageId === message.id}
-                  playProgress={playing?.messageId === message.id ? playing.progress : null}
-                  handlers={handlers}
-                  readOnly={readOnly}
-                />
-              ))}
-            </MessageRun>
-          );
-        })}
-        <TypingLine names={typing} />
+        {items.map((item) => (
+          <TimelineEntry
+            key={item.key}
+            item={item}
+            timeZone={clock.timeZone}
+            compact={compact}
+            onOpenAuthor={onOpenAuthor}
+            highlightId={highlightId}
+            menuMessageId={menuMessageId}
+            playing={playing}
+            handlers={handlers}
+            readOnly={readOnly}
+          />
+        ))}
       </div>
+      <TypingLine names={typing} />
       <button
         type="button"
-        className={`jump${far ? " on" : ""}`}
-        tabIndex={far ? 0 : -1}
+        className={`jump${showJump ? " on" : ""}`}
+        tabIndex={showJump ? 0 : -1}
         onClick={toBottom}
       >
         <Icon name="down" />
