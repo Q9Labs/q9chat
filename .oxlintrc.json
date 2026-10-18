@@ -9,6 +9,7 @@
     "**/.wrangler/**",
     "**/.output/**",
     "**/routeTree.gen.ts",
+    "convex/_generated/**",
     "**/fixtures/**",
     "**/__fixtures__/**",
     ".dependency-cruiser.cjs"

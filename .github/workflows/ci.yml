@@ -11,10 +11,6 @@ permissions:
 jobs:
   gate:
     runs-on: ubuntu-latest
-    env:
-      # Codegen needs a configured deployment; the local anonymous one needs no
-      # account or secret, and the CLI downloads its backend on first use.
-      CONVEX_DEPLOYMENT: anonymous:anonymous-agent
     steps:
       - name: Checkout
         uses: actions/checkout@v7
