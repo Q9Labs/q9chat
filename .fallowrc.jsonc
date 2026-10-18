@@ -1,6 +1,6 @@
 {
   // Project-wide fallow config; `q9gate` runs `fallow audit` through the fallow lane.
-  "entry": ["gate.config.ts"],
+  "entry": ["gate.config.ts", "e2e.config.ts", "tests/*.e2e.ts"],
   "ignorePatterns": [
     "**/dist/**",
     "**/coverage/**",
