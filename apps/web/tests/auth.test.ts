@@ -43,7 +43,7 @@ void test("public routes reject invalid inputs and unsafe origins", async () => 
   assert.equal(
     (await fetch(`${origin}/api/auth/callback?code=invalid&state=invalid`, { redirect: "manual" }))
       .status,
-    400,
+    302,
   );
 });
 
@@ -86,14 +86,36 @@ void test("real staging email sign-in, refresh persistence and sign-out", async 
   assert.ok(key, "staging Worker credentials required");
   const email = `q9-auth-${Date.now()}@example.net`;
   assert.deepEqual(await (await post("email/start", { email })).json(), { ok: true });
-  const challenge = await fetch("https://api.workos.com/user_management/magic_auth", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ email }),
+  // Discover the challenge produced by our public start route, never create a replacement.
+  let magicId: string | undefined;
+  for (let attempt = 0; attempt < 10 && !magicId; attempt++) {
+    const events: Response = await fetch(
+      "https://api.workos.com/events?events=magic_auth.created&limit=100",
+      {
+        headers: { Authorization: `Bearer ${key}` },
+      },
+    );
+    assert.ok(events.ok, "staging event discovery must be available");
+    const parsed = Schema.decodeUnknownSync(
+      Schema.Struct({
+        data: Schema.Array(
+          Schema.Struct({
+            data: Schema.Struct({ id: Schema.String, email: Schema.String }),
+          }),
+        ),
+      }),
+    )(await events.json());
+    magicId = parsed.data.find((event) => event.data.email === email)?.data.id;
+    if (!magicId) await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  assert.ok(magicId, "email/start must create a discoverable Magic Auth challenge");
+  const challenge = await fetch(`https://api.workos.com/user_management/magic_auth/${magicId}`, {
+    headers: { Authorization: `Bearer ${key}` },
   });
-  assert.ok(challenge.ok, "Magic Auth must be enabled before running this test");
-  const challengeBody: unknown = await challenge.json();
-  const { code } = Schema.decodeUnknownSync(Schema.Struct({ code: Schema.String }))(challengeBody);
+  assert.ok(challenge.ok);
+  const { code } = Schema.decodeUnknownSync(Schema.Struct({ code: Schema.String }))(
+    await challenge.json(),
+  );
   const wrong = code === "000000" ? "111111" : "000000";
   assert.deepEqual(
     await (await post("email/verify", { email, code: wrong, client: "web" })).json(),
@@ -103,6 +125,19 @@ void test("real staging email sign-in, refresh persistence and sign-out", async 
   assert.equal(verified.status, 200);
   const first = Schema.decodeUnknownSync(Session)(await verified.json());
   const firstCookie = sessionCookie(verified);
+  for (const path of ["token", "sign-out"]) {
+    const refused = await fetch(`${origin}/api/auth/${path}`, {
+      method: "POST",
+      headers: {
+        origin: "https://evil.example",
+        "content-type": "application/json",
+        cookie: firstCookie ?? "",
+      },
+      body: "{}",
+    });
+    assert.equal(refused.status, 403);
+  }
+
   const refreshed = await post("token", {}, firstCookie);
   assert.equal(refreshed.status, 200);
   const second = Schema.decodeUnknownSync(Session)(await refreshed.json());

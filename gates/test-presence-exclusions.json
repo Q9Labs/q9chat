@@ -12,7 +12,9 @@
     "apps/web/src/routes/api/auth/email/verify.ts": "Covered through the running Worker public routes by apps/web/tests/auth.test.ts; importing these files directly would bypass Worker bindings and route behavior.",
     "apps/web/src/routes/api/auth/email/start.ts": "Covered through the running Worker public routes by apps/web/tests/auth.test.ts; importing these files directly would bypass Worker bindings and route behavior.",
     "apps/web/src/routes/auth/phone-callback.ts": "Covered through the running Worker public routes by apps/web/tests/auth.test.ts; importing these files directly would bypass Worker bindings and route behavior.",
-    "apps/web/src/lib/session.tsx": "Session provider delegates authentication to the public routes exercised by apps/web/tests/auth.test.ts. Browser session UI verification belongs to the sign-in screen lane; no screen is built here.",
-    "apps/web/src/lib/convex.ts": "ConvexReactClient configuration only; the public-route integration test verifies the issued token against the Convex public query authentication boundary."
+    "apps/web/src/lib/session.tsx": "Thin React useSyncExternalStore adapter; lifecycle and multi-tab behavior exercised by apps/web/tests/session.test.ts and browser checks.",
+    "apps/web/src/lib/convex.ts": "ConvexReactClient configuration only; the public-route integration test verifies the issued token against the Convex public query authentication boundary.",
+    "apps/web/src/lib/auth/rate-limit.server.ts": "Public email route behavior and excess-request upstream suppression covered by apps/web/tests/auth-policy.test.ts; real local binding checked separately.",
+    "apps/web/src/routes/auth/error.ts": "Static safe recovery response, exercised by callback recovery tests and running Worker check."
   }
 }

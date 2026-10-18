@@ -2,6 +2,7 @@ import { Either, Schema } from "effect";
 
 import { Client, Code, Email, Method, Nonempty, RefreshInput } from "./contracts.js";
 import { cookie, seal, setCookie, unseal } from "./cookies.server.js";
+import { emailBudget } from "./rate-limit.server.js";
 import { accessClaims, authenticate, WorkosError, workos } from "./workos.server.js";
 
 const sessionCookie = "q9_session";
@@ -90,6 +91,7 @@ export async function sessionResponse(
 export function emailStart(request: Request) {
   return boundary(request, async () => {
     const { email } = await input(request, Schema.Struct({ email: Email }));
+    if (!(await emailBudget(request, email, "start"))) return json({ ok: true });
     try {
       await workos("magic_auth", { email }, Schema.Unknown);
     } catch (error) {
@@ -105,6 +107,8 @@ export function emailVerify(request: Request) {
       request,
       Schema.Struct({ email: Email, code: Code, client: Client }),
     );
+    if (!(await emailBudget(request, email, "verify")))
+      return json({ error: "rate_limited" }, 429, new Headers({ "Retry-After": "60" }));
     try {
       return await sessionResponse(
         await authenticate({
@@ -171,7 +175,12 @@ export function signOut(request: Request) {
     const credentials = await refreshCredentials(request);
     if (credentials) {
       try {
-        await workos("sessions/revoke", { session_id: credentials.sessionId }, Schema.Unknown);
+        await workos(
+          "sessions/revoke",
+          { session_id: credentials.sessionId },
+          Schema.Unknown,
+          "idempotent",
+        );
       } catch (error) {
         if (!(error instanceof WorkosError) || error.status !== 404) throw error;
       }

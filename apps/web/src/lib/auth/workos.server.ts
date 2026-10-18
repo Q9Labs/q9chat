@@ -15,7 +15,12 @@ const ErrorBody = Schema.Struct({
   error: Schema.optional(Schema.String),
 });
 
-export async function workos<A, I>(path: string, body: object, schema: Schema.Schema<A, I>) {
+export async function workos<A, I>(
+  path: string,
+  body: object,
+  schema: Schema.Schema<A, I>,
+  retry: "never" | "idempotent" = "never",
+) {
   const { WORKOS_API_KEY } = workosConfig();
   const request = Effect.tryPromise({
     try: async (signal) => {
@@ -47,7 +52,8 @@ export async function workos<A, I>(path: string, body: object, schema: Schema.Sc
     Effect.retry({
       times: 2,
       schedule: Schedule.exponential("200 millis"),
-      while: (error) => error.status >= 500 && error.code !== "unavailable",
+      while: (error) =>
+        retry === "idempotent" && error.status >= 500 && error.code !== "unavailable",
     }),
     Effect.flatMap((value) => Schema.decodeUnknown(schema)(value)),
     Effect.mapError((error) =>
@@ -107,6 +113,7 @@ export async function authenticate(body: AuthenticationInput) {
       "sessions/revoke",
       { session_id: accessClaims(auth.access_token).sid },
       Schema.Unknown,
+      "idempotent",
     );
     throw new WorkosError({ status: 403, code: "unsupported_method" });
   }

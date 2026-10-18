@@ -55,4 +55,6 @@ words:
   - vitest
   - workerd
   - worktree
+  - worktrees
   - Wrangler
+  - ratelimits

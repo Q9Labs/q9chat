@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
+import { Route as AuthErrorRouteImport } from './routes/auth/error'
 import { Route as AuthPhoneCallbackRouteImport } from './routes/auth/phone-callback'
 import { Route as ApiAuthCallbackRouteImport } from './routes/api/auth/callback'
 import { Route as ApiAuthSignOutRouteImport } from './routes/api/auth/sign-out'
@@ -28,6 +29,11 @@ const IndexRoute = IndexRouteImport.update({
 const ApiHealthRoute = ApiHealthRouteImport.update({
   id: '/api/health',
   path: '/api/health',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthErrorRoute = AuthErrorRouteImport.update({
+  id: '/auth/error',
+  path: '/auth/error',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthPhoneCallbackRoute = AuthPhoneCallbackRouteImport.update({
@@ -74,6 +80,7 @@ const ApiAuthOauthExchangeRoute = ApiAuthOauthExchangeRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/api/health': typeof ApiHealthRoute
+  '/auth/error': typeof AuthErrorRoute
   '/auth/phone-callback': typeof AuthPhoneCallbackRoute
   '/api/auth/callback': typeof ApiAuthCallbackRoute
   '/api/auth/sign-out': typeof ApiAuthSignOutRoute
@@ -86,6 +93,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/api/health': typeof ApiHealthRoute
+  '/auth/error': typeof AuthErrorRoute
   '/auth/phone-callback': typeof AuthPhoneCallbackRoute
   '/api/auth/callback': typeof ApiAuthCallbackRoute
   '/api/auth/sign-out': typeof ApiAuthSignOutRoute
@@ -99,6 +107,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/api/health': typeof ApiHealthRoute
+  '/auth/error': typeof AuthErrorRoute
   '/auth/phone-callback': typeof AuthPhoneCallbackRoute
   '/api/auth/callback': typeof ApiAuthCallbackRoute
   '/api/auth/sign-out': typeof ApiAuthSignOutRoute
@@ -113,6 +122,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/api/health'
+    | '/auth/error'
     | '/auth/phone-callback'
     | '/api/auth/callback'
     | '/api/auth/sign-out'
@@ -125,6 +135,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/api/health'
+    | '/auth/error'
     | '/auth/phone-callback'
     | '/api/auth/callback'
     | '/api/auth/sign-out'
@@ -137,6 +148,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/api/health'
+    | '/auth/error'
     | '/auth/phone-callback'
     | '/api/auth/callback'
     | '/api/auth/sign-out'
@@ -150,6 +162,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApiHealthRoute: typeof ApiHealthRoute
+  AuthErrorRoute: typeof AuthErrorRoute
   AuthPhoneCallbackRoute: typeof AuthPhoneCallbackRoute
   ApiAuthCallbackRoute: typeof ApiAuthCallbackRoute
   ApiAuthSignOutRoute: typeof ApiAuthSignOutRoute
@@ -174,6 +187,13 @@ declare module '@tanstack/react-router' {
       path: '/api/health'
       fullPath: '/api/health'
       preLoaderRoute: typeof ApiHealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/error': {
+      id: '/auth/error'
+      path: '/auth/error'
+      fullPath: '/auth/error'
+      preLoaderRoute: typeof AuthErrorRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth/phone-callback': {
@@ -238,6 +258,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApiHealthRoute: ApiHealthRoute,
+  AuthErrorRoute: AuthErrorRoute,
   AuthPhoneCallbackRoute: AuthPhoneCallbackRoute,
   ApiAuthCallbackRoute: ApiAuthCallbackRoute,
   ApiAuthSignOutRoute: ApiAuthSignOutRoute,
