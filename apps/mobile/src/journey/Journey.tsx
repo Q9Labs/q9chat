@@ -1,5 +1,4 @@
 import { firstName } from "@q9chat/domain";
-import { useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 
 import { PillButton } from "../kit/Buttons";
@@ -44,11 +43,10 @@ function CantConnect() {
 /** Journey 1: sign in, set up the profile the first time, and land in your groups. */
 export function Journey() {
   const stage = useStage();
-  const { authError } = useLocalSearchParams<{ authError?: string }>();
   // Setup stays on screen while the profile saves, even after the profile exists.
   const [saving, setSaving] = useState(false);
   if (stage.kind === "loading") return <Loading />;
-  if (stage.kind === "signedOut") return <SignInJourney authError={authError === "1"} />;
+  if (stage.kind === "signedOut") return <SignInJourney />;
   if (stage.kind === "offline") return <CantConnect />;
   if (stage.kind === "unavailable") return <AccountUnavailable />;
   if (stage.kind === "needsSetup" || saving)

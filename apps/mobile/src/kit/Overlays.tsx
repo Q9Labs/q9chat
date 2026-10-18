@@ -189,6 +189,7 @@ export function ConfirmSheet({
   title,
   text,
   confirmLabel,
+  cancelLabel = "Cancel",
   danger = true,
   confirmDisabled,
   onConfirm,
@@ -198,6 +199,7 @@ export function ConfirmSheet({
   title: string;
   text: string;
   confirmLabel: string;
+  cancelLabel?: string;
   danger?: boolean;
   confirmDisabled?: boolean | undefined;
   onConfirm: () => void;
@@ -217,7 +219,7 @@ export function ConfirmSheet({
           disabled={confirmDisabled}
           onPress={onConfirm}
         />
-        <PillButton label="Cancel" size="sheet" onPress={onCancel} />
+        <PillButton label={cancelLabel} size="sheet" onPress={onCancel} />
       </View>
     </Sheet>
   );

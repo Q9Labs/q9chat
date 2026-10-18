@@ -7,7 +7,7 @@ import { isComplete } from "../screens/codeInput";
 import { sessionClient, useRevokeStatus, type RevokeStatus } from "../session/client";
 import { EmailVerificationError, SignInIncompleteError } from "../session/contracts";
 import type { Provider } from "../session/pkce";
-import { postNotice } from "./notice";
+import { postNotice, takeNotice } from "./notice";
 import { useSignOut } from "./SignOut";
 
 const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
@@ -30,7 +30,7 @@ function noticeOf(
 }
 
 /** Sign in by email code, or through Google or Apple in the system auth session; behaves as the web journey does. */
-export function SignInJourney({ authError }: { authError: boolean }) {
+export function SignInJourney() {
   const signOut = useSignOut();
   const revoke = useRevokeStatus();
   const [email, setEmail] = useState("");
@@ -44,8 +44,9 @@ export function SignInJourney({ authError }: { authError: boolean }) {
   const locked = () => busy.current || revoke === "revoking";
 
   useEffect(() => {
-    if (authError) showToast(INCOMPLETE);
-  }, [authError, showToast]);
+    const notice = takeNotice();
+    if (notice) showToast(notice);
+  }, [showToast]);
 
   async function sendCode(resend = false) {
     if (locked()) return;

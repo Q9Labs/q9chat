@@ -1,4 +1,4 @@
-import { initials } from "@q9chat/domain";
+import { firstName, initials } from "@q9chat/domain";
 
 import type { Avatar, GroupRow, Notify } from "../types";
 
@@ -49,6 +49,10 @@ export function rowStamp(at: number, now: Date): string {
   return `${date.getDate()} ${MONTHS[date.getMonth()] ?? ""}`;
 }
 
+/** How long until the phone's next local midnight, when "Yesterday" and the weekday labels move on. */
+export const msUntilMidnight = (now: Date) =>
+  new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime() - now.getTime();
+
 /** The URL of a protected photo on the Convex HTTP origin; the Avatar sends the access token with it. */
 export const photoUrlOf = (siteUrl: string, path: string | null) =>
   path ? `${siteUrl}${path}` : null;
@@ -76,6 +80,14 @@ const avatarOf = (row: LiveRow, siteUrl: string): Avatar =>
         photoUrl: photoUrlOf(siteUrl, row.avatar.photo),
       };
 
+/** A pair with no message yet shows the same start line as the web list. */
+function previewOf(row: Extract<LiveRow, { status: "member" }>) {
+  if (row.kind === "pair" && row.preview.summary === "")
+    return { by: null, summary: `This is the start of your group with ${firstName(row.title)}` };
+  const { by, summary } = row.preview;
+  return { by: by && { name: by.name, isYou: by.isYou }, summary };
+}
+
 /** `groups.list` results as the list screen's rows, newest activity first as the server sends them. */
 export function groupRows(list: readonly LiveRow[], siteUrl: string, now: Date): GroupRow[] {
   return list.map((row): GroupRow => {
@@ -91,10 +103,7 @@ export function groupRows(list: readonly LiveRow[], siteUrl: string, now: Date):
       ...base,
       status: "member",
       whenLabel: rowStamp(row.lastActivityAt, now),
-      preview: {
-        by: row.preview.by && { name: row.preview.by.name, isYou: row.preview.by.isYou },
-        summary: row.preview.summary,
-      },
+      preview: previewOf(row),
       unreadCount: row.unreadCount,
       needsYou: row.needsYou,
       notify: row.notify,

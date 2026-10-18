@@ -22,7 +22,7 @@ const fontFor: Record<number, number> = {
 
 /**
  * Round for people and groups alike: the initials on the person's fixed color are always drawn, and a photo
- * covers them once it has loaded, so a photo that is loading or fails never leaves a blank circle.
+ * is laid over them, so a photo that is loading, fails or has transparent pixels never leaves a blank circle.
  * `testID` is "avatar-photo" while the photo shows and "avatar-initials" otherwise.
  */
 export function Avatar({ avatar, size = 32 }: { avatar: AvatarData; size?: number }) {
@@ -42,13 +42,13 @@ const shapeOf = (size: number) => ({
   overflow: "hidden" as const,
 });
 
-/** A person with a protected photo: the initials underneath until the photo has loaded and drawn on top. */
+/** A person with a protected photo: the initials and color stay underneath for good, so a transparent photo keeps its base. */
 function PersonAvatar({ avatar, url, size }: { avatar: AvatarData; url: string; size: number }) {
   const [photo, setPhoto] = useState<"loading" | "loaded" | "failed">("loading");
   const auth = useContext(ImageAuthContext);
   return (
     <View testID={photo === "loaded" ? "avatar-photo" : "avatar-initials"} style={shapeOf(size)}>
-      {photo === "loaded" ? null : <Initials avatar={avatar} size={size} />}
+      <Initials avatar={avatar} size={size} />
       {photo === "failed" ? null : (
         <Image
           source={{

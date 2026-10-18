@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { test } from "@e2e-dev/mobile";
 import { api } from "@q9chat/convex";
 import { ConvexHttpClient } from "convex/browser";
-import { expect, type Locator } from "e2e";
+import { expect, type Locator, type Screen } from "e2e";
 
 import { expectButtonHeights } from "./support/targets.js";
 import {
@@ -59,17 +59,52 @@ function addPhotoToLibrary() {
 
 const SIGN_IN_INCOMPLETE = "Sign-in wasn't completed. Try again.";
 
+// The system asks once before it opens the WorkOS page, and not at all when it already asked on this
+// simulator. Either way the run ends with the auth session's own Cancel button on screen.
+async function openGoogleSession(screen: Screen) {
+  await screen.getByRole("button", "Continue with Google").tap();
+  const consent = screen.getByRole("button", "Continue", { exact: true });
+  const cancel = screen.getByRole("button", "Cancel");
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    if (await cancel.isVisible()) return;
+    if (await consent.isVisible()) {
+      await consent.tap();
+      await expect(cancel).toBeVisible();
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  throw new Error("Neither the system consent nor the auth session opened");
+}
+
+// Every attempt keeps its trace, so a retry that passes still leaves the trace of the attempt that failed.
 test(
-  "Google opens the system auth session, and closing it shows the sign-in error",
-  // The error line is on screen for about two seconds and a runner step can take longer, so a missed line is retried.
-  { timeout: 120_000, retries: 2, platforms: ["ios"] },
+  "Google opens the system auth session, and closing it leaves the sign-in screen ready for another try",
+  { timeout: 120_000, platforms: ["ios"], trace: "on" },
   async ({ app, device, screen }) => {
+    stopSystemSheets();
     await device.clearKeychain();
     await app.open();
-    await screen.getByRole("button", "Continue with Google").tap();
-    // The system asks once before it opens the WorkOS page; the proof runner reads the page it shows.
-    await screen.getByRole("button", "Continue", { exact: true }).tap();
+    await openGoogleSession(screen);
     await app.screenshot("oauth-google-session");
+    await screen.getByRole("button", "Cancel").tap();
+    // What lasts after the error line is gone: the auth session is closed and every way to sign in is back.
+    await expect(screen.getByRole("button", "Cancel")).toBeHidden();
+    await expect(screen.getByRole("button", "Continue with Google")).toBeEnabled();
+    await expect(screen.getByRole("button", "Continue with Apple")).toBeEnabled();
+    await expect(screen.getByRole("button", "Email me a code")).toBeEnabled();
+  },
+);
+
+test(
+  "closing the Google auth session shows the sign-in error",
+  // The error line is on screen for about two seconds and a runner step can take longer, so a missed line is retried.
+  { timeout: 120_000, retries: 2, platforms: ["ios"], trace: "on" },
+  async ({ app, device, screen }) => {
+    stopSystemSheets();
+    await device.clearKeychain();
+    await app.open();
+    await openGoogleSession(screen);
     // The error line clears itself after about two seconds, so the check starts before the tap returns.
     await Promise.all([
       expect(screen.getByText(SIGN_IN_INCOMPLETE)).toBeVisible(),
@@ -159,10 +194,17 @@ test(
       ).toBeVisible();
       await expect(screen.getByLabel("6-digit code")).toHaveValue("");
       await expect(screen.getByLabel("6-digit code")).toBeFocused();
-      // The right code is pasted over a digit already in the field: the paste must replace it, not pile on.
-      await screen.getByLabel("6-digit code").pressSequentially("9", { delay: 80 });
+      // The right code is pasted before a digit already in the field: the paste must give the code, not the code and that digit.
+      const codeField = screen.getByLabel("6-digit code");
+      await codeField.pressSequentially("9", { delay: 80 });
       await device.setClipboard(code);
-      await screen.getByLabel("6-digit code").longPress();
+      const box = await codeField.boundingBox();
+      if (!box) throw new Error("The code field has no bounding box");
+      const beforeDigit = { x: 2, y: box.height / 2 };
+      // The first tap puts the cursor in front of the digit, the second opens the edit menu on it.
+      await codeField.tap({ position: beforeDigit });
+      await codeField.tap({ position: beforeDigit });
+      await app.screenshot("02b-paste-menu-at-start");
       await screen.getByText("Paste", { exact: true }).tap();
 
       await expect(screen.getByText("Set up your profile")).toBeVisible();

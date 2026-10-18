@@ -104,6 +104,15 @@ async function copyToClipboard(text: string) {
 // uiautomator client (the e2e engine already holds the only one) can see, so its Paste item is tapped by
 // position. On this 1080 x 2400 emulator the floating toolbar opens just above the code cells, and Paste is
 // 278 px right of the field's left edge and 36 px above its top edge (measured from a screenshot).
+// A long press at the field's left edge puts the cursor in front of the first digit and opens the toolbar.
+async function longPressAtStart(field: ReturnType<Screen["getByLabel"]>) {
+  const box = await field.boundingBox();
+  if (!box) throw new Error("The code field has no bounding box");
+  const x = Math.round(box.x + 6);
+  const y = Math.round(box.y + box.height / 2);
+  adbShell(`input swipe ${x} ${y} ${x} ${y} 900`);
+}
+
 async function tapPasteItem(field: ReturnType<Screen["getByLabel"]>) {
   const box = await field.boundingBox();
   if (!box) throw new Error("The code field has no bounding box");
@@ -204,12 +213,13 @@ test(
       ).toBeVisible();
       await expect(screen.getByLabel("6-digit code")).toHaveValue("");
       await expect(screen.getByLabel("6-digit code")).toBeFocused();
-      // The right code is pasted over a digit already in the field: the paste must replace it, not pile on.
-      await screen.getByLabel("6-digit code").pressSequentially("9");
+      // The right code is pasted before a digit already in the field: the paste must give the code, not the code and that digit.
+      const codeField = screen.getByLabel("6-digit code");
+      await codeField.pressSequentially("9");
       shot("02b-one-digit");
       await copyToClipboard(code);
-      await screen.getByLabel("6-digit code").longPress();
-      await tapPasteItem(screen.getByLabel("6-digit code"));
+      await longPressAtStart(codeField);
+      await tapPasteItem(codeField);
 
       await expect(screen.getByRole("heading", "Set up your profile")).toBeVisible();
       await expect(

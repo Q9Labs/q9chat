@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Loading } from "../../src/journey/Loading";
 import { postNotice } from "../../src/journey/notice";
 import { sessionClient } from "../../src/session/client";
+import { SignInIncompleteError } from "../../src/session/contracts";
 
 /**
  * The Worker's phone-callback page sends the browser to q9chat://auth/callback?code&state. On iOS the auth
@@ -28,7 +29,6 @@ export default function AuthCallbackRoute() {
     };
   }, [code, state]);
   if (outcome === "pending") return <Loading />;
-  if (outcome === "failed") return <Redirect href="/?authError=1" />;
-  postNotice("Signed in");
+  postNotice(outcome === "failed" ? new SignInIncompleteError().message : "Signed in");
   return <Redirect href="/" />;
 }

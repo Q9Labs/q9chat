@@ -1,6 +1,7 @@
 import type { Id } from "@q9chat/convex";
 import { ConvexError } from "convex/values";
 import { Schema } from "effect";
+import { File } from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
 
 import { config } from "../session/config";
@@ -50,19 +51,17 @@ export async function pickPhoto(): Promise<PickResult> {
 
 async function checkAsset(asset: ImagePicker.ImagePickerAsset): Promise<PickResult> {
   const mimeType = asset.mimeType ?? "image/jpeg";
-  const size = SUPPORTED_TYPES.has(mimeType)
-    ? (asset.fileSize ?? (await sizeOfFile(asset.uri)))
-    : null;
+  const size = SUPPORTED_TYPES.has(mimeType) ? (asset.fileSize ?? sizeOfFile(asset.uri)) : null;
   if (size === null) return { kind: "refused", notice: photoRejectedNotice };
   if (photoTooLarge(size)) return { kind: "refused", notice: photoTooLargeNotice };
   return { kind: "picked", photo: { uri: asset.uri, mimeType } };
 }
 
-/** The picker leaves `fileSize` out for some assets; the size then comes from reading the file, or null when it cannot be read. */
-async function sizeOfFile(uri: string): Promise<number | null> {
+/** The picker leaves `fileSize` out for some assets; the size then comes from the file's metadata without reading it, or null when it is missing. */
+function sizeOfFile(uri: string): number | null {
   try {
-    const response = await fetch(uri);
-    return response.ok ? (await response.blob()).size : null;
+    const file = new File(uri);
+    return file.exists ? file.size : null;
   } catch {
     return null;
   }

@@ -2,7 +2,7 @@ import { api } from "@q9chat/convex";
 import { firstName } from "@q9chat/domain";
 import { useMutation } from "convex/react";
 import { usePreventRemove, useRouter } from "expo-router";
-import { useRef, useState } from "react";
+import { useRef } from "react";
 
 import { useToast } from "../kit/useToast";
 import { AccountScreen } from "../screens/AccountScreen";
@@ -11,9 +11,9 @@ import { config } from "../session/config";
 import type { SignInMethod } from "../session/contracts";
 import type { Me } from "../types";
 import { profileAvatar } from "./groupRows";
-import { MAX_NAME } from "./nameRules";
 import { photoNoticeOf, pickPhoto, uploadPhoto } from "./photos";
 import { useSignOut } from "./SignOut";
+import { useNameEditing } from "./useNameEditing";
 import type { ReadyProfile } from "./useStage";
 
 const noop = () => {};
@@ -32,8 +32,7 @@ export function AccountJourney({
   const router = useRouter();
   const signOut = useSignOut();
   const update = useMutation(api.profiles.update);
-  const [draft, setName] = useState<string | null>(null);
-  const name = draft ?? profile.displayName;
+  const editing = useNameEditing(profile.displayName, (displayName) => update({ displayName }));
   const [toast, showToast] = useToast();
   const busy = useRef(false);
 
@@ -57,32 +56,9 @@ export function AccountJourney({
     }
   }
 
-  /** Saves the name when it changed; false when it is invalid or the save failed, so the screen stays open. */
-  async function saveName() {
-    if (busy.current) return false;
-    const displayName = name.trim();
-    if (displayName === profile.displayName) return true;
-    if (!displayName || displayName.length > MAX_NAME) {
-      showToast("Enter a name of 1 to 60 characters.");
-      return false;
-    }
-    busy.current = true;
-    try {
-      await update({ displayName });
-      return true;
-    } catch {
-      showToast("Couldn't save your name. Try again.");
-      return false;
-    } finally {
-      busy.current = false;
-    }
-  }
-
   // Every way out (the header arrow, the iOS swipe, the Android Back) is held here until the name is saved.
-  usePreventRemove(draft !== null && draft.trim() !== profile.displayName, ({ repeat }) => {
-    void saveName().then((saved) => {
-      if (saved) repeat();
-    });
+  usePreventRemove(editing.dirty, ({ repeat }) => {
+    void editing.exit(repeat);
   });
 
   return (
@@ -98,8 +74,16 @@ export function AccountJourney({
         },
         signedInWith: providerLabel(method),
       }}
-      name={name}
-      onNameChange={setName}
+      name={editing.name}
+      onNameChange={editing.change}
+      nameSaving={editing.saving}
+      unsaved={
+        editing.unsaved && {
+          text: editing.unsaved.text,
+          onKeepEditing: editing.keepEditing,
+          onDiscard: editing.discard,
+        }
+      }
       hasPhoto={profile.photo !== null}
       onTogglePhoto={() => void changePhoto()}
       confirmDelete={false}

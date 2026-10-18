@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { groupRows, photoUrlOf, rowStamp } from "../src/journey/groupRows.ts";
+import { groupRows, msUntilMidnight, photoUrlOf, rowStamp } from "../src/journey/groupRows.ts";
+import { saveThenCheck } from "../src/journey/nameRules.ts";
 import { MAX_PHOTO_BYTES, photoTooLarge } from "../src/journey/photoRules.ts";
 
 const at = (iso: string) => new Date(iso);
@@ -116,4 +117,56 @@ void test("live rows become list rows: groups get initials, pairs get a person a
       whenLabel: "Thu",
     },
   ]);
+});
+
+void test("a pair with no message yet shows the start line with the other person's first name", () => {
+  const [row] = groupRows(
+    [
+      {
+        status: "member",
+        groupId: "g4",
+        kind: "pair",
+        title: "Sara Journey",
+        avatar,
+        lastActivityAt: at("2026-10-18T10:42:00").getTime(),
+        preview: { by: null, summary: "" },
+        unreadCount: 0,
+        needsYou: false,
+        notify: "all",
+      },
+    ],
+    "https://x.convex.site",
+    now,
+  );
+  assert.deepEqual(row?.status === "member" ? row.preview : null, {
+    by: null,
+    summary: "This is the start of your group with Sara",
+  });
+});
+
+void test("the day labels move on at the next local midnight", () => {
+  assert.equal(msUntilMidnight(at("2026-10-18T23:59:00")), 60_000);
+  assert.equal(msUntilMidnight(at("2026-10-18T00:00:00")), 24 * 3_600_000);
+});
+
+void test("a name save finishes with the screen free to leave only if the field still holds what was saved", async () => {
+  let field = "Sara";
+  const slow = Promise.withResolvers<void>();
+  const saving = saveThenCheck(
+    "Sara",
+    () => slow.promise,
+    () => field,
+  );
+  field = "Sara Jo";
+  slow.resolve();
+  assert.equal(await saving, false);
+
+  assert.equal(
+    await saveThenCheck(
+      "Sara Jo",
+      async () => {},
+      () => " Sara Jo ",
+    ),
+    true,
+  );
 });

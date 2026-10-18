@@ -5,29 +5,25 @@ export const CELL_IDS = ["first", "second", "third", "fourth", "fifth", "sixth"]
 
 export const isComplete = (code: string) => code.length === CODE_LENGTH;
 
-function commonPrefix(a: string, b: string) {
-  let length = 0;
-  while (length < a.length && length < b.length && a[length] === b[length]) length += 1;
-  return length;
-}
+/** The field's selection before the edit, in UTF-16 units: the part of `previous` the edit replaced. */
+export type Selection = { start: number; end: number };
+
+const digitsOf = (text: string) => text.replace(/\D/gu, "");
 
 /**
- * The code after the field reports `text` while holding `previous`. Only digits count and the code is
- * six long. A paste that adds a whole code to what is already there (over a digit, or after some)
- * replaces it instead of piling up: the added run is what differs from `previous`.
+ * The code after the field reports `text` while holding `previous` with `selection` selected. The edit
+ * replaced that selection, so the inserted run is what sits between the unchanged start and end of
+ * `previous`. A whole code in that run is the new code; shorter runs are typing, joined to the digits
+ * around them. Only digits count and the code is six long.
  */
-export function readCode(previous: string, text: string): string {
-  const digits = text.replace(/\D/gu, "");
-  if (digits.length <= CODE_LENGTH) return digits;
-  const start = commonPrefix(previous, digits);
-  const rest = previous.slice(start);
-  let end = 0;
-  while (
-    end < rest.length &&
-    end < digits.length - start &&
-    rest[rest.length - 1 - end] === digits[digits.length - 1 - end]
-  )
-    end += 1;
-  const added = digits.slice(start, digits.length - end);
-  return (added.length >= CODE_LENGTH ? added : digits).slice(0, CODE_LENGTH);
+export function readCode(previous: string, text: string, selection: Selection): string {
+  const before = previous.slice(0, selection.start);
+  const after = previous.slice(selection.end);
+  const insertedLength = text.length - before.length - after.length;
+  if (insertedLength < 0 || !text.startsWith(before) || !text.endsWith(after))
+    // A delete, or a selection that no longer matches the text: the field's own text is the answer.
+    return digitsOf(text).slice(0, CODE_LENGTH);
+  const inserted = digitsOf(text.slice(before.length, before.length + insertedLength));
+  if (inserted.length >= CODE_LENGTH) return inserted.slice(0, CODE_LENGTH);
+  return digitsOf(before + inserted + after).slice(0, CODE_LENGTH);
 }

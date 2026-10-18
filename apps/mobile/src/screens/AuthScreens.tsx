@@ -20,7 +20,7 @@ import { useTheme } from "../theme";
 import { T } from "../theme/Text";
 import { radius } from "../theme/tokens";
 import type { Avatar as AvatarData } from "../types";
-import { CELL_IDS, CODE_LENGTH, readCode } from "./codeInput";
+import { CELL_IDS, CODE_LENGTH, readCode, type Selection } from "./codeInput";
 
 /**
  * Centered column on the surface; the card is 100% wide with 24px sides, children 10px apart.
@@ -241,6 +241,8 @@ export function CodeScreen({
 }) {
   const { c } = useTheme();
   const input = useRef<TextInputInstance>(null);
+  // Where the cursor or selection was before the latest edit; a paste replaces exactly that part.
+  const selection = useRef<Selection>({ start: code.length, end: code.length });
   useEffect(() => {
     input.current?.focus();
     // oxlint-disable-next-line react/exhaustive-effect-dependencies -- focusKey only asks for the focus again
@@ -296,7 +298,10 @@ export function CodeScreen({
           accessibilityLabel="6-digit code"
           accessibilityHint="Each digit fills the next cell"
           value={code}
-          onChangeText={(text) => onCodeChange(readCode(code, text))}
+          onChangeText={(text) => onCodeChange(readCode(code, text, selection.current))}
+          onSelectionChange={(event) => {
+            selection.current = event.nativeEvent.selection;
+          }}
           inputMode="numeric"
           keyboardType="number-pad"
           textContentType="oneTimeCode"

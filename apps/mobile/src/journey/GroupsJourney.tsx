@@ -11,6 +11,7 @@ import { groupRows, profileAvatar } from "./groupRows";
 import { Loading } from "./Loading";
 import { takeNotice } from "./notice";
 import type { ReadyProfile } from "./useStage";
+import { useToday } from "./useToday";
 
 const COMING_NEXT = "This is coming in the next journey.";
 
@@ -23,9 +24,10 @@ export function GroupsJourney({ profile }: { profile: ReadyProfile }) {
     const notice = takeNotice();
     if (notice) showToast(notice);
   }, [showToast]);
+  const today = useToday();
   const rows = useMemo(
-    () => (groups ? groupRows(groups, config.siteUrl, new Date()) : []),
-    [groups],
+    () => (groups ? groupRows(groups, config.siteUrl, today) : []),
+    [groups, today],
   );
   if (groups === undefined) return <Loading />;
   return (

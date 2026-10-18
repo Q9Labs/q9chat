@@ -668,6 +668,26 @@ export const STATES: GalleryState[] = [
       />
     ),
   },
+  {
+    id: "account-unsaved",
+    title: "Name not saved, on leaving",
+    group: "Account",
+    render: () => (
+      <AccountScreen
+        {...accountHandlers}
+        me={{ person: personOf(ME, w), signedInWith: "Google" }}
+        name=""
+        hasPhoto={false}
+        confirmDelete={false}
+        toast={null}
+        unsaved={{
+          text: "Enter a name of 1 to 60 characters, or discard your change.",
+          onKeepEditing: noop,
+          onDiscard: noop,
+        }}
+      />
+    ),
+  },
 ];
 
 export const stateById = (id: string): GalleryState | undefined =>
