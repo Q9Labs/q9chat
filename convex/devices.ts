@@ -13,14 +13,25 @@ function decode(value: string) {
     throw new Error("Invalid push subscription");
   }
 }
-function validateKeys(p256dh: string, auth: string) {
+async function validateKeys(p256dh: string, auth: string) {
   if (!/^[A-Za-z0-9_-]+={0,2}$/u.test(p256dh) || !/^[A-Za-z0-9_-]+={0,2}$/u.test(auth))
     throw new Error("Invalid push subscription");
   const publicKey = decode(p256dh);
   if (publicKey.length !== 65 || publicKey[0] !== 4 || decode(auth).length !== 16)
     throw new Error("Invalid push subscription");
+  try {
+    await crypto.subtle.importKey(
+      "raw",
+      publicKey,
+      { name: "ECDH", namedCurve: "P-256" },
+      false,
+      [],
+    );
+  } catch {
+    throw new Error("Invalid push subscription");
+  }
 }
-function validateWeb(endpoint: string, p256dh: string, auth: string) {
+function validateWeb(endpoint: string) {
   let url: URL;
   try {
     url = new URL(endpoint);
@@ -42,7 +53,6 @@ function validateWeb(endpoint: string, p256dh: string, auth: string) {
     ].some((host) => url.hostname === host || url.hostname.endsWith(`.${host}`))
   )
     throw new Error("Invalid push subscription");
-  validateKeys(p256dh, auth);
 }
 async function cap(ctx: MutationCtx, profileId: Id<"profiles">) {
   const rows = await ctx.db
@@ -81,7 +91,8 @@ export const registerWeb = mutation({
     const profile = await active(ctx);
     if (args.endpoint.length > 2000 || args.p256dh.length > 200 || args.auth.length > 200)
       throw new Error("Push subscription exceeds its limits");
-    validateWeb(args.endpoint, args.p256dh, args.auth);
+    validateWeb(args.endpoint);
+    await validateKeys(args.p256dh, args.auth);
     const row = await ctx.db
       .query("devices")
       .withIndex("by_endpoint", (q) => q.eq("endpoint", args.endpoint))

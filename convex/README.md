@@ -37,10 +37,10 @@ are cleaned in batches after deletion; post counts disappear transactionally.
 Account deletion is retried by the ten-minute cron and retains the auth-id
 lock until one hour after WorkOS deletion before replacing it with a tombstone.
 
-Voice sniffing reads at most 64 KiB: Ogg requires OpusHead; WebM requires
-A_OPUS without a video codec; M4A requires mp4a without a video handler. Missing
-codec markers and video containers remain generic files. Real ffmpeg fixtures
-cover these classifications.
+Voice sniffing uses only container signatures (Ogg, WebM/EBML, MP4/M4A and
+ADTS AAC), not codec markers or track parsing. A crafted signature may produce
+an unplayable voice note; v1 accepts this. An upload can only be consumed as
+its recorded kind. Real ffmpeg fixtures cover these classifications.
 
 List and timeline queries share a promise cache for people, and added events
 resolve only three names plus an others count. Mentions return profile IDs.

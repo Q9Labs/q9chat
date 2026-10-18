@@ -1226,18 +1226,19 @@ it("review probe Expo error ticket does not masquerade as successful delivery", 
   await drain(t);
   expect(await t.run((ctx) => ctx.db.query("devices").collect())).toHaveLength(0);
 });
-it("review probe truncated Ogg header is not accepted as a playable voice note", async () => {
+it("accepts an Ogg signature without parsing its codecs", async () => {
   const t = fixture();
   const { alice, groupId } = await group(t);
   const uploadId = await upload(alice.client, "OggS");
   await expect(
     alice.client.mutation(api.messages.send, {
       groupId,
-      clientKey: "invalid-audio",
+      clientKey: "signature-only",
       body: "",
       attachments: [{ kind: "voice", uploadId, durationMs: 1000, waveform: [0.5] }],
     }),
-  ).rejects.toThrow("bad_attachment");
+  ).resolves.toBeDefined();
+  await drain(t);
 });
 
 it("bounds timeline added events to three people and an others count", async () => {
@@ -1394,7 +1395,7 @@ it("rejects invalid web key lengths and the wrong public-key prefix", async () =
     ).rejects.toThrow("Invalid push subscription");
 });
 
-it("sniffs real audio codecs and rejects video tracks and incomplete containers", async () => {
+it("classifies real containers by signature without parsing their tracks", async () => {
   const { readFile } = await import("node:fs/promises");
   const t = fixture();
   const { alice, groupId } = await group(t);
@@ -1417,13 +1418,11 @@ it("sniffs real audio codecs and rejects video tracks and incomplete containers"
       body: "",
       attachments: [{ kind: "voice", uploadId: id, durationMs: 50, waveform: [0] }],
     });
-    if (name.startsWith("voice")) await expect(sendVoice).resolves.toBeDefined();
-    else await expect(sendVoice).rejects.toThrow("bad_attachment");
+    await expect(sendVoice).resolves.toBeDefined();
   }
   for (const bytes of [
     "OggS",
     "OggSvorbis",
-    "\x1a\x45\xdf\xa3webm",
     "0000ftypM4A ",
     "OggS" + "x".repeat(65536) + "OpusHead",
   ]) {
@@ -1431,11 +1430,78 @@ it("sniffs real audio codecs and rejects video tracks and incomplete containers"
     await expect(
       alice.client.mutation(api.messages.send, {
         groupId,
-        clientKey: String(bytes.length),
+        clientKey: bytes.slice(0, 16) + String(bytes.length),
         body: "",
         attachments: [{ kind: "voice", uploadId, durationMs: 50, waveform: [0] }],
       }),
-    ).rejects.toThrow("bad_attachment");
+    ).resolves.toBeDefined();
   }
   await drain(t);
+});
+
+it.each(["long.m4a", "noise.webm", "raw.aac"])(
+  "accepts the real voice regression fixture %s and enforces its recorded kind",
+  async (name) => {
+    const { readFile } = await import("node:fs/promises");
+    const t = fixture();
+    const { alice, groupId } = await group(t);
+    const bytes = await readFile(new URL(`./fixtures/${name}`, import.meta.url));
+    const response = await alice.client.fetch("/upload", {
+      method: "POST",
+      headers: { Authorization: "Bearer test", "Content-Type": "application/octet-stream" },
+      body: new Uint8Array(bytes),
+    });
+    expect(response.status).toBe(200);
+    const uploadId = await t.run(async (ctx) => {
+      const rows = await ctx.db.query("uploads").collect();
+      return rows.at(-1)?._id;
+    });
+    if (!uploadId) throw new Error("Missing upload");
+    await expect(
+      alice.client.mutation(api.messages.send, {
+        groupId,
+        clientKey: "wrong-kind",
+        body: "",
+        attachments: [{ kind: "file", uploadId, name }],
+      }),
+    ).rejects.toThrow("bad_attachment");
+    await expect(
+      alice.client.mutation(api.messages.send, {
+        groupId,
+        clientKey: "voice",
+        body: "",
+        attachments: [{ kind: "voice", uploadId, durationMs: 10000, waveform: [0] }],
+      }),
+    ).resolves.toBeDefined();
+    await expect(
+      alice.client.mutation(api.messages.send, {
+        groupId,
+        clientKey: "used-again",
+        body: "",
+        attachments: [{ kind: "voice", uploadId, durationMs: 10000, waveform: [0] }],
+      }),
+    ).rejects.toThrow("bad_attachment");
+    await drain(t);
+  },
+);
+
+it("rejects an off-curve P-256 point before storing a web subscription", async () => {
+  const t = fixture();
+  const alice = await account(t, "Alice");
+  const keys = pushKeys();
+  const offCurve = Buffer.alloc(65);
+  offCurve[0] = 4;
+  const endpoint = "https://fcm.googleapis.com/fcm/send/curve";
+  await expect(
+    alice.client.mutation(api.devices.registerWeb, {
+      endpoint,
+      ...keys,
+      p256dh: offCurve.toString("base64url"),
+    }),
+  ).rejects.toThrow("Invalid push subscription");
+  expect(await t.run((ctx) => ctx.db.query("devices").collect())).toHaveLength(0);
+  await expect(
+    alice.client.mutation(api.devices.registerWeb, { endpoint, ...keys }),
+  ).resolves.toBeNull();
+  expect(await t.run((ctx) => ctx.db.query("devices").collect())).toHaveLength(1);
 });

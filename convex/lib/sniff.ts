@@ -2,7 +2,7 @@ export type Sniffed = { kind: "image" | "file" | "voice"; contentType: string };
 export function sniff(bytes: Uint8Array): Sniffed {
   const text = (offset: number, length: number) =>
     String.fromCharCode(...bytes.slice(offset, offset + length));
-  const prefix = text(0, Math.min(bytes.length, 65536));
+  const prefix = text(0, Math.min(bytes.length, 72));
   const starts = (...signature: number[]) =>
     signature.every((byte, index) => bytes[index] === byte);
   if (starts(0xff, 0xd8, 0xff)) return { kind: "image", contentType: "image/jpeg" };
@@ -15,28 +15,21 @@ export function sniff(bytes: Uint8Array): Sniffed {
     if (/heic|heix|hevc|hevx|mif1|msf1/u.test(brands))
       return { kind: "image", contentType: "image/heic" };
   }
-  const voice = voiceType(prefix, starts);
+  const voice = voiceType(prefix, starts, bytes);
   if (voice) return voice;
   if (text(0, 5) === "%PDF-") return { kind: "file", contentType: "application/pdf" };
   return { kind: "file", contentType: "application/octet-stream" };
 }
 
-const audioTrack = (prefix: string, audio: string, video: string) =>
-  prefix.includes(audio) && !prefix.includes(video);
-function voiceType(prefix: string, starts: (...signature: number[]) => boolean): Sniffed | null {
-  if (
-    prefix.slice(4, 8) === "ftyp" &&
-    /M4A |M4B /u.test(prefix.slice(8, 72)) &&
-    audioTrack(prefix, "mp4a", "vide")
-  )
-    return { kind: "voice", contentType: "audio/mp4" };
-  if (prefix.startsWith("OggS") && audioTrack(prefix, "OpusHead", "theora"))
-    return { kind: "voice", contentType: "audio/ogg" };
-  if (
-    starts(0x1a, 0x45, 0xdf, 0xa3) &&
-    prefix.includes("webm") &&
-    audioTrack(prefix, "A_OPUS", "V_")
-  )
-    return { kind: "voice", contentType: "audio/webm" };
+function voiceType(
+  prefix: string,
+  starts: (...signature: number[]) => boolean,
+  bytes: Uint8Array,
+): Sniffed | null {
+  if (prefix.slice(4, 8) === "ftyp") return { kind: "voice", contentType: "audio/mp4" };
+  if (prefix.startsWith("OggS")) return { kind: "voice", contentType: "audio/ogg" };
+  if (starts(0x1a, 0x45, 0xdf, 0xa3)) return { kind: "voice", contentType: "audio/webm" };
+  if (bytes[0] === 0xff && bytes[1] !== undefined && (bytes[1] & 0xf6) === 0xf0)
+    return { kind: "voice", contentType: "audio/aac" };
   return null;
 }

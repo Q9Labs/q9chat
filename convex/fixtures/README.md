@@ -10,5 +10,13 @@ They contain no personal data.
 - `video.webm`: libvpx plus libopus.
 - `video.m4a`: MPEG-4 video plus AAC, with `-movflags +faststart`.
 
-The tests also use hand-built incomplete headers and a codec marker beyond the
-64 KiB sniffing window to prove those remain generic files.
+The round-two review supplied three additional real ffmpeg audio fixtures:
+
+- `long.m4a`: 10-second AAC/M4A with metadata after the media data (past 64 KiB).
+- `noise.webm`: 10-second Opus audio whose compressed payload contains `V_`.
+- `raw.aac`: ADTS AAC.
+
+The tests classify containers by signature only, including the video fixtures
+and hand-built incomplete headers. No codec or track parsing is intended: v1
+accepts that a crafted signature may not play. The three review fixtures also
+prove that a voice upload cannot be consumed as a file or reused.
