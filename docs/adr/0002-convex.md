@@ -17,15 +17,16 @@ the workspace-only `@q9chat/convex` package.
 
 Use WorkOS AuthKit for sign-in. `convex/auth.config.ts` trusts the two WorkOS
 token issuers for `WORKOS_CLIENT_ID` and verifies them against the WorkOS keys.
-The web app signs in with `@workos-inc/authkit-react` and hands its access token
-to Convex. A person's profile row links to their WorkOS user by the token's
-subject.
+The web Worker uses the headless User Management API for email codes, Google
+and Apple. The web session provider keeps the access token in memory and the
+refresh token in an httpOnly cookie. It hands the access token to Convex. A
+person's profile row links to their WorkOS user by the token's subject.
 
 Deploy Convex from the web deployment workflow with `CONVEX_DEPLOY_KEY`, then
 deploy the web Worker.
 
 ## Consequences
 
-Sign-in has no tables or secrets inside Convex. Each Convex deployment needs its
-own `WORKOS_CLIENT_ID`, and the WorkOS dashboard must list each web address as a
-redirect URI and allowed origin.
+Session tokens stay outside Convex. Each Convex deployment needs its own
+`WORKOS_CLIENT_ID`. The Worker needs server-only `WORKOS_API_KEY` and
+`WORKOS_CLIENT_ID`, and WorkOS must register both callback URLs for each origin.
