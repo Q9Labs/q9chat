@@ -77,6 +77,21 @@ outcomes:
       - Quote a message inline when replying.
       - Jump to the original even far back, and return to the latest messages on send, receive or request.
 
+  - id: chat.edit_react_typing
+    title: Edit or delete your messages, react, and see who is typing
+    area: messages
+    state: planned
+    summary: Not built.
+    theory: theory.md#messages
+    code: []
+    priority: P1
+    size: M
+    size_reason: Two author-only mutations, a reaction toggle and short-lived typing state on both apps.
+    remaining:
+      - Edit your own message and mark it edited; delete your own message and leave a placeholder.
+      - React with one of five fixed emoji and toggle your reaction off.
+      - Show who is typing in a group, with no online indicator.
+
   - id: chat.unread_and_read_state
     title: See what is new since you last looked
     area: messages
@@ -119,7 +134,7 @@ outcomes:
       - Mute a group.
 
   - id: chat.leave_group
-    title: Leave a group
+    title: Leave a group or remove a member
     area: groups
     state: planned
     summary: Not built.
@@ -127,9 +142,10 @@ outcomes:
     code: []
     priority: P1
     size: S
-    size_reason: One mutation and one control on each app.
+    size_reason: Two membership mutations and their controls on each app.
     remaining:
       - Let a member leave a group, ending their access.
+      - Let any member remove another member, and show who removed them in the group.
 
   - id: chat.store_requirements
     title: Delete your account and report a message

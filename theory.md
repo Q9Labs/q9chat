@@ -30,7 +30,11 @@ company join a group like any other member, and leaving a group ends access to
 it.
 
 Membership is the whole permission model: a member can read and write the
-group's history, and a former member cannot.
+group's history, and a former member cannot. Any member can add people or
+remove a member, and the group shows who did it. There are no admin roles.
+
+Anyone can create an account by signing in with an email code, Google or Apple.
+Q9 Chat has no passwords.
 
 ## Messages
 
@@ -39,6 +43,12 @@ original message inline in the same group. Tapping the quote jumps to the
 original, even when it is far back in the history, and the conversation returns
 to the latest messages as soon as the person sends, receives or asks for them.
 There are no side threads.
+
+A person can edit or delete their own messages. An edited message shows that it
+was edited, and a deleted one leaves a quiet placeholder so replies to it still
+make sense. Members react with one of five fixed emoji: 👍 ❤️ 😂 😮 🙏. A
+person has at most one reaction on a message, and a new one replaces it. When a
+person deletes their account, their messages stay and show "Deleted account".
 
 A sent message appears immediately and is never lost or doubled. A retry repeats
 the same message; it never creates a second one. Unsent text stays with its own
@@ -49,7 +59,9 @@ group and never moves into another.
 Q9 Chat interrupts a person only when something needs them: a mention, a reply
 to their message, or any message in a group they chose to hear everything from.
 Everything else waits quietly as an unread count. Read state means what a person
-actually saw, not what the server delivered.
+actually saw, not what the server delivered, and it stays private: nobody sees
+who read what. The only presence a group shows is who is typing; there is no
+online indicator. Notifications reach the phone and the desktop browser.
 
 Opening a group shows what is new since the person last looked. The look is
 quiet as well: a monochrome base, one accent used sparingly, and color that
@@ -69,10 +81,11 @@ and stay in step: what a person read or wrote on one is current on the other.
 3. Open a group and see what is new since you last looked.
 4. Send text, an image, a file or a voice note.
 5. Reply by quoting a message, and jump from the quote to the original.
-6. Find an old message with search.
-7. Get notified only when something needs you, and open the notification
+6. Edit or delete your own message, and react to any message.
+7. Find an old message with search.
+8. Get notified only when something needs you, and open the notification
    straight at the message.
-8. Mute or leave a group.
+9. Mute or leave a group, or remove a member.
 
 Each journey works on the phone and on the web. Account deletion and reporting a
 message exist because the app stores require them.

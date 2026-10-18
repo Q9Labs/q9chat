@@ -45,8 +45,8 @@ Color comes from avatars and from meaning, not decoration. A person shows their
 photo; without one, their initials on one of eight rich colors fixed by their
 ID: `#0369a1`, `#be185d`, `#b45309`, `#0f766e`, `#6d28d9`, `#c2410c`,
 `#4d7c0f`, `#b91c1c`. Their name in a group uses the same color, lightened in
-dark mode until it meets contrast. Red marks a message that failed to send;
-green marks someone online. Generated portrait avatars come after launch.
+dark mode until it meets contrast. Red marks a message that failed to send.
+There is no online indicator. Generated portrait avatars come after launch.
 
 ## Layout and language
 
