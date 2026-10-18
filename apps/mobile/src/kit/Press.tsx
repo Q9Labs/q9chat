@@ -1,7 +1,14 @@
 import { useState } from "react";
-import { Animated, Pressable, type PressableProps, type StyleProp, type ViewStyle } from "react-native";
-import { pressEasing, useReducedMotion } from "./motion";
+import {
+  Animated,
+  Pressable,
+  type PressableProps,
+  type StyleProp,
+  type ViewStyle,
+} from "react-native";
+
 import { motion } from "../theme/tokens";
+import { pressEasing, useReducedMotion } from "./motion";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -16,7 +23,13 @@ export function Press({ scaleTo = 0.97, style, children, onPressIn, onPressOut, 
   const [scale] = useState(() => new Animated.Value(1));
   const reduced = useReducedMotion();
   const to = (value: number) => {
-    if (!reduced) Animated.timing(scale, { toValue: value, duration: motion.press, easing: pressEasing, useNativeDriver: true }).start();
+    if (!reduced)
+      Animated.timing(scale, {
+        toValue: value,
+        duration: motion.press,
+        easing: pressEasing,
+        useNativeDriver: true,
+      }).start();
   };
   return (
     <AnimatedPressable

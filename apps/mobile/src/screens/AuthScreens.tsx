@@ -1,12 +1,13 @@
 import { useRef } from "react";
 import { TextInput, View, type TextInputInstance } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { AppleGlyph, GoogleGlyph, Icon } from "../kit/Icon";
+
 import { PhotoPicker } from "../kit/Avatar";
 import { PillButton } from "../kit/Buttons";
-import { Press } from "../kit/Press";
 import { FieldIcon, Label, Note, TextField } from "../kit/Field";
+import { AppleGlyph, GoogleGlyph, Icon } from "../kit/Icon";
 import { Wordmark } from "../kit/Logo";
+import { Press } from "../kit/Press";
 import { useTheme } from "../theme";
 import { T } from "../theme/Text";
 import { fonts, radius } from "../theme/tokens";
@@ -17,7 +18,15 @@ function AuthFrame({ children }: { children: React.ReactNode }) {
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
   return (
-    <View style={{ flex: 1, backgroundColor: c.s0, paddingTop: insets.top, paddingBottom: insets.bottom, justifyContent: "center" }}>
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: c.s0,
+        paddingTop: insets.top,
+        paddingBottom: insets.bottom,
+        justifyContent: "center",
+      }}
+    >
       <View style={{ paddingHorizontal: 24, gap: 10 }}>{children}</View>
     </View>
   );
@@ -27,14 +36,30 @@ function Hero({ children }: { children: React.ReactNode }) {
   return <View style={{ alignItems: "center", gap: 8, marginBottom: 18 }}>{children}</View>;
 }
 
-function ProviderButton({ label, glyph, onPress }: { label: string; glyph: React.ReactNode; onPress: () => void }) {
+function ProviderButton({
+  label,
+  glyph,
+  onPress,
+}: {
+  label: string;
+  glyph: React.ReactNode;
+  onPress: () => void;
+}) {
   const { c } = useTheme();
   return (
     <Press
       accessibilityRole="button"
       accessibilityLabel={label}
       onPress={onPress}
-      style={{ height: 44, borderRadius: 999, backgroundColor: c.s1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 }}
+      style={{
+        height: 44,
+        borderRadius: 999,
+        backgroundColor: c.s1,
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 10,
+      }}
     >
       {glyph}
       <T weight={600}>{label}</T>
@@ -102,7 +127,14 @@ const CODE_LENGTH = 6;
 function LinkText({ children, onPress }: { children: string; onPress: () => void }) {
   const { c } = useTheme();
   return (
-    <T size={12} weight={600} lineHeight={19.2} onPress={onPress} accessibilityRole="link" style={{ textDecorationLine: "underline", textDecorationColor: c.ln2 }}>
+    <T
+      size={12}
+      weight={600}
+      lineHeight={19.2}
+      onPress={onPress}
+      accessibilityRole="link"
+      style={{ textDecorationLine: "underline", textDecorationColor: c.ln2 }}
+    >
       {children}
     </T>
   );
@@ -150,10 +182,25 @@ export function CodeScreen({
   return (
     <AuthFrame>
       <Hero>
-        <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: c.s1, alignItems: "center", justifyContent: "center" }}>
+        <View
+          style={{
+            width: 56,
+            height: 56,
+            borderRadius: 28,
+            backgroundColor: c.s1,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
           <Icon name="mail" size={24} color="mu" />
         </View>
-        <T size={22} weight={600} lineHeight={30.8} style={{ marginTop: 10 }} accessibilityRole="header">
+        <T
+          size={22}
+          weight={600}
+          lineHeight={30.8}
+          style={{ marginTop: 10 }}
+          accessibilityRole="header"
+        >
           Check your email
         </T>
         <T color="mu" style={{ textAlign: "center" }}>
@@ -162,7 +209,10 @@ export function CodeScreen({
           {"."}
         </T>
       </Hero>
-      <View accessibilityLabel="6-digit code" style={{ flexDirection: "row", justifyContent: "center", gap: 8, marginVertical: 4 }}>
+      <View
+        accessibilityLabel="6-digit code"
+        style={{ flexDirection: "row", justifyContent: "center", gap: 8, marginVertical: 4 }}
+      >
         {digits.map((digit, index) => (
           <CodeCell
             key={index}
@@ -178,7 +228,12 @@ export function CodeScreen({
           />
         ))}
       </View>
-      <T size={13} color="er" accessibilityRole="alert" style={{ textAlign: "center", minHeight: 18, marginTop: 4 }}>
+      <T
+        size={13}
+        color="er"
+        accessibilityRole="alert"
+        style={{ textAlign: "center", minHeight: 18, marginTop: 4 }}
+      >
         {bad ? "That code didn't work. Check it and try again." : ""}
       </T>
       <View style={{ alignItems: "center", marginTop: 12 }}>
@@ -265,7 +320,13 @@ export function ProfileScreen({
   return (
     <AuthFrame>
       <Hero>
-        <T size={22} weight={600} lineHeight={30.8} style={{ marginTop: 10 }} accessibilityRole="header">
+        <T
+          size={22}
+          weight={600}
+          lineHeight={30.8}
+          style={{ marginTop: 10 }}
+          accessibilityRole="header"
+        >
           Set up your profile
         </T>
         <T color="mu" style={{ textAlign: "center" }}>
@@ -276,9 +337,23 @@ export function ProfileScreen({
         <PhotoPicker avatar={avatar} hasPhoto={hasPhoto} onPress={onTogglePhoto} />
       </View>
       <Label>Your name</Label>
-      <TextField accessibilityLabel="Your name" value={name} onChangeText={onNameChange} autoCorrect={false} />
-      <Note style={{ marginTop: 0 }}>{`Signed in as ${email}. Without a photo, people see your initials on your color.`}</Note>
-      <PillButton label="Continue" variant="solid" size="big" wide disabled={!name.trim()} onPress={onContinue} />
+      <TextField
+        accessibilityLabel="Your name"
+        value={name}
+        onChangeText={onNameChange}
+        autoCorrect={false}
+      />
+      <Note
+        style={{ marginTop: 0 }}
+      >{`Signed in as ${email}. Without a photo, people see your initials on your color.`}</Note>
+      <PillButton
+        label="Continue"
+        variant="solid"
+        size="big"
+        wide
+        disabled={!name.trim()}
+        onPress={onContinue}
+      />
     </AuthFrame>
   );
 }

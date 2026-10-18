@@ -1,5 +1,6 @@
 import { Redirect, useLocalSearchParams } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+
 import { stateById } from "../../src/gallery/states";
 import { ThemeProvider } from "../../src/theme";
 

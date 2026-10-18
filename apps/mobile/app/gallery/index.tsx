@@ -1,6 +1,7 @@
 import { Link, Redirect } from "expo-router";
 import { ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+
 import { STATES } from "../../src/gallery/states";
 import { useTheme } from "../../src/theme";
 import { T } from "../../src/theme/Text";
@@ -16,13 +17,17 @@ export default function GalleryIndex() {
         <T size={22} weight={600}>
           Gallery
         </T>
+        {/* react-doctor-disable-next-line react-doctor/rn-no-scrollview-mapped-list -- dev-only index of a short fixed list */}
         {groups.map((group) => (
           <View key={group} style={{ gap: 6 }}>
             <T size={13} weight={600} color="mu">
               {group}
             </T>
             {STATES.filter((state) => state.group === group).map((state) => (
-              <Link key={state.id} href={{ pathname: "/gallery/[state]", params: { state: state.id } }}>
+              <Link
+                key={state.id}
+                href={{ pathname: "/gallery/[state]", params: { state: state.id } }}
+              >
                 <T size={15}>{`${state.title}  ·  ${state.id}`}</T>
               </Link>
             ))}

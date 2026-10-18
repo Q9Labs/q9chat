@@ -1,10 +1,11 @@
 import { View } from "react-native";
+
 import { useTheme } from "../theme";
 import { T } from "../theme/Text";
+import type { GroupRow } from "../types";
 import { Avatar } from "./Avatar";
 import { Icon } from "./Icon";
 import { Press } from "./Press";
-import type { GroupRow } from "../types";
 
 function Badge({ children, muted, wide }: { children: string; muted: boolean; wide?: boolean }) {
   const { c } = useTheme();
@@ -28,47 +29,87 @@ function Badge({ children, muted, wide }: { children: string; muted: boolean; wi
   );
 }
 
-const previewText = ({ by, summary }: { by: { name: string; isYou: boolean } | null; summary: string }) =>
-  by === null ? summary : `${by.isYou ? "You" : by.name}: ${summary}`;
+const previewText = ({
+  by,
+  summary,
+}: {
+  by: { name: string; isYou: boolean } | null;
+  summary: string;
+}) => (by === null ? summary : `${by.isYou ? "You" : by.name}: ${summary}`);
+
+type RowFacts = { muted: boolean; unread: number; mentions: boolean; preview: string };
+
+const factsOf = (row: GroupRow): RowFacts => {
+  if (row.status === "removed")
+    return { muted: false, unread: 0, mentions: false, preview: `${row.removedBy} removed you` };
+  return {
+    muted: row.notify === "muted",
+    unread: row.unreadCount,
+    mentions: row.needsYou && row.unreadCount > 0,
+    preview: previewText(row.preview),
+  };
+};
+
+const labelOf = (title: string, { unread, mentions, muted }: RowFacts) =>
+  [
+    title,
+    unread ? `${unread} unread` : null,
+    mentions ? "mentions you" : null,
+    muted ? "muted" : null,
+  ]
+    .filter(Boolean)
+    .join(", ");
+
+/** The mute bell, the @ badge and the unread count. */
+function Badges({ facts }: { facts: RowFacts }) {
+  const { muted, mentions, unread } = facts;
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 4, minHeight: 18 }}>
+      {muted ? <Icon name="bellOff" size={14} color="mu" /> : null}
+      {mentions ? (
+        <Badge muted={muted} wide>
+          @
+        </Badge>
+      ) : null}
+      {unread ? <Badge muted={muted}>{unread > 99 ? "99+" : String(unread)}</Badge> : null}
+    </View>
+  );
+}
 
 /** A group in the list: avatar, title and preview, time, mute bell, @ and unread badges. */
 export function GroupRowView({ row, onPress }: { row: GroupRow; onPress: () => void }) {
-  const removed = row.status === "removed";
-  const muted = !removed && row.notify === "muted";
-  const unread = !removed ? row.unreadCount : 0;
-  const mentions = !removed && row.needsYou && unread > 0;
-  const preview = removed ? `${row.removedBy} removed you` : previewText(row.preview);
-  const label = `${row.title}${unread ? `, ${unread} unread` : ""}${mentions ? ", mentions you" : ""}${muted ? ", muted" : ""}`;
+  const facts = factsOf(row);
   return (
     <Press
       accessibilityRole="button"
-      accessibilityLabel={label}
+      accessibilityLabel={labelOf(row.title, facts)}
       onPress={onPress}
       scaleTo={1}
-      style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10, paddingHorizontal: 8, borderRadius: 12 }}
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+        paddingVertical: 10,
+        paddingHorizontal: 8,
+        borderRadius: 12,
+      }}
     >
       <Avatar avatar={row.avatar} size={48} />
       <View style={{ flex: 1, minWidth: 0, gap: 1 }}>
         <T size={16} weight={600} numberOfLines={1}>
           {row.title}
         </T>
-        <T size={14.5} color={unread && !muted ? "tx2" : "mu"} numberOfLines={1}>
-          {preview}
+        <T size={14.5} color={facts.unread && !facts.muted ? "tx2" : "mu"} numberOfLines={1}>
+          {facts.preview}
         </T>
       </View>
-      <View style={{ alignSelf: "stretch", alignItems: "flex-end", justifyContent: "center", gap: 4 }}>
+      <View
+        style={{ alignSelf: "stretch", alignItems: "flex-end", justifyContent: "center", gap: 4 }}
+      >
         <T size={13} color="mu" tabular>
           {row.whenLabel}
         </T>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 4, minHeight: 18 }}>
-          {muted ? <Icon name="bellOff" size={14} color="mu" /> : null}
-          {mentions ? (
-            <Badge muted={muted} wide>
-              @
-            </Badge>
-          ) : null}
-          {unread ? <Badge muted={muted}>{unread > 99 ? "99+" : String(unread)}</Badge> : null}
-        </View>
+        <Badges facts={facts} />
       </View>
     </Press>
   );

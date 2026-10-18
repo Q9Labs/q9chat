@@ -1,5 +1,6 @@
 import { useRouter } from "expo-router";
 import { useState } from "react";
+
 import { ME_FULL_NAME, defaultWorld, personOf } from "../src/fixtures/build";
 import { AccountScreen } from "../src/screens/AccountScreen";
 

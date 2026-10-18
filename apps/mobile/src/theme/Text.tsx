@@ -1,6 +1,7 @@
 import { Text as RNText, type StyleProp, type TextProps, type TextStyle } from "react-native";
+
 import { useTheme } from ".";
-import { fonts, resolveColor, type ColorRef, type Weight } from "./tokens";
+import { fonts, italicFont, resolveColor, type ColorRef, type Weight } from "./tokens";
 
 type Props = Omit<TextProps, "style"> & {
   size?: number;
@@ -8,6 +9,7 @@ type Props = Omit<TextProps, "style"> & {
   color?: ColorRef;
   lineHeight?: number;
   tabular?: boolean;
+  italic?: boolean;
   style?: StyleProp<TextStyle>;
 };
 
@@ -18,6 +20,7 @@ export function T({
   color = "tx",
   lineHeight,
   tabular,
+  italic,
   style,
   ...rest
 }: Props) {
@@ -29,7 +32,7 @@ export function T({
       {...rest}
       style={[
         {
-          fontFamily: fonts[weight],
+          fontFamily: italic ? italicFont : fonts[weight],
           fontSize: size,
           lineHeight: lineHeight ?? Math.round(size * 1.4 * 100) / 100,
           color: resolved,

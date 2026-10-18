@@ -1,4 +1,5 @@
 import { ScrollView, View } from "react-native";
+
 import { PhotoPicker } from "../kit/Avatar";
 import { PillButton } from "../kit/Buttons";
 import { PageNav, Screen } from "../kit/Chrome";
@@ -26,7 +27,7 @@ export type AccountScreenProps = {
 function ProviderIcon({ provider }: { provider: Me["signedInWith"] }) {
   if (provider === "Google") return <GoogleGlyph />;
   if (provider === "Apple") return <AppleGlyph />;
-  return <Icon name="mail" size={20} color="mu" />;
+  return <Icon name="mail" size={20} color="tx" />;
 }
 
 export function AccountScreen(props: AccountScreenProps) {
@@ -34,10 +35,30 @@ export function AccountScreen(props: AccountScreenProps) {
   return (
     <Screen safeBottom>
       <PageNav title="Account" start={{ back: true, onPress: props.onBack }} />
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 18 }}>
-        <View style={{ alignItems: "center", gap: 2, paddingTop: 18, paddingHorizontal: 20, paddingBottom: 16 }}>
-          <PhotoPicker avatar={person.avatar} hasPhoto={props.hasPhoto} onPress={props.onTogglePhoto} />
-          <T size={17} weight={600} style={{ marginTop: 10, textAlign: "center" }} accessibilityRole="header">
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 18 }}
+      >
+        <View
+          style={{
+            alignItems: "center",
+            gap: 2,
+            paddingTop: 18,
+            paddingHorizontal: 20,
+            paddingBottom: 16,
+          }}
+        >
+          <PhotoPicker
+            avatar={person.avatar}
+            hasPhoto={props.hasPhoto}
+            onPress={props.onTogglePhoto}
+          />
+          <T
+            size={17}
+            weight={600}
+            style={{ marginTop: 10, textAlign: "center" }}
+            accessibilityRole="header"
+          >
             {person.fullName}
           </T>
           <T size={13} color="mu">
@@ -45,19 +66,41 @@ export function AccountScreen(props: AccountScreenProps) {
           </T>
         </View>
         <Field label="Name">
-          <TextField accessibilityLabel="Name" value={props.name} onChangeText={props.onNameChange} autoCorrect={false} />
+          <TextField
+            accessibilityLabel="Name"
+            value={props.name}
+            onChangeText={props.onNameChange}
+            autoCorrect={false}
+          />
         </Field>
         <Field label="Photo">
           <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
-            <PillButton label={props.hasPhoto ? "Remove photo" : "Upload photo"} onPress={props.onTogglePhoto} />
-            <Note style={{ margin: 0, flexShrink: 1 }}>{props.hasPhoto ? "People see your photo." : "Without a photo, people see your initials on your color."}</Note>
+            <PillButton
+              label={props.hasPhoto ? "Remove photo" : "Upload photo"}
+              onPress={props.onTogglePhoto}
+            />
+            <Note style={{ margin: 0, flexShrink: 1 }}>
+              {props.hasPhoto
+                ? "People see your photo."
+                : "Without a photo, people see your initials on your color."}
+            </Note>
           </View>
         </Field>
         <Field label="Signed in with">
-          <FlatValue icon={<ProviderIcon provider={signedInWith} />} text={`${signedInWith} · ${person.email}`} />
+          <FlatValue
+            icon={<ProviderIcon provider={signedInWith} />}
+            text={`${signedInWith} · ${person.email}`}
+          />
         </Field>
-        <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 24, gap: 8 }}>
-          <PillButton label="Delete account" icon="trash" variant="danger" onPress={props.onAskDelete} />
+        <View
+          style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 8, gap: 8 }}
+        >
+          <PillButton
+            label="Delete account"
+            icon="trash"
+            variant="danger"
+            onPress={props.onAskDelete}
+          />
           <PillButton label="Sign out" icon="logout" onPress={props.onSignOut} />
         </View>
       </ScrollView>

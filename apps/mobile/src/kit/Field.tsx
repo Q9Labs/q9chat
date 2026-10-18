@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { TextInput, View, type StyleProp, type TextInputProps, type TextStyle } from "react-native";
+
 import { useTheme } from "../theme";
 import { T } from "../theme/Text";
 import { fonts, radius } from "../theme/tokens";
@@ -46,7 +47,14 @@ export function TextField({
         }}
         placeholderTextColor={c.mu}
         selectionColor={c.ac}
-        style={{ flex: 1, height: "100%", padding: 0, fontFamily: fonts[400], fontSize: 15, color: c.tx }}
+        style={{
+          flex: 1,
+          height: "100%",
+          padding: 0,
+          fontFamily: fonts[400],
+          fontSize: 15,
+          color: c.tx,
+        }}
       />
       {right}
     </View>
@@ -106,14 +114,40 @@ export function Field({ label, children }: { label?: string; children: ReactNode
 }
 
 /** The invite link with its copy button; the check shows briefly after copying. */
-export function LinkBox({ link, copied, onCopy }: { link: string; copied: boolean; onCopy: () => void }) {
+export function LinkBox({
+  link,
+  copied,
+  onCopy,
+}: {
+  link: string;
+  copied: boolean;
+  onCopy: () => void;
+}) {
   const { c } = useTheme();
   return (
-    <View style={{ height: 44, flexDirection: "row", alignItems: "center", gap: 8, paddingLeft: 14, paddingRight: 4, borderRadius: 12, backgroundColor: c.s1 }}>
+    <View
+      style={{
+        height: 44,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+        paddingLeft: 14,
+        paddingRight: 4,
+        borderRadius: 12,
+        backgroundColor: c.s1,
+      }}
+    >
       <T size={13} color="tx2" numberOfLines={1} style={{ flex: 1 }}>
         {link}
       </T>
-      <IconButton icon={copied ? "check" : "copy"} iconSize={18} size={36} color={copied ? "tx" : "mu"} label={copied ? "Copied" : "Copy invite link"} onPress={onCopy} />
+      <IconButton
+        icon={copied ? "check" : "copy"}
+        iconSize={18}
+        size={36}
+        color={copied ? "tx" : "mu"}
+        label={copied ? "Copied" : "Copy invite link"}
+        onPress={onCopy}
+      />
     </View>
   );
 }

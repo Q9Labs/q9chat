@@ -1,5 +1,6 @@
 import { useRouter } from "expo-router";
 import { useState } from "react";
+
 import { defaultWorld, personOf } from "../src/fixtures/build";
 import { PEOPLE } from "../src/fixtures/seed";
 import { useToast } from "../src/kit/useToast";
@@ -16,9 +17,15 @@ export default function NewGroupRoute() {
   const [query, setQuery] = useState("");
   const [, showToast] = useToast();
   const q = query.trim().toLowerCase();
+  const pickedIds = new Set(picked);
   const suggestions = q
     ? Object.values(PEOPLE)
-        .filter((p) => p.id !== "hasan" && !picked.includes(p.id) && (p.name.toLowerCase().startsWith(q) || p.email.startsWith(q)))
+        .filter(
+          (p) =>
+            p.id !== "hasan" &&
+            !pickedIds.has(p.id) &&
+            (p.name.toLowerCase().startsWith(q) || p.email.startsWith(q)),
+        )
         .slice(0, 4)
         .map((p) => personOf(p.id, world))
     : [];

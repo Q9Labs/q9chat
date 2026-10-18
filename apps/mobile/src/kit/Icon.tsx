@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import Svg, { Circle, G, Path, Rect } from "react-native-svg";
+
 import { useTheme } from "../theme";
 import { resolveColor, type ColorRef } from "../theme/tokens";
 
@@ -45,7 +46,9 @@ const outline = {
       <Circle cx="19" cy="12" r="1.3" />
     </>
   ),
-  clip: <Path d="m21.4 11.1-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5" />,
+  clip: (
+    <Path d="m21.4 11.1-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5" />
+  ),
   mic: (
     <>
       <Rect x="9" y="2" width="6" height="12" rx="3" />

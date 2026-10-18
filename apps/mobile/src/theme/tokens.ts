@@ -108,6 +108,9 @@ export const fonts = {
   700: "Figtree_700Bold",
 } as const;
 
+/** The only italic the mock uses: "You deleted this message". */
+export const italicFont = "Figtree_400Regular_Italic";
+
 export type Weight = keyof typeof fonts;
 
 export type ColorRef = keyof Palette | (string & {});
@@ -115,4 +118,5 @@ export type ColorRef = keyof Palette | (string & {});
 const isToken = (key: string): key is keyof Palette => key in light;
 
 /** A palette token name or a literal color, resolved against the active palette. */
-export const resolveColor = (c: Palette, color: ColorRef): string => (isToken(color) ? c[color] : color);
+export const resolveColor = (c: Palette, color: ColorRef): string =>
+  isToken(color) ? c[color] : color;

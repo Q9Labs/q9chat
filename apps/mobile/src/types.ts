@@ -48,7 +48,13 @@ export type Segment =
 
 export type MessageContent =
   | { kind: "text"; segments: Segment[]; edited: boolean }
-  | { kind: "image"; caption: Segment[] | null; alt: string; uri: string | null; aspectRatio: number }
+  | {
+      kind: "image";
+      caption: Segment[] | null;
+      alt: string;
+      uri: string | null;
+      aspectRatio: number;
+    }
   | { kind: "file"; name: string; size: string }
   | { kind: "voice"; durationSeconds: number; waveform: readonly number[] }
   | { kind: "deleted" };

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { AccessibilityInfo, Animated, Easing } from "react-native";
+
 import { motion } from "../theme/tokens";
 
 export const moveEasing = Easing.bezier(...motion.ease);
@@ -29,7 +30,13 @@ export function useEased(to: number, duration: number, from?: number): Animated.
   const [value] = useState(() => new Animated.Value(from ?? to));
   useEffect(() => {
     if (reduced) value.setValue(to);
-    else Animated.timing(value, { toValue: to, duration, easing: moveEasing, useNativeDriver: true }).start();
+    else
+      Animated.timing(value, {
+        toValue: to,
+        duration,
+        easing: moveEasing,
+        useNativeDriver: true,
+      }).start();
   }, [reduced, to, duration, value]);
   return value;
 }

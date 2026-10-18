@@ -1,10 +1,11 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
-import { defaultWorld, groupAvatar, groupById, groupTitle, timelineOf, typersOf, waveSamples } from "../../../src/fixtures/build";
-import { useToast } from "../../../src/kit/useToast";
+
+import { chatStateOf, defaultWorld, groupById, waveSamples } from "../../../src/fixtures/build";
 import type { ComposerMode } from "../../../src/kit/Composer";
-import { ChatScreen, type ChatSheet, type ReportReason } from "../../../src/screens/ChatScreen";
 import { noop } from "../../../src/kit/noop";
+import { useToast } from "../../../src/kit/useToast";
+import { ChatScreen, type ChatSheet, type ReportReason } from "../../../src/screens/ChatScreen";
 
 // Fixture data stands in until the wiring lane maps `groups.get` and `messages.range` onto the same props.
 const world = defaultWorld();
@@ -27,15 +28,7 @@ export default function ChatRoute() {
 
   return (
     <ChatScreen
-      title={groupTitle(group, world)}
-      avatar={groupAvatar(group)}
-      subtitle={group.pair ? null : `${group.members.length} members`}
-      muted={world.muted.has(groupId)}
-      removed={null}
-      offline={false}
-      items={timelineOf(groupId, world, group.unread)}
-      typingText={typersOf(group, 1, world)}
-      latestKey={groupId}
+      {...chatStateOf(groupId, world, group.unread, 1)}
       tappedMessageId={tapped}
       playingMessageId={null}
       playProgress={0}

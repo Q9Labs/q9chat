@@ -1,8 +1,9 @@
 import { useRouter } from "expo-router";
 import { useState } from "react";
+
 import { avatarOf } from "../src/fixtures/build";
-import { ProfileScreen } from "../src/screens/AuthScreens";
 import { noop } from "../src/kit/noop";
+import { ProfileScreen } from "../src/screens/AuthScreens";
 
 export default function ProfileRoute() {
   const router = useRouter();

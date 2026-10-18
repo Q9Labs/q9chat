@@ -1,11 +1,22 @@
 import { Image, View } from "react-native";
-import { Icon } from "./Icon";
-import { Press } from "./Press";
+
 import { useTheme } from "../theme";
 import { T } from "../theme/Text";
 import type { Avatar as AvatarData } from "../types";
+import { Icon } from "./Icon";
+import { Press } from "./Press";
 
-const fontFor: Record<number, number> = { 22: 9, 24: 9.5, 28: 11, 32: 12, 36: 12, 40: 13, 44: 15, 48: 16, 72: 24 };
+const fontFor: Record<number, number> = {
+  22: 9,
+  24: 9.5,
+  28: 11,
+  32: 12,
+  36: 12,
+  40: 13,
+  44: 15,
+  48: 16,
+  72: 24,
+};
 
 /** Round for people and groups alike: a photo, else initials on the person's fixed color. */
 export function Avatar({ avatar, size = 32 }: { avatar: AvatarData; size?: number }) {
@@ -20,7 +31,14 @@ export function Avatar({ avatar, size = 32 }: { avatar: AvatarData; size?: numbe
     <View
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
-      style={[base, { alignItems: "center", justifyContent: "center", backgroundColor: group ? c.s2 : avatar.color }]}
+      style={[
+        base,
+        {
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: group ? c.s2 : avatar.color,
+        },
+      ]}
     >
       <T size={font} weight={600} lineHeight={font} color={group ? "tx2" : "#ffffff"}>
         {avatar.initials}
@@ -30,10 +48,25 @@ export function Avatar({ avatar, size = 32 }: { avatar: AvatarData; size?: numbe
 }
 
 /** A 72px avatar with the camera badge that adds or removes the photo. */
-export function PhotoPicker({ avatar, hasPhoto, onPress, size = 72 }: { avatar: AvatarData; hasPhoto: boolean; onPress: () => void; size?: number }) {
+export function PhotoPicker({
+  avatar,
+  hasPhoto,
+  onPress,
+  size = 72,
+}: {
+  avatar: AvatarData;
+  hasPhoto: boolean;
+  onPress: () => void;
+  size?: number;
+}) {
   const { c } = useTheme();
   return (
-    <Press accessibilityRole="button" accessibilityLabel={hasPhoto ? "Remove photo" : "Add a photo"} onPress={onPress} scaleTo={1}>
+    <Press
+      accessibilityRole="button"
+      accessibilityLabel={hasPhoto ? "Remove photo" : "Add a photo"}
+      onPress={onPress}
+      scaleTo={1}
+    >
       <Avatar avatar={avatar} size={size} />
       <View
         style={{

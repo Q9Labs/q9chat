@@ -1,19 +1,35 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Animated, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from "react-native";
+import {
+  Animated,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+  useWindowDimensions,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
 import { RaisedSurface, useTheme } from "../theme";
 import { T } from "../theme/Text";
 import { motion, radius } from "../theme/tokens";
 import { PillButton } from "./Buttons";
 import { Icon, type IconName } from "./Icon";
-import { Press } from "./Press";
 import { moveEasing, useEased, useReducedMotion } from "./motion";
+import { Press } from "./Press";
 
 /**
  * Bottom sheet: runs to the bottom edge, only the top corners are rounded, and its content stays
  * above the home indicator. Render it inside the screen's root view so it covers that screen.
  */
-export function Sheet({ onDismiss, children, label }: { onDismiss: () => void; children: ReactNode; label: string }) {
+export function Sheet({
+  onDismiss,
+  children,
+  label,
+}: {
+  onDismiss: () => void;
+  children: ReactNode;
+  label: string;
+}) {
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
   const { height: screenHeight } = useWindowDimensions();
@@ -28,16 +44,33 @@ export function Sheet({ onDismiss, children, label }: { onDismiss: () => void; c
       y.setValue(0);
       return;
     }
-    Animated.timing(y, { toValue: 0, duration: motion.sheet, easing: moveEasing, useNativeDriver: true }).start();
+    Animated.timing(y, {
+      toValue: 0,
+      duration: motion.sheet,
+      easing: moveEasing,
+      useNativeDriver: true,
+    }).start();
   }, [measured, reduced, y]);
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-      <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: c.scrim, opacity: scrim }]}>
-        <Pressable accessibilityLabel="Close" accessibilityRole="button" onPress={onDismiss} style={StyleSheet.absoluteFill} />
+      <Animated.View
+        style={[StyleSheet.absoluteFill, { backgroundColor: c.scrim, opacity: scrim }]}
+      >
+        <Pressable
+          accessibilityLabel="Close"
+          accessibilityRole="button"
+          onPress={onDismiss}
+          style={StyleSheet.absoluteFill}
+        />
       </Animated.View>
       <RaisedSurface>
-        <SheetPanel label={label} y={y} onMeasured={() => setMeasured(true)} bottomInset={insets.bottom}>
+        <SheetPanel
+          label={label}
+          y={y}
+          onMeasured={() => setMeasured(true)}
+          bottomInset={insets.bottom}
+        >
           {children}
         </SheetPanel>
       </RaisedSurface>
@@ -86,10 +119,23 @@ function SheetPanel({
       <ScrollView
         bounces={false}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingTop: 8, paddingHorizontal: 16, paddingBottom: 8 + bottomInset }}
+        contentContainerStyle={{
+          paddingTop: 8,
+          paddingHorizontal: 16,
+        }}
       >
-        <View style={{ width: 36, height: 5, borderRadius: 3, backgroundColor: c.ln2, alignSelf: "center", marginBottom: 14 }} />
+        <View
+          style={{
+            width: 36,
+            height: 5,
+            borderRadius: 3,
+            backgroundColor: c.ln2,
+            alignSelf: "center",
+            marginBottom: 14,
+          }}
+        />
         {children}
+        <View style={{ height: 8 + bottomInset }} />
       </ScrollView>
     </Animated.View>
   );
@@ -97,13 +143,19 @@ function SheetPanel({
 
 export function SheetTitle({ children }: { children: string }) {
   return (
-    <T size={17} weight={600} lineHeight={23.8} style={{ marginBottom: 6 }} accessibilityRole="header">
+    <T
+      size={17}
+      weight={600}
+      lineHeight={23.8}
+      style={{ marginBottom: 6 }}
+      accessibilityRole="header"
+    >
       {children}
     </T>
   );
 }
 
-export function SheetText({ children }: { children: string }) {
+function SheetText({ children }: { children: string }) {
   return (
     <T color="mu" style={{ marginBottom: 20 }}>
       {children}
@@ -136,8 +188,14 @@ export function ConfirmSheet({
       <SheetTitle>{title}</SheetTitle>
       <SheetText>{text}</SheetText>
       {children}
-      <View style={{ marginTop: 20, gap: 8 }}>
-        <PillButton label={confirmLabel} size="sheet" variant={danger ? "solidDanger" : "solid"} disabled={confirmDisabled} onPress={onConfirm} />
+      <View style={{ marginTop: children ? 20 : 0, gap: 8 }}>
+        <PillButton
+          label={confirmLabel}
+          size="sheet"
+          variant={danger ? "solidDanger" : "solid"}
+          disabled={confirmDisabled}
+          onPress={onConfirm}
+        />
         <PillButton label="Cancel" size="sheet" onPress={onCancel} />
       </View>
     </Sheet>
@@ -189,7 +247,17 @@ export function Toast({ text }: { text: string }) {
   const { c } = useTheme();
   const progress = useEased(1, motion.toast, 0);
   return (
-    <View pointerEvents="none" style={{ position: "absolute", left: 0, right: 0, bottom: 110, alignItems: "center", zIndex: 70 }}>
+    <View
+      pointerEvents="none"
+      style={{
+        position: "absolute",
+        left: 0,
+        right: 0,
+        bottom: 110,
+        alignItems: "center",
+        zIndex: 70,
+      }}
+    >
       <Animated.View
         accessibilityRole="alert"
         style={{
@@ -203,7 +271,9 @@ export function Toast({ text }: { text: string }) {
           gap: 10,
           boxShadow: c.shadow,
           opacity: progress,
-          transform: [{ translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }],
+          transform: [
+            { translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) },
+          ],
         }}
       >
         <Icon name="check" size={18} color="mu" />

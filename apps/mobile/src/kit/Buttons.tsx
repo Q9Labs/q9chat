@@ -1,4 +1,5 @@
 import type { StyleProp, ViewStyle } from "react-native";
+
 import { useTheme } from "../theme";
 import { T } from "../theme/Text";
 import { radius, resolveColor, type ColorRef } from "../theme/tokens";
@@ -36,7 +37,9 @@ export function PillButton({
     danger: c.s1,
     solidDanger: c.er2,
   }[variant];
-  const fg: ColorRef = { default: "tx", solid: "s0", danger: "er", solidDanger: "#ffffff" }[variant];
+  const fg: ColorRef = { default: "tx", solid: "s0", danger: "er", solidDanger: "#ffffff" }[
+    variant
+  ];
   const height = { default: 36, big: 44, small: 32, sheet: 48 }[size];
   const fontSize = { default: 13, big: 14, small: 13, sheet: 15 }[size];
   const px = size === "small" ? 12 : 16;

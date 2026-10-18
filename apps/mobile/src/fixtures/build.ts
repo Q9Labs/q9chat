@@ -34,10 +34,8 @@ const minutes = (time: string) => {
 };
 const stamp = (message: FixtureMessage) => DAY_OFFSET[message.day] * 1440 + minutes(message.time);
 
-export const firstName = (id: string, world: World) => (id === "bilal" && world.long ? LONG_PERSON : (PEOPLE[id]?.name ?? id));
+const firstName = (id: string, world: World) => (id === "bilal" && world.long ? LONG_PERSON : (PEOPLE[id]?.name ?? id));
 const fullName = (id: string, world: World) => (id === ME ? ME_FULL_NAME : firstName(id, world));
-
-export const PHOTO_URI = "https://q9chat.invalid/fixture-photo.png";
 
 export function avatarOf(id: string, photoUri: string | null = null): Avatar {
   const person = PEOPLE[id];
@@ -64,12 +62,12 @@ export const groupById = (id: string): SeedGroup => {
   return group;
 };
 
-export const groupTitle = (group: SeedGroup, world: World) =>
-  group.pair ? firstName(group.pair, world) : world.long && group.id === "launch" ? LONG_GROUP : (group.name ?? group.id);
+const groupTitle = (group: SeedGroup, world: World) =>
+  group.kind === "pair" ? firstName(group.pair, world) : world.long && group.id === "launch" ? LONG_GROUP : group.name;
 
-export const groupAvatar = (group: SeedGroup): Avatar => (group.pair ? avatarOf(group.pair) : { kind: "group", initials: group.initials ?? "?" });
+export const groupAvatar = (group: SeedGroup): Avatar => (group.kind === "pair" ? avatarOf(group.pair) : { kind: "group", initials: group.initials });
 
-export function visibleMessages(groupId: string, world: World): FixtureMessage[] {
+function visibleMessages(groupId: string, world: World): FixtureMessage[] {
   const seeded: FixtureMessage[] = (MESSAGES[groupId] ?? []).filter((message) => !message.long || world.long);
   return [...seeded, ...(world.append[groupId] ?? [])].map((message) => ({ ...message, ...world.patch[message.id] }));
 }
@@ -94,19 +92,23 @@ function systemText(message: FixtureMessage, world: World): string {
 
 const formatDuration = (seconds: number) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 
-export function summaryOf(message: FixtureMessage, world: World): string {
-  if (message.kind === "system") return systemText(message, world);
-  if (message.deleted) return "Message deleted";
+function mediaSummary(message: FixtureMessage, world: World): string {
   if (message.kind === "voice") return `Voice note · ${formatDuration(message.duration ?? 0)}`;
   if (message.kind === "image") return message.text ? `Photo · ${message.text}` : "Photo";
   if (message.kind === "file") return fileName(message, world);
   return message.text;
 }
 
+function summaryOf(message: FixtureMessage, world: World): string {
+  if (message.kind === "system") return systemText(message, world);
+  if (message.deleted) return "Message deleted";
+  return mediaSummary(message, world);
+}
+
 const URL_RE = /https?:\/\/\S+/g;
 const NAME_RE = /@(Hasan|Shoaib|Bilal|Sara|Yahya|Omar|Rana|Nadia)\b/g;
 
-export function segmentsOf(text: string): Segment[] {
+function segmentsOf(text: string): Segment[] {
   const out: Segment[] = [];
   let last = 0;
   const pushNames = (chunk: string) => {
@@ -155,37 +157,48 @@ function reactionsOf(message: FixtureMessage, world: World): Reaction[] {
   return out;
 }
 
-function toMessage(message: FixtureMessage, all: readonly FixtureMessage[], world: World): Message {
-  const mine = message.by === ME;
+type Content = Pick<Message, "content" | "copyText">;
+
+function mediaContentOf(message: FixtureMessage, world: World): Content {
+  if (message.kind === "voice") {
+    return { content: { kind: "voice", durationSeconds: message.duration ?? 0, waveform: waveSamples(seedOf(message.id)) }, copyText: null };
+  }
+  if (message.kind === "file") return { content: { kind: "file", name: fileName(message, world), size: message.size ?? "" }, copyText: null };
+  return {
+    content: { kind: "image", caption: message.text ? segmentsOf(message.text) : null, alt: "Photo: initials on eight colors, light and dark", uri: null, aspectRatio: 1.5 },
+    copyText: message.text || null,
+  };
+}
+
+function contentOf(message: FixtureMessage, world: World): Content {
+  if (message.deleted) return { content: { kind: "deleted" }, copyText: null };
+  if (message.kind === "text") {
+    return { content: { kind: "text", segments: segmentsOf(message.text), edited: message.edited ?? false }, copyText: message.text };
+  }
+  return mediaContentOf(message, world);
+}
+
+function quoteOf(message: FixtureMessage, all: readonly FixtureMessage[], world: World): Message["quote"] {
   const quoted = message.quote ? all.find((other) => other.id === message.quote) : undefined;
-  const base = {
+  if (!quoted) return null;
+  return { messageId: quoted.id, author: quoted.by === ME ? "You" : firstName(quoted.by, world), summary: summaryOf(quoted, world) };
+}
+
+function toMessage(message: FixtureMessage, all: readonly FixtureMessage[], world: World): Message {
+  return {
     id: message.id,
     timeLabel: message.time,
-    mine,
+    mine: message.by === ME,
     state: message.state ?? "sent",
-    quote: quoted
-      ? { messageId: quoted.id, author: quoted.by === ME ? "You" : firstName(quoted.by, world), summary: quoted.deleted ? "Message deleted" : summaryOf(quoted, world) }
-      : null,
+    quote: quoteOf(message, all, world),
     reactions: reactionsOf(message, world),
     summary: summaryOf(message, world),
     highlighted: message.highlighted ?? false,
+    ...contentOf(message, world),
   };
-  if (message.deleted) return { ...base, content: { kind: "deleted" }, copyText: null };
-  if (message.kind === "voice") return { ...base, content: { kind: "voice", durationSeconds: message.duration ?? 0, waveform: waveSamples(seedOf(message.id)) }, copyText: null };
-  if (message.kind === "file") return { ...base, content: { kind: "file", name: fileName(message, world), size: message.size ?? "" }, copyText: null };
-  if (message.kind === "image") {
-    return {
-      ...base,
-      content: { kind: "image", caption: message.text ? segmentsOf(message.text) : null, alt: "Photo: initials on eight colors, light and dark", uri: null, aspectRatio: 1.5 },
-      copyText: message.text || null,
-    };
-  }
-  return { ...base, content: { kind: "text", segments: segmentsOf(message.text), edited: message.edited ?? false }, copyText: message.text };
 }
 
-export type TimelineOptions = { unread: number; typing: number };
-
-export const typersOf = (group: SeedGroup, count: number, world: World): string | null => {
+const typersOf = (group: SeedGroup, count: number, world: World): string | null => {
   const order = ["shoaib", "bilal", "sara", "yahya", "omar", "rana", "hasan", "nadia"];
   const names = order.filter((id) => id !== ME && group.members.includes(id)).map((id) => firstName(id, world));
   const n = Math.min(count, names.length);
@@ -195,19 +208,28 @@ export const typersOf = (group: SeedGroup, count: number, world: World): string 
   return `${n} people are typing`;
 };
 
-/** Day separators, the unread divider, system lines and one group per run by one person under five minutes. */
-export function timelineOf(groupId: string, world: World, unread: number): TimelineItem[] {
-  const messages = visibleMessages(groupId, world);
-  const incoming = messages.filter((message) => message.kind !== "system" && message.by !== ME);
-  const dividerBefore = unread > 0 ? incoming.at(-unread)?.id : undefined;
+type Run = { by: string; messages: FixtureMessage[] };
 
+function dividerBeforeId(messages: readonly FixtureMessage[], unread: number): string | undefined {
+  if (unread <= 0) return undefined;
+  return messages.filter((message) => message.kind !== "system" && message.by !== ME).at(-unread)?.id;
+}
+
+function continuesRun(run: Run | null, message: FixtureMessage): run is Run {
+  const last = run?.messages.at(-1);
+  return run !== null && run.by === message.by && last !== undefined && minutes(message.time) - minutes(last.time) < 5;
+}
+
+/** Day separators, the unread divider, system lines and one group per run by one person under five minutes. */
+function timelineOf(groupId: string, world: World, unread: number): TimelineItem[] {
+  const messages = visibleMessages(groupId, world);
+  const dividerBefore = dividerBeforeId(messages, unread);
   const items: TimelineItem[] = [];
   let day: string | null = null;
-  let run: { by: string; messages: FixtureMessage[] } | null = null;
+  let run: Run | null = null;
   const close = () => {
-    if (!run) return;
-    const first = run.messages[0];
-    if (first) {
+    const first = run?.messages[0];
+    if (run && first) {
       items.push({
         type: "group",
         id: `g-${first.id}`,
@@ -232,11 +254,9 @@ export function timelineOf(groupId: string, world: World, unread: number): Timel
     if (message.kind === "system") {
       close();
       items.push({ type: "system", id: message.id, segments: systemSegments(message, world) });
-      continue;
-    }
-    const last = run?.messages.at(-1);
-    if (run && run.by === message.by && last && minutes(message.time) - minutes(last.time) < 5) run.messages.push(message);
-    else {
+    } else if (continuesRun(run, message)) {
+      run.messages.push(message);
+    } else {
       close();
       run = { by: message.by, messages: [message] };
     }
@@ -261,43 +281,43 @@ const whenOf = (message: FixtureMessage) => (message.day === "Today" ? message.t
 
 export type RowOptions = { unreadOn: boolean; removedGroupIds: readonly string[]; removedBy: string };
 
+const lastBy = (group: SeedGroup, last: FixtureMessage | undefined, world: World) => {
+  if (!last || last.kind === "system" || (group.kind === "pair" && last.by !== ME)) return null;
+  return { name: last.by === ME ? "You" : firstName(last.by, world), isYou: last.by === ME };
+};
+
+function rowOf(group: SeedGroup, last: FixtureMessage | undefined, world: World, options: RowOptions): GroupRow {
+  const base = { groupId: group.id, title: groupTitle(group, world), avatar: groupAvatar(group), whenLabel: last ? whenOf(last) : "" };
+  if (options.removedGroupIds.includes(group.id)) {
+    return { status: "removed", ...base, removedBy: firstName(options.removedBy, world) };
+  }
+  return {
+    status: "member",
+    ...base,
+    preview: { by: lastBy(group, last, world), summary: last ? summaryOf(last, world) : "" },
+    unreadCount: options.unreadOn ? group.unread : 0,
+    needsYou: options.unreadOn && group.mentions,
+    notify: world.muted.has(group.id) ? "muted" : "mentions",
+  };
+}
+
 export function rowsOf(world: World, options: RowOptions): GroupRow[] {
   const groups = GROUPS.filter((group) => visibleMessages(group.id, world).length > 0 || options.removedGroupIds.includes(group.id));
-  const sorted = groups
+  return groups
     .map((group) => ({ group, last: visibleMessages(group.id, world).at(-1) }))
-    .sort((a, b) => (b.last ? stamp(b.last) : 1e9) - (a.last ? stamp(a.last) : 1e9));
-  return sorted.map(({ group, last }): GroupRow => {
-    const title = groupTitle(group, world);
-    if (options.removedGroupIds.includes(group.id)) {
-      return { status: "removed", groupId: group.id, title, avatar: groupAvatar(group), removedBy: firstName(options.removedBy, world), whenLabel: last ? whenOf(last) : "" };
-    }
-    const by =
-      !last || last.kind === "system" || (group.pair && last.by !== ME)
-        ? null
-        : { name: last.by === ME ? "You" : firstName(last.by, world), isYou: last.by === ME };
-    return {
-      status: "member",
-      groupId: group.id,
-      title,
-      avatar: groupAvatar(group),
-      whenLabel: last ? whenOf(last) : "",
-      preview: { by, summary: last ? summaryOf(last, world) : "" },
-      unreadCount: options.unreadOn ? group.unread : 0,
-      needsYou: options.unreadOn && !!group.mentions,
-      notify: world.muted.has(group.id) ? "muted" : "mentions",
-    };
-  });
+    .sort((a, b) => (b.last ? stamp(b.last) : 1e9) - (a.last ? stamp(a.last) : 1e9))
+    .map(({ group, last }) => rowOf(group, last, world, options));
 }
 
 export function infoOf(groupId: string, world: World): GroupInfo {
   const group = groupById(groupId);
   return {
     groupId,
-    kind: group.pair ? "pair" : "group",
+    kind: group.kind === "pair" ? "pair" : "group",
     title: groupTitle(group, world),
     avatar: groupAvatar(group),
     memberCount: group.members.length,
-    partnerEmail: group.pair ? (PEOPLE[group.pair]?.email ?? null) : null,
+    partnerEmail: group.kind === "pair" ? (PEOPLE[group.pair]?.email ?? null) : null,
     members: group.members.map((id) => personOf(id, world)),
     notify: world.muted.has(groupId) ? "muted" : "mentions",
     inviteLink: group.link ? `chat.q9labs.ai/join/${group.link}` : null,
@@ -314,6 +334,11 @@ function snippetOf(text: string, query: string): { before: string; match: string
   return { before: `${start > 0 ? "…" : ""}${text.slice(start, at)}`, match: text.slice(at, at + query.length), after: text.slice(at + query.length, at + query.length + 140) };
 }
 
+function searchableText(message: FixtureMessage, world: World): string | null {
+  if (message.deleted || message.kind === "system" || message.kind === "voice") return null;
+  return message.kind === "file" ? fileName(message, world) : message.text;
+}
+
 export function searchOf(query: string, world: World, scopeGroupId: string | null): SearchHit[] {
   const q = query.trim().toLowerCase();
   if (!q) return [];
@@ -322,8 +347,7 @@ export function searchOf(query: string, world: World, scopeGroupId: string | nul
     if (scopeGroupId && group.id !== scopeGroupId) continue;
     const messages = visibleMessages(group.id, world);
     messages.forEach((message, index) => {
-      if (message.deleted || message.kind === "system" || message.kind === "voice") return;
-      const text = message.kind === "file" ? fileName(message, world) : message.text;
+      const text = searchableText(message, world);
       if (!text || !text.toLowerCase().includes(q)) return;
       hits.push({
         at: stamp(message),
@@ -340,4 +364,20 @@ export function searchOf(query: string, world: World, scopeGroupId: string | nul
     });
   }
   return hits.sort((a, b) => b.at - a.at).map(({ hit }) => hit);
+}
+
+/** The chat props the app route and the gallery build the same way. */
+export function chatStateOf(groupId: string, world: World, unread: number, typing: number) {
+  const group = groupById(groupId);
+  return {
+    title: groupTitle(group, world),
+    avatar: groupAvatar(group),
+    subtitle: group.kind === "pair" ? null : `${group.members.length} members`,
+    muted: world.muted.has(groupId),
+    removed: null,
+    offline: false,
+    items: timelineOf(groupId, world, unread),
+    typingText: typersOf(group, typing, world),
+    latestKey: groupId,
+  };
 }

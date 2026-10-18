@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Animated, View } from "react-native";
+import { Animated, PixelRatio, View } from "react-native";
+
 import { useTheme } from "../theme";
 import { T } from "../theme/Text";
 import { motion } from "../theme/tokens";
@@ -7,13 +8,29 @@ import { moveEasing, useReducedMotion } from "./motion";
 import { Press } from "./Press";
 
 /** 36 by 22 switch; the thumb moves 14px on transform only. */
-export function Switch({ on, onChange, label, children }: { on: boolean; onChange: (next: boolean) => void; label: string; children: ReactNode }) {
+export function Switch({
+  on,
+  onChange,
+  label,
+  children,
+}: {
+  on: boolean;
+  onChange: (next: boolean) => void;
+  label: string;
+  children: ReactNode;
+}) {
   const { c } = useTheme();
   const reduced = useReducedMotion();
   const [x] = useState(() => new Animated.Value(on ? 14 : 0));
   useEffect(() => {
     if (reduced) x.setValue(on ? 14 : 0);
-    else Animated.timing(x, { toValue: on ? 14 : 0, duration: 150, easing: moveEasing, useNativeDriver: true }).start();
+    else
+      Animated.timing(x, {
+        toValue: on ? 14 : 0,
+        duration: 150,
+        easing: moveEasing,
+        useNativeDriver: true,
+      }).start();
   }, [on, reduced, x]);
   return (
     <Press
@@ -22,7 +39,15 @@ export function Switch({ on, onChange, label, children }: { on: boolean; onChang
       accessibilityState={{ checked: on }}
       onPress={() => onChange(!on)}
       scaleTo={1}
-      style={{ flexDirection: "row", alignItems: "center", gap: 12, minHeight: 48, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 12 }}
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+        minHeight: 48,
+        paddingVertical: 6,
+        paddingHorizontal: 12,
+        borderRadius: 12,
+      }}
     >
       {children}
       <View style={{ width: 36, height: 22, borderRadius: 999, backgroundColor: on ? c.tx : c.s3 }}>
@@ -44,7 +69,15 @@ export function Switch({ on, onChange, label, children }: { on: boolean; onChang
   );
 }
 
-export type RadioOption<V extends string> = { value: V; label: string; suffix?: string; hint?: string };
+export type RadioOption<V extends string> = {
+  value: V;
+  label: string;
+  suffix?: string;
+  hint?: string;
+};
+
+/** The mock's 1.5px ring: browsers floor a border to whole device pixels, so draw 4 of 3x's 4.5 pixels. */
+const RING = Math.floor(1.5 * PixelRatio.get()) / PixelRatio.get();
 
 /** One radio row: 18px ring with a 9px dot, bold label, muted hint. */
 export function RadioList<V extends string>({
@@ -71,21 +104,30 @@ export function RadioList<V extends string>({
             accessibilityState={{ checked }}
             onPress={() => onChange(option.value)}
             scaleTo={1}
-            style={{ flexDirection: "row", alignItems: "flex-start", gap: 12, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 9 }}
+            style={{
+              flexDirection: "row",
+              alignItems: "flex-start",
+              gap: 12,
+              paddingVertical: 10,
+              paddingHorizontal: 12,
+              borderRadius: 9,
+            }}
           >
             <View
               style={{
                 width: 18,
                 height: 18,
                 borderRadius: 9,
-                borderWidth: 1.5,
+                borderWidth: RING,
                 borderColor: checked ? c.tx : c.mu,
                 marginTop: 1,
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
-              {checked ? <View style={{ width: 9, height: 9, borderRadius: 4.5, backgroundColor: c.tx }} /> : null}
+              {checked ? (
+                <View style={{ width: 9, height: 9, borderRadius: 4.5, backgroundColor: c.tx }} />
+              ) : null}
             </View>
             <View style={{ flex: 1, gap: 1 }}>
               <T weight={600}>
@@ -115,9 +157,22 @@ export function PopIn({ children, active }: { children: ReactNode; active: boole
   useEffect(() => {
     if (active && !reduced) {
       scale.setValue(0.5);
-      Animated.timing(scale, { toValue: 1, duration: motion.pop, easing: moveEasing, useNativeDriver: true }).start();
+      Animated.timing(scale, {
+        toValue: 1,
+        duration: motion.pop,
+        easing: moveEasing,
+        useNativeDriver: true,
+      }).start();
     }
   }, [active, reduced, scale]);
-  return <Animated.View style={{ transform: [{ scale }], opacity: scale.interpolate({ inputRange: [0.5, 1], outputRange: [0, 1] }) }}>{children}</Animated.View>;
+  return (
+    <Animated.View
+      style={{
+        transform: [{ scale }],
+        opacity: scale.interpolate({ inputRange: [0.5, 1], outputRange: [0, 1] }),
+      }}
+    >
+      {children}
+    </Animated.View>
+  );
 }
-

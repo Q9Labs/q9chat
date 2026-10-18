@@ -14,27 +14,32 @@ export const PEOPLE: Record<string, SeedPerson> = {
   nadia: { id: "nadia", name: "Nadia", initials: "NA", color: "#b91c1c", colorOnDark: "#f87171", email: "nadia@q9labs.ai" },
 };
 
-export type SeedGroup = {
-  id: string;
-  name?: string;
-  initials?: string;
-  /** Set for a group of two: the partner. */
-  pair?: string;
-  members: string[];
-  unread: number;
-  mentions?: boolean;
-  link?: string;
-};
+type SeedGroupBase = { id: string; members: string[]; unread: number; mentions: boolean; link: string | null };
+
+/** A named room, or a group of two that takes its partner's name and avatar. */
+export type SeedGroup = SeedGroupBase & ({ kind: "pair"; pair: string } | { kind: "room"; name: string; initials: string });
+
+const room = (id: string, name: string, initials: string, members: string[], unread: number, link: string, mentions = false): SeedGroup => ({
+  id,
+  kind: "room",
+  name,
+  initials,
+  members,
+  unread,
+  mentions,
+  link,
+});
+const duo = (partner: string, unread: number): SeedGroup => ({ id: partner, kind: "pair", pair: partner, members: ["hasan", partner], unread, mentions: false, link: null });
 
 export const GROUPS: SeedGroup[] = [
-  { id: "launch", name: "Q9 Chat launch", initials: "QL", members: ["hasan", "shoaib", "bilal", "sara", "omar"], unread: 4, mentions: true, link: "k7Pq2x" },
-  { id: "shoaib", pair: "shoaib", members: ["hasan", "shoaib"], unread: 2 },
-  { id: "chalk", name: "Chalk", initials: "CH", members: ["hasan", "shoaib", "yahya", "omar", "rana"], unread: 3, link: "c4Lm9t" },
-  { id: "core", name: "Q9 Core", initials: "Q9", members: ["hasan", "shoaib", "yahya"], unread: 0, link: "q9Cr3w" },
-  { id: "design", name: "Design", initials: "DE", members: ["hasan", "sara", "bilal", "rana"], unread: 5, link: "d3Sg8n" },
-  { id: "bilal", pair: "bilal", members: ["hasan", "bilal"], unread: 0 },
-  { id: "random", name: "Random", initials: "RA", members: ["hasan", "shoaib", "bilal", "sara", "yahya", "omar", "rana"], unread: 9, link: "r4Nd0m" },
-  { id: "sara", pair: "sara", members: ["hasan", "sara"], unread: 0 },
+  room("launch", "Q9 Chat launch", "QL", ["hasan", "shoaib", "bilal", "sara", "omar"], 4, "k7Pq2x", true),
+  duo("shoaib", 2),
+  room("chalk", "Chalk", "CH", ["hasan", "shoaib", "yahya", "omar", "rana"], 3, "c4Lm9t"),
+  room("core", "Q9 Core", "Q9", ["hasan", "shoaib", "yahya"], 0, "q9Cr3w"),
+  room("design", "Design", "DE", ["hasan", "sara", "bilal", "rana"], 5, "d3Sg8n"),
+  duo("bilal", 0),
+  room("random", "Random", "RA", ["hasan", "shoaib", "bilal", "sara", "yahya", "omar", "rana"], 9, "r4Nd0m"),
+  duo("sara", 0),
 ];
 
 export type SeedMessage = {

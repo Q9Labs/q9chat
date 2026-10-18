@@ -1,28 +1,30 @@
 import { useState } from "react";
 import { Image, View, type LayoutChangeEvent } from "react-native";
+
 import { useTheme } from "../theme";
 import { T } from "../theme/Text";
-import { Icon } from "./Icon";
-import { PopIn } from "./Controls";
-import { Press } from "./Press";
 import type { Quote, Reaction, Segment } from "../types";
+import { PopIn } from "./Controls";
+import { formatDuration, keyedByOffset } from "./format";
+import { Icon } from "./Icon";
+import { Press } from "./Press";
 
 /** Body text: @mentions in the accent color, links underlined. */
 export function BodyText({ segments, edited }: { segments: readonly Segment[]; edited?: boolean }) {
   const { c } = useTheme();
   return (
     <T>
-      {segments.map((segment, index) => {
+      {keyedByOffset(segments, (segment) => segment.text.length).map(({ key, item: segment }) => {
         if (segment.type === "mention") {
           return (
-            <T key={index} weight={600} color="ac">
+            <T key={key} weight={600} color="ac">
               {segment.text}
             </T>
           );
         }
         if (segment.type === "link") {
           return (
-            <T key={index} style={{ textDecorationLine: "underline", textDecorationColor: c.mu }}>
+            <T key={key} style={{ textDecorationLine: "underline", textDecorationColor: c.mu }}>
               {segment.text}
             </T>
           );
@@ -135,7 +137,16 @@ export function FileCard({ name, size }: { name: string; size: string }) {
         gap: 10,
       }}
     >
-      <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: c.s0, alignItems: "center", justifyContent: "center" }}>
+      <View
+        style={{
+          width: 36,
+          height: 36,
+          borderRadius: 10,
+          backgroundColor: c.s0,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
         <Icon name="file" size={18} color="mu" />
       </View>
       <View style={{ flexShrink: 1 }}>
@@ -153,11 +164,22 @@ export function FileCard({ name, size }: { name: string; size: string }) {
 const WAVE_MIN = 4;
 const WAVE_RANGE = 20;
 
-export function Waveform({ samples, progress = 0, height = 26 }: { samples: readonly number[]; progress?: number; height?: number }) {
+export function Waveform({
+  samples,
+  progress = 0,
+  height = 26,
+}: {
+  samples: readonly number[];
+  progress?: number;
+  height?: number;
+}) {
   const { c } = useTheme();
   return (
-    <View style={{ flex: 1, height, flexDirection: "row", alignItems: "center", gap: 2, minWidth: 0 }} accessibilityElementsHidden>
-      {samples.map((sample, index) => (
+    <View
+      style={{ flex: 1, height, flexDirection: "row", alignItems: "center", gap: 2, minWidth: 0 }}
+      accessibilityElementsHidden
+    >
+      {keyedByOffset(samples, () => 1).map(({ key: index, item: sample }) => (
         <View
           key={index}
           style={{
@@ -172,8 +194,6 @@ export function Waveform({ samples, progress = 0, height = 26 }: { samples: read
     </View>
   );
 }
-
-export const formatDuration = (seconds: number) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 
 export function VoiceNote({
   durationSeconds,
@@ -208,7 +228,14 @@ export function VoiceNote({
         accessibilityRole="button"
         accessibilityLabel={playing ? "Pause voice note" : "Play voice note"}
         onPress={onTogglePlay}
-        style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: c.tx, alignItems: "center", justifyContent: "center" }}
+        style={{
+          width: 32,
+          height: 32,
+          borderRadius: 16,
+          backgroundColor: c.tx,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
       >
         <Icon name={playing ? "pause" : "play"} size={12} color="s0" />
       </Press>
@@ -233,12 +260,26 @@ const SAMPLE_TILES = [
 ] as const;
 
 /** A photo; without a loaded URL it shows the mock's placeholder, initials on eight colors. */
-export function ImageAttachment({ alt, uri, aspectRatio }: { alt: string; uri: string | null; aspectRatio: number }) {
+export function ImageAttachment({
+  alt,
+  uri,
+  aspectRatio,
+}: {
+  alt: string;
+  uri: string | null;
+  aspectRatio: number;
+}) {
   const [width, setWidth] = useState(0);
   const onLayout = (event: LayoutChangeEvent) => setWidth(event.nativeEvent.layout.width);
   const dot = Math.max(0, (width / 2 - 20 - 18) / 4);
   if (uri) {
-    return <Image accessibilityLabel={alt} source={{ uri }} style={{ width: 320, maxWidth: "100%", aspectRatio, borderRadius: 14 }} />;
+    return (
+      <Image
+        accessibilityLabel={alt}
+        source={{ uri }}
+        style={{ width: 320, maxWidth: "100%", aspectRatio, borderRadius: 14 }}
+      />
+    );
   }
   const halves = [
     { key: "light", background: "#fafafa" },
@@ -249,7 +290,13 @@ export function ImageAttachment({ alt, uri, aspectRatio }: { alt: string; uri: s
       accessibilityRole="image"
       accessibilityLabel={alt}
       onLayout={onLayout}
-      style={{ width: 320, maxWidth: "100%", borderRadius: 14, overflow: "hidden", flexDirection: "row" }}
+      style={{
+        width: 320,
+        maxWidth: "100%",
+        borderRadius: 14,
+        overflow: "hidden",
+        flexDirection: "row",
+      }}
     >
       {halves.map((tile) => (
         <View
@@ -265,7 +312,17 @@ export function ImageAttachment({ alt, uri, aspectRatio }: { alt: string; uri: s
           }}
         >
           {SAMPLE_TILES.map((item) => (
-            <View key={item.initials} style={{ width: dot, height: dot, borderRadius: dot / 2, backgroundColor: item.color, alignItems: "center", justifyContent: "center" }}>
+            <View
+              key={item.initials}
+              style={{
+                width: dot,
+                height: dot,
+                borderRadius: dot / 2,
+                backgroundColor: item.color,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
               <T size={8} weight={700} color="#ffffff" lineHeight={8}>
                 {item.initials}
               </T>

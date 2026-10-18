@@ -1,82 +1,145 @@
 import type { ReactNode } from "react";
 import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
 import { useTheme } from "../theme";
 import { T } from "../theme/Text";
 import { radius } from "../theme/tokens";
+import type { Avatar as AvatarData } from "../types";
 import { Avatar } from "./Avatar";
 import { IconButton, PillButton } from "./Buttons";
 import { Icon } from "./Icon";
-import { Press } from "./Press";
 import { Wordmark } from "./Logo";
-import type { Avatar as AvatarData } from "../types";
+import { Press } from "./Press";
 
 /** A full phone screen: the surface plus the top inset; `safeBottom` also keeps the bottom inset. */
 export function Screen({ children, safeBottom }: { children: ReactNode; safeBottom?: boolean }) {
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
   return (
-    <View style={{ flex: 1, backgroundColor: c.s0, paddingTop: insets.top, paddingBottom: safeBottom ? insets.bottom : 0 }}>{children}</View>
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: c.s0,
+        paddingTop: insets.top,
+        paddingBottom: safeBottom ? insets.bottom : 0,
+      }}
+    >
+      {children}
+    </View>
+  );
+}
+
+type NavStart = { label?: string; back?: boolean; onPress: () => void };
+type NavEnd = { label: string; onPress: () => void; disabled?: boolean; strong?: boolean };
+
+function NavStartButton({ start }: { start: NavStart }) {
+  return (
+    <Press
+      accessibilityRole="button"
+      accessibilityLabel={start.back ? "Back" : (start.label ?? "Back")}
+      onPress={start.onPress}
+      scaleTo={1}
+      style={{ height: 44, flexDirection: "row", alignItems: "center", gap: 2 }}
+    >
+      {start.back ? (
+        <Icon name="back" size={24} color="tx" />
+      ) : (
+        <T size={16} color="tx">
+          {start.label ?? ""}
+        </T>
+      )}
+    </Press>
+  );
+}
+
+function NavEndButton({ end }: { end: NavEnd }) {
+  return (
+    <Press
+      accessibilityRole="button"
+      accessibilityState={{ disabled: !!end.disabled }}
+      disabled={end.disabled}
+      onPress={end.onPress}
+      scaleTo={1}
+      style={{ height: 44, justifyContent: "center", opacity: end.disabled ? 0.35 : 1 }}
+    >
+      <T size={16} weight={end.strong ? 600 : 400}>
+        {end.label}
+      </T>
+    </Press>
   );
 }
 
 /** Page header: a text or icon button on each side and a centered 17px title. */
-export function PageNav({
-  title,
-  start,
-  end,
-}: {
-  title: string;
-  start?: { label?: string; back?: boolean; onPress: () => void };
-  end?: { label: string; onPress: () => void; disabled?: boolean; strong?: boolean };
-}) {
+export function PageNav({ title, start, end }: { title: string; start?: NavStart; end?: NavEnd }) {
   return (
-    <View style={{ height: 52, paddingHorizontal: 12, flexDirection: "row", alignItems: "center", gap: 6 }}>
+    <View
+      style={{
+        height: 52,
+        paddingHorizontal: 12,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+      }}
+    >
       <View style={{ minWidth: 64, height: 44 }}>
-        {start ? (
-          <Press
-            accessibilityRole="button"
-            accessibilityLabel={start.back ? "Back" : (start.label ?? "Back")}
-            onPress={start.onPress}
-            scaleTo={1}
-            style={{ height: 44, flexDirection: "row", alignItems: "center", gap: 2 }}
-          >
-            {start.back ? <Icon name="back" size={24} color="tx" /> : <T size={16} color="tx">{start.label ?? ""}</T>}
-          </Press>
-        ) : null}
+        {start ? <NavStartButton start={start} /> : null}
       </View>
-      <T size={17} weight={600} numberOfLines={1} accessibilityRole="header" style={{ flex: 1, textAlign: "center" }}>
+      <T
+        size={17}
+        weight={600}
+        numberOfLines={1}
+        accessibilityRole="header"
+        style={{ flex: 1, textAlign: "center" }}
+      >
         {title}
       </T>
       <View style={{ minWidth: 64, height: 44, alignItems: "flex-end" }}>
-        {end ? (
-          <Press
-            accessibilityRole="button"
-            accessibilityState={{ disabled: !!end.disabled }}
-            disabled={end.disabled}
-            onPress={end.onPress}
-            scaleTo={1}
-            style={{ height: 44, justifyContent: "center", opacity: end.disabled ? 0.35 : 1 }}
-          >
-            <T size={16} weight={end.strong ? 600 : 400}>
-              {end.label}
-            </T>
-          </Press>
-        ) : null}
+        {end ? <NavEndButton end={end} /> : null}
       </View>
     </View>
   );
 }
 
 /** Groups header: wordmark, New group, and your avatar as the Account button. */
-export function GroupsTop({ me, onNewGroup, onAccount }: { me: AvatarData; onNewGroup: () => void; onAccount: () => void }) {
+export function GroupsTop({
+  me,
+  onNewGroup,
+  onAccount,
+}: {
+  me: AvatarData;
+  onNewGroup: () => void;
+  onAccount: () => void;
+}) {
   const { c } = useTheme();
   return (
-    <View style={{ height: 56, paddingLeft: 20, paddingRight: 12, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+    <View
+      style={{
+        height: 56,
+        paddingLeft: 20,
+        paddingRight: 12,
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+      }}
+    >
       <Wordmark size={22} />
       <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-        <IconButton icon="plus" label="New group" size={40} color="tx" background={c.s1} onPress={onNewGroup} />
-        <Press accessibilityRole="button" accessibilityLabel="Account" onPress={onAccount} scaleTo={1} style={{ borderRadius: 18 }}>
+        <IconButton
+          icon="plus"
+          label="New group"
+          size={40}
+          color="tx"
+          background={c.s1}
+          onPress={onNewGroup}
+        />
+        <Press
+          accessibilityRole="button"
+          accessibilityLabel="Account"
+          onPress={onAccount}
+          scaleTo={1}
+          style={{ borderRadius: 18 }}
+        >
           <Avatar avatar={me} size={36} />
         </Press>
       </View>
@@ -92,7 +155,18 @@ export function SearchBox({ onPress }: { onPress: () => void }) {
       accessibilityLabel="Search"
       onPress={onPress}
       scaleTo={1}
-      style={{ height: 40, marginTop: 4, marginHorizontal: 16, marginBottom: 8, paddingHorizontal: 12, borderRadius: radius.input, backgroundColor: c.s1, flexDirection: "row", alignItems: "center", gap: 8 }}
+      style={{
+        height: 40,
+        marginTop: 4,
+        marginHorizontal: 16,
+        marginBottom: 8,
+        paddingHorizontal: 12,
+        borderRadius: radius.input,
+        backgroundColor: c.s1,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+      }}
     >
       <Icon name="search" size={18} color="mu" />
       <T color="mu" style={{ flex: 1 }}>
@@ -107,7 +181,17 @@ export function OfflinePill() {
   return (
     <View
       accessibilityRole="alert"
-      style={{ alignSelf: "center", height: 32, paddingHorizontal: 14, marginVertical: 4, borderRadius: 999, backgroundColor: c.s1, flexDirection: "row", alignItems: "center", gap: 8 }}
+      style={{
+        alignSelf: "center",
+        height: 32,
+        paddingHorizontal: 14,
+        marginVertical: 4,
+        borderRadius: 999,
+        backgroundColor: c.s1,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+      }}
     >
       <Icon name="wifiOff" size={15} color="mu" />
       <T size={12.5} weight={500} color="tx2">
@@ -117,12 +201,26 @@ export function OfflinePill() {
   );
 }
 
-export function PermissionBanner({ onNotNow, onTurnOn }: { onNotNow: () => void; onTurnOn: () => void }) {
+export function PermissionBanner({
+  onNotNow,
+  onTurnOn,
+}: {
+  onNotNow: () => void;
+  onTurnOn: () => void;
+}) {
   const { c } = useTheme();
   return (
     <View
       accessibilityLabel="Turn on notifications"
-      style={{ marginTop: 4, marginHorizontal: 16, marginBottom: 10, padding: 12, borderRadius: 16, backgroundColor: c.s1, gap: 12 }}
+      style={{
+        marginTop: 4,
+        marginHorizontal: 16,
+        marginBottom: 10,
+        padding: 12,
+        borderRadius: 16,
+        backgroundColor: c.s1,
+        gap: 12,
+      }}
     >
       <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
         <Icon name="bell" size={18} color="mu" />
@@ -131,8 +229,20 @@ export function PermissionBanner({ onNotNow, onTurnOn }: { onNotNow: () => void;
         </T>
       </View>
       <View style={{ flexDirection: "row", gap: 12 }}>
-        <PillButton label="Not now" size="big" background="s0" style={{ flex: 1, height: 36 }} onPress={onNotNow} />
-        <PillButton label="Turn on" variant="solid" size="big" style={{ flex: 1, height: 36 }} onPress={onTurnOn} />
+        <PillButton
+          label="Not now"
+          size="big"
+          background="s0"
+          style={{ flex: 1, height: 36 }}
+          onPress={onNotNow}
+        />
+        <PillButton
+          label="Turn on"
+          variant="solid"
+          size="big"
+          style={{ flex: 1, height: 36 }}
+          onPress={onTurnOn}
+        />
       </View>
     </View>
   );
@@ -152,17 +262,52 @@ export function CenterState({
 }) {
   const { c } = useTheme();
   return (
-    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 24, paddingHorizontal: 32, gap: 6 }}>
-      <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: c.s1, alignItems: "center", justifyContent: "center" }}>
+    <View
+      style={{
+        flex: 1,
+        alignItems: "center",
+        justifyContent: "center",
+        paddingVertical: 24,
+        paddingHorizontal: 32,
+        gap: 6,
+      }}
+    >
+      <View
+        style={{
+          width: 56,
+          height: 56,
+          borderRadius: 28,
+          backgroundColor: c.s1,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
         <Icon name={icon} size={24} color="mu" />
       </View>
-      <T size={18} weight={600} style={{ marginTop: 10, textAlign: "center" }} accessibilityRole="header">
+      <T
+        size={18}
+        weight={600}
+        style={{ marginTop: 10, textAlign: "center" }}
+        accessibilityRole="header"
+      >
         {title}
       </T>
       <T color="mu" style={{ maxWidth: 340, textAlign: "center" }}>
         {text}
       </T>
-      {action ? <View style={{ marginTop: 16, flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 8 }}>{action}</View> : null}
+      {action ? (
+        <View
+          style={{
+            marginTop: 16,
+            flexDirection: "row",
+            flexWrap: "wrap",
+            justifyContent: "center",
+            gap: 8,
+          }}
+        >
+          {action}
+        </View>
+      ) : null}
     </View>
   );
 }

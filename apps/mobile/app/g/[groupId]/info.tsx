@@ -1,5 +1,6 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
+
 import { defaultWorld, infoOf } from "../../../src/fixtures/build";
 import { useToast } from "../../../src/kit/useToast";
 import { InfoScreen, type InfoSheet } from "../../../src/screens/InfoScreen";
@@ -35,7 +36,11 @@ export default function InfoRoute() {
       onChooseNotify={(next) => {
         setNotify(next);
         close();
-        showToast(next === "muted" ? `${base.title} is muted` : `Notifications: ${next === "all" ? "all messages" : "mentions and replies"}`);
+        showToast(
+          next === "muted"
+            ? `${base.title} is muted`
+            : `Notifications: ${next === "all" ? "all messages" : "mentions and replies"}`,
+        );
       }}
       onToggleMute={(muted) => {
         setNotify(muted ? "muted" : "mentions");

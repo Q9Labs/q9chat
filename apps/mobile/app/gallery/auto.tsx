@@ -1,6 +1,7 @@
 import { Redirect } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
+
 import { STATES } from "../../src/gallery/states";
 import { ThemeProvider } from "../../src/theme";
 
@@ -12,6 +13,7 @@ const STEPS = SCHEMES.flatMap((scheme) => STATES.map((state) => ({ scheme, state
 export default function GalleryAuto() {
   const [index, setIndex] = useState(0);
   const step = STEPS[index];
+  // react-doctor-disable-next-line react-doctor/no-fetch-in-effect -- dev-only harness: the request tells the host to take the screenshot
   useEffect(() => {
     const timer = setTimeout(() => {
       if (!step) return;

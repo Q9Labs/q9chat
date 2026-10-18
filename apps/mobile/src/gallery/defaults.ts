@@ -6,8 +6,10 @@ import type { InfoScreenProps } from "../screens/InfoScreen";
 import type { NewGroupScreenProps } from "../screens/NewGroupScreen";
 import type { SearchScreenProps } from "../screens/SearchScreen";
 
-
-export const groupsHandlers: Pick<GroupsScreenProps, "onOpenGroup" | "onNewGroup" | "onAccount" | "onSearch" | "onNotNow" | "onTurnOn"> = {
+export const groupsHandlers: Pick<
+  GroupsScreenProps,
+  "onOpenGroup" | "onNewGroup" | "onAccount" | "onSearch" | "onNotNow" | "onTurnOn"
+> = {
   onOpenGroup: noop,
   onNewGroup: noop,
   onAccount: noop,
@@ -18,7 +20,23 @@ export const groupsHandlers: Pick<GroupsScreenProps, "onOpenGroup" | "onNewGroup
 
 export const chatHandlers: Omit<
   ChatScreenProps,
-  "title" | "avatar" | "subtitle" | "muted" | "removed" | "offline" | "items" | "typingText" | "latestKey" | "tappedMessageId" | "playingMessageId" | "playProgress" | "poppedReaction" | "composer" | "draft" | "sheet" | "toast"
+  | "title"
+  | "avatar"
+  | "subtitle"
+  | "muted"
+  | "removed"
+  | "offline"
+  | "items"
+  | "typingText"
+  | "latestKey"
+  | "tappedMessageId"
+  | "playingMessageId"
+  | "playProgress"
+  | "poppedReaction"
+  | "composer"
+  | "draft"
+  | "sheet"
+  | "toast"
 > = {
   onBack: noop,
   onOpenInfo: noop,
@@ -70,7 +88,13 @@ export const infoHandlers: Omit<InfoScreenProps, "info" | "sheet" | "copied" | "
 
 export const newGroupHandlers: Pick<
   NewGroupScreenProps,
-  "onGroupNameChange" | "onQueryChange" | "onPick" | "onUnpick" | "onCopyLink" | "onPrimary" | "onCancel"
+  | "onGroupNameChange"
+  | "onQueryChange"
+  | "onPick"
+  | "onUnpick"
+  | "onCopyLink"
+  | "onPrimary"
+  | "onCancel"
 > = {
   onGroupNameChange: noop,
   onQueryChange: noop,
@@ -81,14 +105,26 @@ export const newGroupHandlers: Pick<
   onCancel: noop,
 };
 
-export const searchHandlers: Pick<SearchScreenProps, "onQueryChange" | "onClearScope" | "onOpenHit" | "onCancel"> = {
+export const searchHandlers: Pick<
+  SearchScreenProps,
+  "onQueryChange" | "onClearScope" | "onOpenHit" | "onCancel"
+> = {
   onQueryChange: noop,
   onClearScope: noop,
   onOpenHit: noop,
   onCancel: noop,
 };
 
-export const accountHandlers: Pick<AccountScreenProps, "onNameChange" | "onTogglePhoto" | "onBack" | "onSignOut" | "onAskDelete" | "onConfirmDelete" | "onCancelDelete"> = {
+export const accountHandlers: Pick<
+  AccountScreenProps,
+  | "onNameChange"
+  | "onTogglePhoto"
+  | "onBack"
+  | "onSignOut"
+  | "onAskDelete"
+  | "onConfirmDelete"
+  | "onCancelDelete"
+> = {
   onNameChange: noop,
   onTogglePhoto: noop,
   onBack: noop,

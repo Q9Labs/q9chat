@@ -1,5 +1,6 @@
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { useColorScheme } from "react-native";
+
 import { palettes, type Palette, type SchemeName } from "./tokens";
 
 type Theme = { scheme: SchemeName; c: Palette };
@@ -15,7 +16,10 @@ export function ThemeProvider({
 }) {
   const system = useColorScheme();
   const resolved: SchemeName = scheme ?? (system === "dark" ? "dark" : "light");
-  const value = useMemo<Theme>(() => ({ scheme: resolved, c: palettes[resolved].base }), [resolved]);
+  const value = useMemo<Theme>(
+    () => ({ scheme: resolved, c: palettes[resolved].base }),
+    [resolved],
+  );
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 
