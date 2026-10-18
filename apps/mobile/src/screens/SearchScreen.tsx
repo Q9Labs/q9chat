@@ -97,9 +97,9 @@ function Hit({ hit, onPress }: { hit: SearchHit; onPress: () => void }) {
         </View>
         <T color="tx2" numberOfLines={2}>
           {hit.before}
-          <View style={{ backgroundColor: c.s2, borderRadius: 4, paddingHorizontal: 2 }}>
-            <T weight={600}>{hit.match}</T>
-          </View>
+          <T weight={600} style={{ backgroundColor: c.s2 }}>
+            {hit.match}
+          </T>
           {hit.after}
         </T>
       </View>

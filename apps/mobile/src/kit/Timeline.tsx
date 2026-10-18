@@ -3,6 +3,7 @@ import {
   Animated,
   ScrollView,
   View,
+  type LayoutChangeEvent,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   type ScrollViewInstance,
@@ -19,21 +20,23 @@ import { MessageBubble } from "./MessageBubble";
 import { useEased, useReducedMotion } from "./motion";
 import { Press } from "./Press";
 
-function DateSeparator({ label }: { label: string }) {
+/** The first label sits flush under the list's padding: the mock's `.tl>:first-child` auto margin replaces its 24px. */
+function DateSeparator({ label, first }: { label: string; first: boolean }) {
   return (
-    <T size={12} weight={600} color="mu" style={{ alignSelf: "center", marginTop: 24 }}>
+    <T size={12} weight={600} color="mu" style={{ alignSelf: "center", marginTop: first ? 0 : 24 }}>
       {label}
     </T>
   );
 }
 
 /** "New since you last looked": accent text between two faint rules. */
-function UnreadDivider() {
+function UnreadDivider({ onLayout }: { onLayout?: (event: LayoutChangeEvent) => void }) {
   const { c } = useTheme();
   const rule = { flex: 1, height: 1, backgroundColor: c.ac, opacity: 0.22 };
   return (
     <View
       accessibilityRole="header"
+      onLayout={onLayout}
       style={{ flexDirection: "row", alignItems: "center", gap: 12, marginTop: 24 }}
     >
       <View style={rule} />
@@ -219,8 +222,16 @@ function MessageGroup({ item, actions }: { item: GroupItem; actions: GroupAction
   );
 }
 
-function TimelineRow({ item, actions }: { item: TimelineItem; actions: GroupActions }) {
-  if (item.type === "day") return <DateSeparator label={item.label} />;
+function TimelineRow({
+  item,
+  first,
+  actions,
+}: {
+  item: TimelineItem;
+  first: boolean;
+  actions: GroupActions;
+}) {
+  if (item.type === "day") return <DateSeparator label={item.label} first={first} />;
   if (item.type === "unread") return <UnreadDivider />;
   if (item.type === "system") return <SystemLine segments={item.segments} />;
   return <MessageGroup item={item} actions={actions} />;
@@ -234,8 +245,10 @@ type TimelineProps = {
 } & GroupActions;
 
 const FAR_FROM_LATEST = 240;
-/** The unread divider rests this far under the top of the list when a group opens with unread messages: the mock puts it 90px under its screen top, 67px of which are the header. */
-const DIVIDER_INSET = 23;
+/** Within this distance of the end the list follows new content; further up it stays put. */
+const AT_LATEST = 24;
+/** The unread divider rests this far under the top of the list when a group opens with unread messages, so the last read message shows above it. */
+const DIVIDER_INSET = 90;
 
 type Metrics = { viewport: number; content: number; divider: number | null };
 
@@ -255,20 +268,25 @@ export function Timeline({ items, typingText, latestKey, ...actions }: TimelineP
   const progress = useEased(away ? 1 : 0, motion.scrim);
   const metrics = useRef<Metrics>({ viewport: 0, content: 0, divider: null });
   const placedKey = useRef<string | null>(null);
+  const following = useRef(true);
+  const dragged = useRef(false);
   const hasDivider = items.some((item) => item.type === "unread");
 
-  const place = () => {
+  const place = (again = false) => {
     const m = metrics.current;
-    if (placedKey.current === latestKey || !isMeasured(m, hasDivider)) return;
+    if ((placedKey.current === latestKey && !again) || !isMeasured(m, hasDivider)) return;
     placedKey.current = latestKey;
     const y = restingOffset(m, hasDivider);
     ref.current?.scrollTo({ y, animated: false });
+    following.current = m.content - y - m.viewport < AT_LATEST;
     setAway(m.content - y - m.viewport > FAR_FROM_LATEST);
   };
 
   const settle = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
-    setAway(contentSize.height - contentOffset.y - layoutMeasurement.height > FAR_FROM_LATEST);
+    const fromEnd = contentSize.height - contentOffset.y - layoutMeasurement.height;
+    following.current = fromEnd < AT_LATEST;
+    setAway(fromEnd > FAR_FROM_LATEST);
   };
 
   return (
@@ -279,6 +297,9 @@ export function Timeline({ items, typingText, latestKey, ...actions }: TimelineP
         onLayout={(event) => {
           metrics.current.viewport = event.nativeEvent.layout.height;
           place();
+        }}
+        onScrollBeginDrag={() => {
+          dragged.current = true;
         }}
         onScrollEndDrag={settle}
         onMomentumScrollEnd={settle}
@@ -293,23 +314,21 @@ export function Timeline({ items, typingText, latestKey, ...actions }: TimelineP
         onContentSizeChange={(_, height) => {
           metrics.current.content = height;
           if (placedKey.current !== latestKey) place();
-          else if (!away) ref.current?.scrollToEnd({ animated: true });
+          else if (following.current) ref.current?.scrollToEnd({ animated: true });
         }}
       >
         {/* react-doctor-disable-next-line react-doctor/rn-no-scrollview-mapped-list -- the unread divider is placed from measured row layout, which a virtualized list would not give */}
-        {items.map((item) =>
+        {items.map((item, index) =>
           item.type === "unread" ? (
-            <View
+            <UnreadDivider
               key={item.id}
               onLayout={(event) => {
                 metrics.current.divider = event.nativeEvent.layout.y;
-                place();
+                place(!dragged.current);
               }}
-            >
-              <UnreadDivider />
-            </View>
+            />
           ) : (
-            <TimelineRow key={item.id} item={item} actions={actions} />
+            <TimelineRow key={item.id} item={item} first={index === 0} actions={actions} />
           ),
         )}
         {typingText ? <TypingLine text={typingText} /> : null}

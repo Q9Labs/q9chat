@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Animated, PixelRatio, View } from "react-native";
+import { Animated, View } from "react-native";
 
 import { useTheme } from "../theme";
 import { T } from "../theme/Text";
@@ -76,8 +76,8 @@ export type RadioOption<V extends string> = {
   hint?: string;
 };
 
-/** The mock's 1.5px ring: browsers floor a border to whole device pixels, so draw 4 of 3x's 4.5 pixels. */
-const RING = Math.floor(1.5 * PixelRatio.get()) / PixelRatio.get();
+/** The mock's ring is 1.5px, but Chromium floors a border to whole CSS pixels, so it paints 1px (3 device pixels at 3x). 1.5 here would paint 5. */
+const RING = 1;
 
 /** One radio row: 18px ring with a 9px dot, bold label, muted hint. */
 export function RadioList<V extends string>({
