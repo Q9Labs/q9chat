@@ -1,8 +1,8 @@
 import { api, type Id } from "@q9chat/convex";
 import { eventSentence } from "@q9chat/domain";
+import { useNavigate } from "@tanstack/react-router";
 import { useConvex, useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { ConvexError } from "convex/values";
 import {
   Component,
   useEffect,
@@ -20,6 +20,7 @@ import { GroupInfo } from "../screens/group-info.js";
 import { Avatar } from "../ui/avatar.js";
 import { Button } from "../ui/controls.js";
 import { Dialog, DialogActions } from "../ui/overlay.js";
+import { invalidInviteCopy, journeyError, removedInviteCopy } from "./group-errors.js";
 import { clearSavedJoin } from "./oauth.js";
 import { usePhotos } from "./photos.js";
 import { pickerLimit } from "./picker-limit.js";
@@ -27,36 +28,6 @@ import { pickerLimit } from "./picker-limit.js";
 type Person = FunctionReturnType<typeof api.people.find>[number];
 type Detail = FunctionReturnType<typeof api.groups.get>;
 type ActiveGroup = Extract<Detail, { status: "member" }>;
-const removedInviteCopy = "You were removed from this group. Ask a member to add you back.";
-const invalidInviteCopy = "This invite link isn't valid.";
-
-const errorCopy = new Map([
-  ["name_required", "Enter a group name or add someone."],
-  ["name_too_long", "Use a group name of 80 characters or fewer."],
-  ["group_full", "This group is full. A group can have up to 100 people."],
-  ["too_many_groups", "You have reached the 100-group limit. Leave a group before trying again."],
-  ["pair_locked", "You can't add people to a group of two. Create a new group instead."],
-  ["invite_invalid", invalidInviteCopy],
-  ["removed_from_group", removedInviteCopy],
-  ["not_member", "You no longer have access to this group."],
-  ["account_unavailable", "This account isn't available. Try signing in again."],
-]);
-function errorCode(error: unknown): string | null {
-  if (!(error instanceof ConvexError)) return null;
-  const data: unknown = error.data;
-  if (typeof data !== "object" || data === null || !("code" in data)) return null;
-  return typeof data.code === "string" ? data.code : null;
-}
-const pickedErrorCopy = new Map([
-  ["too_many_groups", "Someone you picked is already in 100 groups. Remove them to continue."],
-  ["account_unavailable", "Someone you picked is no longer available. Remove them to continue."],
-]);
-function journeyError(error: unknown, pickedPerson = false): string {
-  const code = errorCode(error);
-  if (code === null) return "Couldn't complete that. Try again.";
-  const picked = pickedPerson ? pickedErrorCopy.get(code) : undefined;
-  return picked ?? errorCopy.get(code) ?? "Couldn't complete that. Try again.";
-}
 
 export class GroupJourneyBoundary extends Component<
   { readonly children: ReactNode },
@@ -153,7 +124,7 @@ function usePairMatch(
           if (!cancelled) setMatch({ profileId, groupId });
         },
         (error: unknown) => {
-          if (!cancelled) onNotice(journeyError(error, true));
+          if (!cancelled) onNotice(journeyError(error, 1));
         },
       );
     return () => {
@@ -240,7 +211,7 @@ function usePickerSubmit({
         }
         onClose();
       } catch (cause) {
-        setError(journeyError(cause, true));
+        setError(journeyError(cause, people.length));
       } finally {
         busy.current = false;
       }
@@ -402,6 +373,10 @@ function InviteState({
   );
 }
 
+function canMessage(person: ActiveGroup["members"][number]) {
+  return !person.isYou && !person.deleted;
+}
+
 function History({
   group,
   onMessage,
@@ -467,7 +442,7 @@ function History({
           <h3>{author.fullName}</h3>
           <DialogActions>
             <Button onClick={() => setAuthor(null)}>Close</Button>
-            {author.isYou ? null : (
+            {!canMessage(author) ? null : (
               <Button
                 variant="solid"
                 onClick={() => {
@@ -558,16 +533,18 @@ function LiveGroupInfo({
 
 export function useGroupJourney({
   token,
+  selectedGroup,
   renderEmpty,
   onNotice,
 }: {
   readonly token: string | undefined;
+  readonly selectedGroup: Id<"groups"> | null;
   readonly renderEmpty: (onNewGroup: () => void) => ReactNode;
   readonly onNotice: (text: string) => void;
 }) {
-  const [chosen, setSelected] = useState<Id<"groups"> | null>(null);
+  const navigate = useNavigate();
   const invite = useInvite(token);
-  const selected = chosen ?? invite.groupId;
+  const selected = selectedGroup ?? invite.groupId;
   const [infoOpen, setInfoOpen] = useState(false);
   const [picker, setPicker] = useState<PickerMode | null>(null);
   const detail = useQuery(api.groups.get, selected ? { groupId: selected } : "skip");
@@ -576,7 +553,7 @@ export function useGroupJourney({
   const { copied, copy, reset } = useInviteCopy(detail, onNotice);
   const unavailable = () => onNotice("This is coming in the next journey.");
   function open(id: Id<"groups">) {
-    setSelected(id);
+    void navigate({ to: "/", search: { group: id, authError: undefined } });
     setInfoOpen(false);
     reset();
   }
@@ -584,7 +561,7 @@ export function useGroupJourney({
     try {
       open(await openPair({ profileId: id }));
     } catch (error) {
-      onNotice(journeyError(error, true));
+      onNotice(journeyError(error, 1));
     }
   }
   const group = detail?.status === "member" ? displayGroup(detail, photos) : null;

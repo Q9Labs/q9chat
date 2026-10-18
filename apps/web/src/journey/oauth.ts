@@ -27,7 +27,7 @@ export function rememberJoinPath() {
     tryStorage((storage) => storage.setItem(joinReturnSlot, path));
     return path;
   }
-  if (path.startsWith("/join/")) clearSavedJoin();
+  clearSavedJoin();
   return null;
 }
 

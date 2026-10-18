@@ -84,7 +84,7 @@ function Suggestions({
           <Avatar avatar={person.avatar} size="sm" />
           <span>
             <b>{person.name}</b>
-            <small>{person.email}</small>
+            {person.email ? <small>{person.email}</small> : null}
           </span>
         </button>
       ))}

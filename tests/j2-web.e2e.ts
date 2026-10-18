@@ -26,6 +26,26 @@ test(
     const engine = required(surface.context().browser(), "Missing browser for independent members");
     const bContext = await engine.newContext();
     const cContext = await engine.newContext();
+    async function failGoogle() {
+      await expect(screen.getByRole("button", "Email me a code")).toBeVisible();
+      await screen.getByRole("button", "Continue with Google", { exact: true }).tap();
+      await surface.page().waitForURL((url) => url.origin !== "http://localhost:3000");
+      // Follow the real error route used when the OAuth provider fails or is cancelled.
+      await app.open("/auth/error");
+    }
+    async function expectNoSavedInvite() {
+      expect(await surface.page().evaluate(() => sessionStorage.getItem("q9.join-return"))).toBe(
+        null,
+      );
+    }
+    async function expectInvitePrompt(path: string) {
+      await expect(screen.getByRole("heading", "Join Launch", { exact: true })).toBeVisible();
+      expect(new URL(await browser.url()).pathname).toBe(path);
+      await expect(browser.locator(".center p")).toHaveText([
+        "3 members",
+        "Join to read and write in this group.",
+      ]);
+    }
     async function expectPair() {
       await expect(browser.locator(".chat-title b .tt")).toHaveText("Bilal Journey");
       await expect(browser.locator("[role=log] .sys")).toHaveText(
@@ -88,7 +108,7 @@ test(
       await browser.setViewport({ width: 1280, height: 800 });
       await browser.emulateMedia({ colorScheme: "light" });
       const b = await peer(bContext, "b", "Bilal Journey");
-      await peer(cContext, "c", "Cora Journey");
+      const c = await peer(cContext, "c", "Cora Journey");
       // Separate real cookie jars: these pages remain open to observe live list updates.
       const bPage = await bContext.newPage();
       const cPage = await cContext.newPage();
@@ -299,34 +319,65 @@ test(
       expect(await surface.page().locator('meta[name="referrer"]').getAttribute("content")).toBe(
         "no-referrer",
       );
-      await screen.getByRole("button", "Continue with Google", { exact: true }).tap();
-      await surface.page().waitForURL((url) => url.origin !== "http://localhost:3000");
-      // Follow the real error route used when the OAuth provider fails or is cancelled.
-      await app.open("/auth/error");
+      // An abandoned invite must not capture a later ordinary sign-in failure.
+      await app.open("/");
+      await failGoogle();
+      await expect(browser.locator(".toast")).toHaveText("Sign-in wasn't completed. Try again.");
+      expect(new URL(await browser.url()).pathname).toBe("/");
+      await expect(browser.locator(".auth-hero p")).toHaveText(
+        "Sign in, or create an account if you're new.",
+      );
+      await expectNoSavedInvite();
+      await app.open(new URL(link).pathname);
+      await failGoogle();
       await surface.page().waitForURL((url) => url.pathname === new URL(link).pathname);
       await expect(browser.locator(".toast")).toHaveText("Sign-in wasn't completed. Try again.");
       expect(new URL(await browser.url()).pathname).toBe(new URL(link).pathname);
       await signUp("d", "Dalia Journey");
-      await expect(screen.getByRole("heading", "Join Launch", { exact: true })).toBeVisible();
-      expect(new URL(await browser.url()).pathname).toBe(new URL(link).pathname);
-      await expect(browser.locator(".center p")).toHaveText([
-        "3 members",
-        "Join to read and write in this group.",
-      ]);
+      await expectInvitePrompt(new URL(link).pathname);
+      const dClient = await clientFor(surface.context());
+      const ownGroup = await dClient.mutation(api.groups.create, {
+        name: "Dalia's group",
+        memberIds: [],
+        inviteToken: crypto.randomUUID().replaceAll("-", "").slice(0, 16),
+      });
+      await screen.getByRole("button", "Dalia's group", { exact: true }).tap();
+      await expect(browser.locator(".chat-title b .tt")).toHaveText("Dalia's group");
+      expect(new URL(await browser.url()).pathname).toBe("/");
+      expect(new URL(await browser.url()).searchParams.get("group")).toBe(ownGroup);
+      await surface.page().goBack();
+      await expectInvitePrompt(new URL(link).pathname);
       await expectMainFullWidth();
       await app.screenshot("j2-06-join-open");
       await screen.getByRole("button", "Join group", { exact: true }).tap();
       await expect(browser.locator("[role=log] .sys").last()).toHaveText("Dalia joined");
-      expect(await surface.page().evaluate(() => sessionStorage.getItem("q9.join-return"))).toBe(
-        null,
-      );
+      await expectNoSavedInvite();
       await app.open(new URL(link).pathname);
       await expect(browser.locator(".chat-title b .tt")).toHaveText("Launch");
       await expect(screen.getByRole("button", "Join group", { exact: true })).toHaveCount(0);
       await expect(browser.locator("[role=log] .sys").last()).toHaveText("Dalia joined");
       await expectMainFullWidth();
       await app.screenshot("j2-07-joined");
-      clients.push(await clientFor(surface.context()));
+      clients.push(dClient);
+      await screen.getByRole("button", "New group", { exact: true }).first().tap();
+      await screen.getByLabel("Add people", { exact: true }).fill("Amal");
+      await expect(browser.locator(".suggestions button b")).toHaveText("Amal");
+      await expect(browser.locator(".suggestions button small")).toHaveCount(0);
+      await screen.getByLabel("Add people", { exact: true }).fill(email("a"));
+      await expect(browser.locator(".suggestions button small")).toHaveText(email("a"));
+      await screen.getByRole("button", "Cancel", { exact: true }).tap();
+      await c.client.mutation(api.messages.send, {
+        groupId: launch.groupId,
+        clientKey: crypto.randomUUID(),
+        body: "Retained after account deletion",
+        attachments: [],
+      });
+      await c.client.mutation(api.profiles.deleteAccount, {});
+      clients.splice(clients.indexOf(c.client), 1);
+      await screen.getByRole("button", "About Deleted account", { exact: true }).tap();
+      await expect(screen.getByRole("dialog", "Deleted account")).toBeVisible();
+      await expect(screen.getByRole("button", "Message", { exact: true })).toHaveCount(0);
+      await screen.getByRole("button", "Close", { exact: true }).tap();
       const d = required(
         (await a.query(api.people.find, { query: email("d") }))[0],
         "Missing newly joined Dalia",

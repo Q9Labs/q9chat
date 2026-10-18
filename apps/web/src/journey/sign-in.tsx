@@ -9,10 +9,14 @@ const emptyDigits = () => Array.from({ length: 6 }, () => "");
 
 function useInviteReturn(authError: boolean) {
   useLayoutEffect(() => {
-    const saved = savedJoinPath();
-    if (authError && saved && window.location.pathname !== saved) {
-      window.location.replace(`${saved}?authError=1`);
-    } else rememberJoinPath();
+    if (authError && window.location.pathname === "/") {
+      const saved = savedJoinPath();
+      if (saved) {
+        window.location.replace(`${saved}?authError=1`);
+        return;
+      }
+    }
+    rememberJoinPath();
   }, [authError]);
 }
 
@@ -36,6 +40,7 @@ export function SignInJourney({
 
   async function sendCode(resend = false) {
     if (busy.current) return;
+    rememberJoinPath();
     onSignInAttempt();
     const target = resend ? codeEmail : email.trim();
     if (!target || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(target)) {

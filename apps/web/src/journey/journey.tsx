@@ -1,5 +1,6 @@
 import { api } from "@q9chat/convex";
 import { firstName, initials } from "@q9chat/domain";
+import { useSearch } from "@tanstack/react-router";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { Schema } from "effect";
@@ -207,6 +208,11 @@ function photoPaths(profile: ReadyProfile, groups: readonly LiveGroup[]) {
   return [profile.photo, ...groups.map((row) => row.avatar.photo)].filter((path) => path !== null);
 }
 
+function useSelectedGroup(groups: readonly LiveGroup[] | undefined) {
+  const search = useSearch({ strict: false });
+  return groups?.find((row) => row.groupId === search.group)?.groupId ?? null;
+}
+
 function Groups({
   profile,
   welcome,
@@ -234,6 +240,7 @@ function Groups({
   };
   const rows = (groups ?? []).map((row) => groupRow(row, photos));
   const workspace = useGroupJourney({
+    selectedGroup: useSelectedGroup(groups),
     token: useContext(InviteToken),
     onNotice: setNotice,
     renderEmpty: (onNewGroup) => <GroupsContent groups={groups} onNewGroup={onNewGroup} />,
