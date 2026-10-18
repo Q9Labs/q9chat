@@ -1,17 +1,14 @@
 @import "tailwindcss";
 @import "@q9labsai/ui/tokens.css";
+@import "./styles/chat.css";
 
 @source "./";
+@source not "./styles";
 @source "../node_modules/@q9labsai/ui/dist";
 
 @layer base {
   body {
     min-width: 20rem;
-    font-family: var(--font-sans);
-  }
-
-  :focus-visible {
-    outline: 2px solid var(--ring);
-    outline-offset: 2px;
+    font-family: "Figtree Variable", var(--font-sans);
   }
 }
