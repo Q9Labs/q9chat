@@ -29,7 +29,7 @@ outcomes:
     size: M
     size_reason: WorkOS setup, profile creation on first sign-in, phone sign-in and the groups list on both apps.
     remaining:
-      - Connect a WorkOS environment and enable email, Google and Apple sign-in.
+      - Connect a Convex-managed WorkOS environment and enable email code, Google and Apple sign-in.
       - Create a person's profile on first sign-in.
       - Sign in on the phone.
       - Show the person's groups sorted by latest activity with unread counts.
@@ -172,7 +172,7 @@ outcomes:
     size: L
     size_reason: A new Expo app sharing the Convex API and domain package.
     remaining:
-      - Add an Expo app that signs in and offers the version 1 journeys.
+      - Add an Expo app that signs in and offers the version 1 journeys, built alongside the web app.
 
   - id: release.first_live
     title: Q9's team uses Q9 Chat on chat.q9labs.ai and TestFlight
