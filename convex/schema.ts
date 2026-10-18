@@ -2,7 +2,8 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
 // Chat model. Membership is the whole permission model: every query and
-// mutation on a group first resolves the caller's membership row.
+// mutation on a group first resolves the caller's membership row, and a row
+// exists only while the person can read and write the group.
 
 export const profileValidator = v.union(
   v.object({
@@ -13,7 +14,8 @@ export const profileValidator = v.union(
     email: v.string(),
     photoStorageId: v.optional(v.id("_storage")),
   }),
-  // Account deletion keeps a tombstone so old messages still have an author.
+  // Account deletion keeps a tombstone so old messages still have an author,
+  // shown as "Deleted account". It holds no personal data.
   v.object({
     status: v.literal("deleted"),
     authUserId: v.string(),
@@ -30,20 +32,24 @@ export const groupValidator = v.union(
     kind: v.literal("group"),
     name: v.string(),
     createdBy: v.id("profiles"),
+    // Anyone holding the link can join and read the whole group, except a
+    // person who was removed: only a member can bring them back.
+    inviteToken: v.string(),
     lastSequence: v.number(),
-    lastMessageAt: v.number(),
   }),
   // A conversation between two people. pairKey is the two profile ids in
-  // sorted order, so starting it again finds the existing group.
+  // sorted order, so starting it again finds the existing group. A pair has
+  // no invite link and nobody else joins it.
   v.object({
     kind: v.literal("pair"),
     pairKey: v.string(),
     lastSequence: v.number(),
-    lastMessageAt: v.number(),
   }),
 );
 
-const groups = defineTable(groupValidator).index("by_pair_key", ["pairKey"]);
+const groups = defineTable(groupValidator)
+  .index("by_pair_key", ["pairKey"])
+  .index("by_invite_token", ["inviteToken"]);
 
 export const notifyModeValidator = v.union(
   v.literal("mentions"),
@@ -51,7 +57,7 @@ export const notifyModeValidator = v.union(
   v.literal("muted"),
 );
 
-// Leaving a group deletes the row, which ends access.
+// Leaving or being removed deletes the row, which ends access.
 const memberships = defineTable({
   groupId: v.id("groups"),
   profileId: v.id("profiles"),
@@ -61,12 +67,28 @@ const memberships = defineTable({
   .index("by_group_profile", ["groupId", "profileId"])
   .index("by_profile", ["profileId"]);
 
+// A person removed from a group. The group stays in their list as "Shoaib
+// removed you" until they dismiss it, and the row keeps them from rejoining
+// through the invite link until a member adds them back. It grants no access
+// to the group's messages.
+const removals = defineTable({
+  groupId: v.id("groups"),
+  profileId: v.id("profiles"),
+  removedBy: v.id("profiles"),
+  removedAt: v.number(),
+  dismissedAt: v.optional(v.number()),
+})
+  .index("by_group_profile", ["groupId", "profileId"])
+  .index("by_profile", ["profileId"]);
+
 // Kept apart from memberships so marking a group read does not re-run every
-// query that checks membership.
+// query that checks membership. lastNeedsYouSequence is the latest message
+// that mentions this person or replies to them; it drives the "@" badge.
 const readStates = defineTable({
   groupId: v.id("groups"),
   profileId: v.id("profiles"),
   lastReadSequence: v.number(),
+  lastNeedsYouSequence: v.number(),
 }).index("by_group_profile", ["groupId", "profileId"]);
 
 export const attachmentValidator = v.union(
@@ -89,33 +111,86 @@ export const attachmentValidator = v.union(
     storageId: v.id("_storage"),
     contentType: v.string(),
     durationMs: v.number(),
+    // Peak levels from 0 to 1, measured while recording, drawn as the waveform.
+    waveform: v.array(v.number()),
   }),
 );
 
-const messages = defineTable({
-  groupId: v.id("groups"),
-  authorId: v.id("profiles"),
-  sequence: v.number(),
-  // Chosen by the sending client; a retry with the same key returns the
-  // existing message instead of creating a second one.
-  clientKey: v.string(),
-  body: v.string(),
-  replyToId: v.optional(v.id("messages")),
-  mentions: v.array(v.id("profiles")),
-  attachments: v.array(attachmentValidator),
-})
+export const reactionEmojiValidator = v.union(
+  v.literal("👍"),
+  v.literal("❤️"),
+  v.literal("😂"),
+  v.literal("😮"),
+  v.literal("🙏"),
+);
+
+// A person has at most one reaction on a message; a new one replaces it.
+export const reactionValidator = v.object({
+  profileId: v.id("profiles"),
+  emoji: reactionEmojiValidator,
+});
+
+// The group's own history of who joined and left, shown as quiet lines.
+export const memberEventValidator = v.union(
+  v.object({ type: v.literal("created"), by: v.id("profiles") }),
+  v.object({ type: v.literal("added"), by: v.id("profiles"), profileId: v.id("profiles") }),
+  v.object({ type: v.literal("joined"), profileId: v.id("profiles") }),
+  v.object({ type: v.literal("removed"), by: v.id("profiles"), profileId: v.id("profiles") }),
+  v.object({ type: v.literal("left"), profileId: v.id("profiles") }),
+);
+
+// sequence orders a group's history; it is gap-free, so it also counts unread
+// messages and finds a message far back in the history.
+export const messageValidator = v.union(
+  v.object({
+    kind: v.literal("post"),
+    groupId: v.id("groups"),
+    sequence: v.number(),
+    authorId: v.id("profiles"),
+    // Chosen by the sending client; a retry with the same key returns the
+    // existing message instead of creating a second one.
+    clientKey: v.string(),
+    body: v.string(),
+    // The body plus file names, which search also matches.
+    searchText: v.string(),
+    replyToId: v.optional(v.id("messages")),
+    mentions: v.array(v.id("profiles")),
+    attachments: v.array(attachmentValidator),
+    reactions: v.array(reactionValidator),
+    editedAt: v.optional(v.number()),
+  }),
+  // Deleting a post drops its content and files but keeps its place, so
+  // replies to it still make sense.
+  v.object({
+    kind: v.literal("deleted"),
+    groupId: v.id("groups"),
+    sequence: v.number(),
+    authorId: v.id("profiles"),
+    clientKey: v.string(),
+    deletedAt: v.number(),
+  }),
+  v.object({
+    kind: v.literal("event"),
+    groupId: v.id("groups"),
+    sequence: v.number(),
+    event: memberEventValidator,
+  }),
+);
+
+const messages = defineTable(messageValidator)
   .index("by_group_sequence", ["groupId", "sequence"])
   .index("by_author_client_key", ["authorId", "clientKey"])
-  .searchIndex("search_body", { searchField: "body", filterFields: ["groupId"] });
+  .searchIndex("search_text", { searchField: "searchText", filterFields: ["groupId"] });
 
-const inviteLinks = defineTable({
+// Who is typing right now. A row lives a few seconds unless the typist
+// refreshes it; it is the only presence Q9 Chat shows.
+const typing = defineTable({
   groupId: v.id("groups"),
-  token: v.string(),
-  createdBy: v.id("profiles"),
-  revokedAt: v.optional(v.number()),
+  profileId: v.id("profiles"),
+  expiresAt: v.number(),
 })
-  .index("by_token", ["token"])
-  .index("by_group", ["groupId"]);
+  .index("by_group", ["groupId"])
+  .index("by_group_profile", ["groupId", "profileId"]);
 
 // Expo's push service delivers to APNs and FCM; browsers use Web Push.
 export const deviceValidator = v.union(
@@ -138,19 +213,27 @@ const devices = defineTable(deviceValidator)
   .index("by_expo_push_token", ["expoPushToken"])
   .index("by_endpoint", ["endpoint"]);
 
+export const reportReasonValidator = v.union(
+  v.literal("spam"),
+  v.literal("harassment"),
+  v.literal("other"),
+);
+
+// The author is never told who reported their message.
 const reports = defineTable({
   messageId: v.id("messages"),
   reporterId: v.id("profiles"),
-  reason: v.string(),
+  reason: reportReasonValidator,
 }).index("by_message", ["messageId"]);
 
 export default defineSchema({
   devices,
   groups,
-  inviteLinks,
   memberships,
   messages,
   profiles,
   readStates,
+  removals,
   reports,
+  typing,
 });
