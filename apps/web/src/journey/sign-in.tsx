@@ -1,11 +1,20 @@
-import { useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 
 import { EmailVerificationError, useSession } from "../lib/session.js";
 import { EmailCode, SignIn } from "../screens/auth.js";
 import { Toast } from "../ui/overlay.js";
-import { startOAuth } from "./oauth.js";
+import { rememberJoinPath, savedJoinPath, startOAuth } from "./oauth.js";
 
 const emptyDigits = () => Array.from({ length: 6 }, () => "");
+
+function useInviteReturn(authError: boolean) {
+  useLayoutEffect(() => {
+    const saved = savedJoinPath();
+    if (authError && saved && window.location.pathname !== saved) {
+      window.location.replace(`${saved}?authError=1`);
+    } else rememberJoinPath();
+  }, [authError]);
+}
 
 export function SignInJourney({
   authError,
@@ -23,6 +32,7 @@ export function SignInJourney({
   const [codeError, setCodeError] = useState("");
   const [notice, setNotice] = useState(authError ? "Sign-in wasn't completed. Try again." : "");
   const busy = useRef(false);
+  useInviteReturn(authError);
 
   async function sendCode(resend = false) {
     if (busy.current) return;
@@ -94,11 +104,19 @@ export function SignInJourney({
           }}
         />
       )}
-      {signOutStatus === "failed" ? null : signOutStatus === "complete" ? (
-        <Toast message="Signed out" />
-      ) : notice ? (
-        <Toast message={notice} />
-      ) : null}
+      <SignInNotice status={signOutStatus} notice={notice} />
     </>
   );
+}
+
+function SignInNotice({
+  status,
+  notice,
+}: {
+  readonly status: "idle" | "pending" | "complete" | "failed";
+  readonly notice: string;
+}) {
+  if (status === "failed") return null;
+  const message = status === "complete" ? "Signed out" : notice;
+  return message ? <Toast message={message} /> : null;
 }

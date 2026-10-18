@@ -187,7 +187,14 @@ function groupRow(row: LiveGroup, photos: ReadonlyMap<string, string>): GroupLis
   };
   return row.status === "removed"
     ? { ...row, avatar, removedBy: row.removedBy.name }
-    : { ...row, avatar };
+    : {
+        ...row,
+        avatar,
+        preview:
+          row.kind === "pair" && row.preview.summary === ""
+            ? { by: null, summary: `This is the start of your group with ${firstName(row.title)}` }
+            : row.preview,
+      };
 }
 
 function accountProvider(method: ReturnType<typeof useSession>["method"]): Me["provider"] {

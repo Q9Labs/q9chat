@@ -5,7 +5,7 @@ import { expect } from "e2e";
 import { Schema } from "effect";
 
 import { Session } from "../apps/web/src/lib/auth/contracts.js";
-import { browserEngine } from "./support/browser.js";
+import { browserEngine, expectMainFullWidth } from "./support/browser.js";
 import { magicCode, removeTestUser } from "./support/workos.js";
 
 const convexUrl = "https://quixotic-crab-23.convex.cloud";
@@ -26,6 +26,12 @@ test(
     const engine = required(surface.context().browser(), "Missing browser for independent members");
     const bContext = await engine.newContext();
     const cContext = await engine.newContext();
+    async function expectPair() {
+      await expect(browser.locator(".chat-title b .tt")).toHaveText("Bilal Journey");
+      await expect(browser.locator("[role=log] .sys")).toHaveText(
+        "This is the start of your group with Bilal",
+      );
+    }
     async function clientFor(context: typeof bContext) {
       const response = await context.request.post("http://localhost:3000/api/auth/token", {
         headers: { Origin: "http://localhost:3000" },
@@ -104,6 +110,10 @@ test(
       await expect(browser.locator(".hint span")).toHaveText(
         "People with an account can be added by name or email. For anyone else, share the invite link.",
       );
+      await screen.getByLabel("Add people", { exact: true }).fill(email("a"));
+      await expect(browser.locator(".hint span")).toHaveText("That's you.");
+      await expect(browser.locator(".suggestions button")).toHaveCount(0);
+      await screen.getByLabel("Add people", { exact: true }).fill("");
       await screen.getByLabel("Group name", { exact: true }).fill("Launch");
       await screen.getByLabel("Add people", { exact: true }).fill("x".repeat(101));
       await expect(screen.getByRole("alert")).toHaveText(
@@ -128,6 +138,7 @@ test(
       await expect(screen.getByRole("button", "Launch", { exact: true })).toBeVisible();
       await bPage.getByRole("button", { name: "Launch", exact: true }).waitFor();
       expect(await bPage.locator(".row .ttl").allTextContents()).toEqual(["Launch"]);
+      await expectMainFullWidth();
       await app.screenshot("j2-02-created-group");
       const launch = required(
         (await a.query(api.groups.list, {})).find((row) => row.title === "Launch"),
@@ -136,9 +147,14 @@ test(
 
       await screen.getByRole("button", "New group", { exact: true }).first().tap();
       await pick(email("b"), "Bilal");
+      await expect(browser.locator(".dlg .link-box")).toHaveCount(0);
+      await expect(browser.locator(".dlg .note")).toHaveText(
+        "Add a name or more people to get an invite link.",
+      );
       await screen.getByRole("button", "Start a group with Bilal", { exact: true }).tap();
-      await expect(browser.locator(".chat-title b .tt")).toHaveText("Bilal Journey");
-      await expect(browser.locator("[role=log] .sys")).toHaveText(
+      await expectPair();
+      await expectMainFullWidth();
+      await expect(browser.locator('.row[aria-label="Bilal Journey"] .pv')).toHaveText(
         "This is the start of your group with Bilal",
       );
       await app.screenshot("j2-03-pair-start");
@@ -146,10 +162,7 @@ test(
       await screen.getByRole("button", "New group", { exact: true }).first().tap();
       await pick(email("b"), "Bilal");
       await screen.getByRole("button", "Open your group with Bilal", { exact: true }).tap();
-      await expect(browser.locator(".chat-title b .tt")).toHaveText("Bilal Journey");
-      await expect(browser.locator("[role=log] .sys")).toHaveText(
-        "This is the start of your group with Bilal",
-      );
+      await expectPair();
       expect(await a.query(api.groups.pairWith, { profileId: b.id })).toBe(firstPair);
       expect((await a.query(api.groups.list, {})).filter((row) => row.kind === "pair").length).toBe(
         1,
@@ -177,8 +190,8 @@ test(
       await expect(browser.locator(".toast")).toHaveText("Invite link copied");
       await expect(screen.getByRole("button", "Copied", { exact: true })).toBeVisible();
       await expect(screen.getByRole("tooltip")).toHaveText("Copied");
-      const link = await browser.locator(".info .link-box code").textContent();
-      if (!link) throw new Error("Missing invite URL");
+      const link = await surface.page().evaluate(() => navigator.clipboard.readText());
+      await expect(browser.locator(".info .link-box code")).toHaveText(link.replace("http://", ""));
       expect(new URL(link).origin).toBe("http://localhost:3000");
       expect(new URL(link).pathname).toMatch(/^\/join\/[A-Za-z0-9]{16}$/u);
       expect(await surface.page().evaluate(() => navigator.clipboard.readText())).toBe(link);
@@ -218,10 +231,7 @@ test(
         .filter({ hasText: "Bilal Journey" })
         .getByRole("button", "Message", { exact: true })
         .tap();
-      await expect(browser.locator(".chat-title b .tt")).toHaveText("Bilal Journey");
-      await expect(browser.locator("[role=log] .sys")).toHaveText(
-        "This is the start of your group with Bilal",
-      );
+      await expectPair();
       expect(await a.query(api.groups.pairWith, { profileId: b.id })).toBe(firstPair);
       await screen.getByRole("button", "Launch", { exact: true }).tap();
       await b.client.mutation(api.messages.send, {
@@ -233,10 +243,7 @@ test(
       await expect(screen.getByRole("button", "About Bilal", { exact: true })).toBeVisible();
       await screen.getByRole("button", "About Bilal", { exact: true }).tap();
       await screen.getByRole("button", "Message", { exact: true }).tap();
-      await expect(browser.locator(".chat-title b .tt")).toHaveText("Bilal Journey");
-      await expect(browser.locator("[role=log] .sys")).toHaveText(
-        "This is the start of your group with Bilal",
-      );
+      await expectPair();
 
       await screen.getByRole("button", "New group", { exact: true }).first().tap();
       await screen.getByLabel("Group name", { exact: true }).fill("x".repeat(81));
@@ -289,6 +296,16 @@ test(
       await screen.getByRole("button", "Sign out", { exact: true }).tap();
       await app.open(new URL(link).pathname);
       await expect(screen.getByRole("button", "Email me a code")).toBeVisible();
+      expect(await surface.page().locator('meta[name="referrer"]').getAttribute("content")).toBe(
+        "no-referrer",
+      );
+      await screen.getByRole("button", "Continue with Google", { exact: true }).tap();
+      await surface.page().waitForURL((url) => url.origin !== "http://localhost:3000");
+      // Follow the real error route used when the OAuth provider fails or is cancelled.
+      await app.open("/auth/error");
+      await surface.page().waitForURL((url) => url.pathname === new URL(link).pathname);
+      await expect(browser.locator(".toast")).toHaveText("Sign-in wasn't completed. Try again.");
+      expect(new URL(await browser.url()).pathname).toBe(new URL(link).pathname);
       await signUp("d", "Dalia Journey");
       await expect(screen.getByRole("heading", "Join Launch", { exact: true })).toBeVisible();
       expect(new URL(await browser.url()).pathname).toBe(new URL(link).pathname);
@@ -296,13 +313,18 @@ test(
         "3 members",
         "Join to read and write in this group.",
       ]);
+      await expectMainFullWidth();
       await app.screenshot("j2-06-join-open");
       await screen.getByRole("button", "Join group", { exact: true }).tap();
       await expect(browser.locator("[role=log] .sys").last()).toHaveText("Dalia joined");
+      expect(await surface.page().evaluate(() => sessionStorage.getItem("q9.join-return"))).toBe(
+        null,
+      );
       await app.open(new URL(link).pathname);
       await expect(browser.locator(".chat-title b .tt")).toHaveText("Launch");
       await expect(screen.getByRole("button", "Join group", { exact: true })).toHaveCount(0);
       await expect(browser.locator("[role=log] .sys").last()).toHaveText("Dalia joined");
+      await expectMainFullWidth();
       await app.screenshot("j2-07-joined");
       clients.push(await clientFor(surface.context()));
       const d = required(
@@ -314,9 +336,11 @@ test(
       await expect(browser.locator(".center p")).toHaveText(
         "You were removed from this group. Ask a member to add you back.",
       );
+      await expectMainFullWidth();
       await app.screenshot("j2-08-join-removed");
       await app.open("/join/thisTokenIsNotReal123");
       await expect(browser.locator(".center p")).toHaveText("This invite link isn't valid.");
+      await expectMainFullWidth();
       await app.screenshot("j2-09-join-invalid");
       await app.open("/join/abc");
       await expect(browser.locator(".center p")).toHaveText("This invite link isn't valid.");

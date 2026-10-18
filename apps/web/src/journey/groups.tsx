@@ -1,9 +1,17 @@
 import { api, type Id } from "@q9chat/convex";
 import { eventSentence } from "@q9chat/domain";
-import { useMutation, useQuery } from "convex/react";
+import { useConvex, useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { ConvexError } from "convex/values";
-import { Component, useLayoutEffect, useRef, useState, useTransition, type ReactNode } from "react";
+import {
+  Component,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useTransition,
+  type ReactNode,
+} from "react";
 
 import { ChatHeader } from "../chat/chat-view.js";
 import type { Avatar as AvatarView, GroupDetail, PersonMatch } from "../chat/types.js";
@@ -12,7 +20,9 @@ import { GroupInfo } from "../screens/group-info.js";
 import { Avatar } from "../ui/avatar.js";
 import { Button } from "../ui/controls.js";
 import { Dialog, DialogActions } from "../ui/overlay.js";
+import { clearSavedJoin } from "./oauth.js";
 import { usePhotos } from "./photos.js";
+import { pickerLimit } from "./picker-limit.js";
 
 type Person = FunctionReturnType<typeof api.people.find>[number];
 type Detail = FunctionReturnType<typeof api.groups.get>;
@@ -24,22 +34,28 @@ const errorCopy = new Map([
   ["name_required", "Enter a group name or add someone."],
   ["name_too_long", "Use a group name of 80 characters or fewer."],
   ["group_full", "This group is full. A group can have up to 100 people."],
-  [
-    "too_many_groups",
-    "Someone has reached the 100-group limit. Leave a group before trying again.",
-  ],
+  ["too_many_groups", "You have reached the 100-group limit. Leave a group before trying again."],
   ["pair_locked", "You can't add people to a group of two. Create a new group instead."],
   ["invite_invalid", invalidInviteCopy],
   ["removed_from_group", removedInviteCopy],
   ["not_member", "You no longer have access to this group."],
   ["account_unavailable", "This account isn't available. Try signing in again."],
 ]);
-function journeyError(error: unknown): string {
-  const fallback = "Couldn't complete that. Try again.";
-  if (!(error instanceof ConvexError)) return fallback;
+function errorCode(error: unknown): string | null {
+  if (!(error instanceof ConvexError)) return null;
   const data: unknown = error.data;
-  if (typeof data !== "object" || data === null || !("code" in data)) return fallback;
-  return typeof data.code === "string" ? (errorCopy.get(data.code) ?? fallback) : fallback;
+  if (typeof data !== "object" || data === null || !("code" in data)) return null;
+  return typeof data.code === "string" ? data.code : null;
+}
+const pickedErrorCopy = new Map([
+  ["too_many_groups", "Someone you picked is already in 100 groups. Remove them to continue."],
+  ["account_unavailable", "Someone you picked is no longer available. Remove them to continue."],
+]);
+function journeyError(error: unknown, pickedPerson = false): string {
+  const code = errorCode(error);
+  if (code === null) return "Couldn't complete that. Try again.";
+  const picked = pickedPerson ? pickedErrorCopy.get(code) : undefined;
+  return picked ?? errorCopy.get(code) ?? "Couldn't complete that. Try again.";
 }
 
 export class GroupJourneyBoundary extends Component<
@@ -103,17 +119,48 @@ function displayGroup(detail: ActiveGroup, photos: ReadonlyMap<string, string>):
 
 type PickerMode = { kind: "new" } | { kind: "add"; group: ActiveGroup };
 function usePeopleMatches(query: string) {
-  const trimmed = query.trim();
-  const tooLong = trimmed.length > 100;
-  const matches = useQuery(api.people.find, trimmed && !tooLong ? { query: trimmed } : "skip");
-  return { matches, tooLong };
-}
-function usePairMatch(mode: PickerMode, name: string, people: readonly Person[]) {
-  const only = people.length === 1 ? people[0] : undefined;
-  return useQuery(
-    api.groups.pairWith,
-    mode.kind === "new" && !name.trim() && only ? { profileId: only.id } : "skip",
+  const [debounced, setDebounced] = useState(query);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebounced(query), 200);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+  const trimmed = debounced.trim();
+  const tooLong = query.trim().length > 100;
+  const matches = useQuery(
+    api.people.find,
+    trimmed && trimmed.length <= 100 ? { query: trimmed } : "skip",
   );
+  return { matches: query === debounced ? matches : undefined, tooLong };
+}
+function pairCandidate(mode: PickerMode, name: string, people: readonly Person[]) {
+  if (mode.kind !== "new" || name.trim() !== "") return null;
+  return people.length === 1 ? (people[0]?.id ?? null) : null;
+}
+function usePairMatch(
+  mode: PickerMode,
+  name: string,
+  people: readonly Person[],
+  onNotice: (text: string) => void,
+) {
+  const client = useConvex();
+  const profileId = pairCandidate(mode, name, people);
+  const [match, setMatch] = useState<{ profileId: Id<"profiles">; groupId: Id<"groups"> | null }>();
+  useEffect(() => {
+    let cancelled = false;
+    if (profileId)
+      void client.query(api.groups.pairWith, { profileId }).then(
+        (groupId) => {
+          if (!cancelled) setMatch({ profileId, groupId });
+        },
+        (error: unknown) => {
+          if (!cancelled) onNotice(journeyError(error, true));
+        },
+      );
+    return () => {
+      cancelled = true;
+    };
+  }, [client, profileId, onNotice]);
+  return match?.profileId === profileId ? match.groupId : undefined;
 }
 function availablePeople(
   matches: readonly Person[],
@@ -128,6 +175,15 @@ function unknownAddress(query: string, matches: readonly Person[] | undefined) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(query.trim()) && matches?.length === 0
     ? query.trim()
     : null;
+}
+function usePickerHint(query: string, matches: readonly Person[] | undefined) {
+  const me = useQuery(api.profiles.me, {});
+  const ownEmail =
+    me?.status === "ready" && query.trim().toLowerCase() === me.profile.email.toLowerCase();
+  return {
+    unknownEmail: ownEmail ? null : unknownAddress(query, matches),
+    pickerHint: ownEmail ? "That's you." : undefined,
+  };
 }
 function useGroupCreation() {
   const create = useMutation(api.groups.create);
@@ -166,6 +222,11 @@ function usePickerSubmit({
   const add = useMutation(api.groups.addMembers);
   function submit() {
     if (busy.current) return;
+    const limit = pickerLimit(mode.kind, people.length);
+    if (limit) {
+      setError(limit);
+      return;
+    }
     busy.current = true;
     setError("");
     startTransition(async () => {
@@ -179,7 +240,7 @@ function usePickerSubmit({
         }
         onClose();
       } catch (cause) {
-        setError(journeyError(cause));
+        setError(journeyError(cause, true));
       } finally {
         busy.current = false;
       }
@@ -206,14 +267,14 @@ function PeopleDialog({
   );
   const [copied, setCopied] = useState(false);
   const { matches, tooLong: queryTooLong } = usePeopleMatches(query);
-  const pair = usePairMatch(mode, name, people);
+  const pair = usePairMatch(mode, name, people, onNotice);
   const { photos } = usePhotos(
     [...people, ...(matches ?? [])].flatMap((p) => (p.avatar.photo ? [p.avatar.photo] : [])),
     onNotice,
   );
   const display = (p: Person): PersonMatch => ({ ...p, isYou: false, avatar: avatar(p, photos) });
   const suggestions = availablePeople(matches ?? [], people, mode);
-  const unknownEmail = unknownAddress(query, matches);
+  const { unknownEmail, pickerHint } = usePickerHint(query, matches);
   const { pending, error, setError, submit } = usePickerSubmit({
     mode,
     name,
@@ -242,9 +303,16 @@ function PeopleDialog({
       onRemovePerson={(p) => setPeople(people.filter((selected) => selected.id !== p.id))}
       query={query}
       queryError={queryTooLong ? "Use 100 characters or fewer to find someone." : undefined}
+      pickerHint={pickerHint}
       onQueryChange={setQuery}
       suggestions={suggestions.map(display)}
       onPick={(person) => {
+        const limit = pickerLimit(mode.kind, people.length + 1);
+        if (limit) {
+          setError(limit);
+          return;
+        }
+        setError("");
         const match = matches?.find((p) => p.id === person.id);
         if (match) {
           setPeople([...people, match]);
@@ -284,7 +352,9 @@ function Join({
     setError("");
     startTransition(async () => {
       try {
-        onOpen(await join({ token }));
+        const groupId = await join({ token });
+        clearSavedJoin();
+        onOpen(groupId);
       } catch (cause) {
         setError(journeyError(cause));
       } finally {
@@ -418,6 +488,10 @@ function History({
 function useInvite(token: string | undefined) {
   const valid = token !== undefined && /^[A-Za-z0-9]{16,32}$/u.test(token);
   const info = useQuery(api.groups.inviteInfo, valid ? { token } : "skip");
+  useEffect(() => {
+    if (!valid || info === null || info?.status === "member" || info?.status === "removed")
+      clearSavedJoin();
+  }, [valid, info]);
   return { info: valid ? info : null, groupId: info?.status === "member" ? info.groupId : null };
 }
 function groupPhotoPaths(detail: Detail | undefined) {
@@ -441,7 +515,6 @@ function useInviteCopy(detail: Detail | undefined, onNotice: (text: string) => v
   return { copied, copy, reset: () => setCopied(false) };
 }
 function LiveGroupInfo({
-  visible,
   group,
   detail,
   onClose,
@@ -451,7 +524,6 @@ function LiveGroupInfo({
   onMessage,
   unavailable,
 }: {
-  readonly visible: boolean;
   readonly group: GroupDetail | null;
   readonly detail: Detail | undefined;
   readonly onClose: () => void;
@@ -461,7 +533,7 @@ function LiveGroupInfo({
   readonly onMessage: (id: Id<"profiles">) => void;
   readonly unavailable: () => void;
 }) {
-  if (!visible || !group || detail?.status !== "member") return null;
+  if (!group || detail?.status !== "member") return null;
   return (
     <GroupInfo
       group={group}
@@ -512,7 +584,7 @@ export function useGroupJourney({
     try {
       open(await openPair({ profileId: id }));
     } catch (error) {
-      onNotice(journeyError(error));
+      onNotice(journeyError(error, true));
     }
   }
   const group = detail?.status === "member" ? displayGroup(detail, photos) : null;
@@ -534,9 +606,8 @@ export function useGroupJourney({
         onUnavailable={unavailable}
       />
     ),
-    info: (
+    info: infoOpen ? (
       <LiveGroupInfo
-        visible={infoOpen}
         group={group}
         detail={detail}
         onClose={() => setInfoOpen(false)}
@@ -546,7 +617,7 @@ export function useGroupJourney({
         onMessage={(id) => void message(id)}
         unavailable={unavailable}
       />
-    ),
+    ) : undefined,
     dialog: picker ? (
       <PeopleDialog
         mode={picker}
