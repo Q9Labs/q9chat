@@ -17,11 +17,11 @@ void test("the authorize URL asks WorkOS for the provider and returns to the pho
     provider: "google",
     redirectUri: "http://localhost:3000/auth/phone-callback",
     state: "s t",
-    challenge: "chal-_",
+    challenge: "challenge-_",
   });
   assert.equal(
     url,
-    "https://api.workos.com/user_management/authorize?client_id=client_01ABC&provider=GoogleOAuth&response_type=code&redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fauth%2Fphone-callback&state=s%20t&code_challenge=chal-_&code_challenge_method=S256",
+    "https://api.workos.com/user_management/authorize?client_id=client_01ABC&provider=GoogleOAuth&response_type=code&redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fauth%2Fphone-callback&state=s%20t&code_challenge=challenge-_&code_challenge_method=S256",
   );
   assert.match(
     authorizeUrl({

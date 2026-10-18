@@ -1,4 +1,4 @@
-// Expo inlines EXPO_PUBLIC_* only for direct `process.env.NAME` reads, so each one is read by name.
+// Expo replaces EXPO_PUBLIC_* values at build time only for direct `process.env.NAME` reads, so each one is read by name.
 function required(name: string, value: string | undefined): string {
   if (!value) throw new Error(`Set ${name} in apps/mobile/.env (see .env.example)`);
   return value;

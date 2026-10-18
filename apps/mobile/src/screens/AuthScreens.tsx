@@ -293,7 +293,7 @@ export function CodeScreen({
             bottom: 0,
             left: 0,
             padding: 0,
-            // Android reads a fully transparent colour as unset and draws the text; one step of alpha is invisible.
+            // Android reads a fully transparent color as unset and draws the text; one step of alpha is invisible.
             color: "#00000001",
             backgroundColor: "transparent",
           }}
