@@ -40,7 +40,7 @@
   "dependencies": {
     "@q9chat/domain": "workspace:*",
     "convex": "catalog:",
-    "effect": "3.22.2",
+    "effect": "catalog:",
     "web-push": "3.6.7"
   },
   "devDependencies": {

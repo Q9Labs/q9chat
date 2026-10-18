@@ -35,6 +35,8 @@ words:
   - oxfmt
   - oxlint
   - pnpm
+  - PKCE
+  - HMAC
   - q9gate
   - q9labs
   - regclass
@@ -53,6 +55,7 @@ words:
   - vitest
   - workerd
   - worktree
+  - worktrees
   - Wrangler
   # The people in the mock's seed data, used by the web gallery fixtures.
   - Bilal
@@ -68,3 +71,4 @@ words:
   - wordmark
   # The mock's screen name for the New group dialog, kept as the gallery state id.
   - newgroup
+  - ratelimits
