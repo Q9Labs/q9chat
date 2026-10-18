@@ -199,7 +199,7 @@ test(
         body: "Launch history",
         attachments: [],
       });
-      await expect(browser.locator("[role=log] p")).toHaveText("Launch history");
+      await expect(browser.locator("[role=log] .txt")).toHaveText("Launch history");
       await screen.getByRole("button", "Group info", { exact: true }).tap();
       await expect(browser.locator(".info .mrow b")).toHaveCount(2);
       expect((await browser.locator(".info .mrow b").allTextContents()).toSorted()).toEqual([
@@ -280,7 +280,7 @@ test(
       await expect(browser.locator(".chat-title b .tt")).toHaveText("Bilal, Cora");
       await expect(browser.locator("[role=log] .sys")).toHaveText([
         "You created this group",
-        "You added Bilal, Cora",
+        "You added Bilal and Cora",
       ]);
       const namedGroup = required(
         (await a.query(api.groups.list, {})).find((row) => row.title === "Bilal, Cora"),
@@ -300,7 +300,7 @@ test(
       await expect(browser.locator(".chat-title b .tt")).toHaveText("Bilal Journey");
       await screen.getByRole("button", "Bilal, Cora", { exact: true }).tap();
       await expect(browser.locator(".chat-title b .tt")).toHaveText("Bilal, Cora");
-      await expect(browser.locator("[role=log] p").last()).toHaveText(newest);
+      await expect(browser.locator("[role=log] .txt").last()).toHaveText(newest);
       expect(
         await browser.evaluate(() => {
           const log = document.querySelector('[role="log"]');
@@ -336,6 +336,7 @@ test(
       await signUp("d", "Dalia Journey");
       await expectInvitePrompt(new URL(link).pathname);
       const dClient = await clientFor(surface.context());
+      clients.push(dClient);
       const ownGroup = await dClient.mutation(api.groups.create, {
         name: "Dalia's group",
         memberIds: [],
@@ -350,15 +351,14 @@ test(
       await expectMainFullWidth();
       await app.screenshot("j2-06-join-open");
       await screen.getByRole("button", "Join group", { exact: true }).tap();
-      await expect(browser.locator("[role=log] .sys").last()).toHaveText("Dalia joined");
+      await expect(browser.locator("[role=log] .sys").last()).toHaveText("You joined");
       await expectNoSavedInvite();
       await app.open(new URL(link).pathname);
       await expect(browser.locator(".chat-title b .tt")).toHaveText("Launch");
       await expect(screen.getByRole("button", "Join group", { exact: true })).toHaveCount(0);
-      await expect(browser.locator("[role=log] .sys").last()).toHaveText("Dalia joined");
+      await expect(browser.locator("[role=log] .sys").last()).toHaveText("You joined");
       await expectMainFullWidth();
       await app.screenshot("j2-07-joined");
-      clients.push(dClient);
       await screen.getByRole("button", "New group", { exact: true }).first().tap();
       await screen.getByLabel("Add people", { exact: true }).fill("Amal");
       await expect(browser.locator(".suggestions button b")).toHaveText("Amal");

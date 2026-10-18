@@ -209,10 +209,29 @@ are deliberately omitted; see [group member privacy](../../docs/group-member-pri
 OAuth passes it through the existing same-origin `returnTo` parameter. Members
 open the group directly; removed people and invalid links show plain copy.
 
-The chat reads the newest 100 sequences without marking them read. Sending,
-older pages, search, notifications, removal, leaving and account deletion are
-outside this journey. Their controls remain unavailable.
+Journey 3 extends the chat history; sending, search, notification settings,
+removal and leaving remain outside these web journeys.
 
 `tests/j2-web.e2e.ts` uses fresh staging email-code accounts and independent
 browser contexts to verify live lists, member history, pair reuse and invite
 joining. Run it with journey 1 using `pnpm test:e2e` on the disposable cloud test box.
+
+## Journey 3
+
+Conversation history uses live `messages.range` pages of at most 100 sequences.
+Opening captures the private read boundary once, places the unread divider before
+an incoming post, and positions it 90px below the list top (clamped). Without a
+divider, the list opens at the bottom. Earlier pages preserve the scroll position;
+Jump to latest appears over 240px from the bottom. Live arrivals follow only when
+already at the bottom.
+
+Visible posts advance `readStates.markRead` only in a focused, visible window.
+Typing subscriptions expire locally as well as on the backend. Pair headers omit
+the member count, and Group info never shows member email addresses. Quotes and
+reaction counts are display-only. Attachment metadata is shown without fetching
+protected files; rendering and playback belong to journey 4.
+
+`tests/j3-web.e2e.ts` seeds fresh staging accounts and genuine dev history via the
+public APIs. Run it with J1 and J2 using `pnpm test:e2e` on test box. It writes its
+live flow screenshots to `artifacts/j3/` and deletes its profiles and WorkOS users
+in a cleanup, including on assertion failure.
