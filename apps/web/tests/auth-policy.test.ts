@@ -1,112 +1,12 @@
 // cspell:ignore fevil cevil
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
-import { registerHooks } from "node:module";
-import { after, test } from "node:test";
+import { test } from "node:test";
 
 import { Schema } from "effect";
 
-const envModule = `
-const limiter = (max) => {
-  const counts = new Map();
-  return { async limit({key}) { const count = (counts.get(key) ?? 0) + 1; counts.set(key, count); return {success: count <= max}; } };
-};
-export const env = { WORKOS_API_KEY: "test-only", WORKOS_CLIENT_ID: "test-only",
- AUTH_START_IP: limiter(20), AUTH_START_EMAIL: limiter(3), AUTH_VERIFY_IP: limiter(60), AUTH_VERIFY_EMAIL: limiter(10) };
-`;
-const hooks = registerHooks({
-  resolve(specifier, context, nextResolve) {
-    if (specifier === "cloudflare:workers")
-      return { url: `data:text/javascript,${encodeURIComponent(envModule)}`, shortCircuit: true };
-    if (specifier.endsWith(".js") && context.parentURL?.startsWith("file:")) {
-      const target = new URL(specifier.slice(0, -3) + ".ts", context.parentURL);
-      if (existsSync(target)) return nextResolve(target.href);
-    }
-    return nextResolve(specifier);
-  },
-});
-after(() => hooks.deregister());
-const routes = {
-  start: (await import("../src/routes/api/auth/email/start.ts")).Route,
-  verify: (await import("../src/routes/api/auth/email/verify.ts")).Route,
-  oauth: (await import("../src/routes/api/auth/oauth/$provider.ts")).Route,
-  callback: (await import("../src/routes/api/auth/callback.ts")).Route,
-  exchange: (await import("../src/routes/api/auth/oauth/exchange.ts")).Route,
-  token: (await import("../src/routes/api/auth/token.ts")).Route,
-  signOut: (await import("../src/routes/api/auth/sign-out.ts")).Route,
-  phone: (await import("../src/routes/auth/phone-callback.ts")).Route,
-};
-const origin = "https://chat.example.test";
+import { auth, call, cookies, origin, outside, seal, transaction } from "./auth-fixture.ts";
+
 let sequence = 0;
-async function call(
-  route: keyof typeof routes,
-  body?: object,
-  query = "",
-  cookie = "",
-  ip?: string,
-  requestOrigin?: string,
-) {
-  const handlers = routes[route].options.server?.handlers;
-  assert.ok(handlers && typeof handlers !== "function");
-  const handler = body
-    ? "POST" in handlers
-      ? handlers.POST
-      : undefined
-    : "GET" in handlers
-      ? handlers.GET
-      : undefined;
-  assert.ok(typeof handler === "function");
-  const response: unknown = await Reflect.apply(handler, undefined, [
-    {
-      request: new Request(`${origin}/api/auth/${route}${query}`, {
-        method: body ? "POST" : "GET",
-        headers: {
-          "content-type": "application/json",
-          cookie,
-          "CF-Connecting-IP": ip ?? `test-${++sequence}`,
-          ...(requestOrigin ? { origin: requestOrigin } : {}),
-        },
-        ...(body ? { body: JSON.stringify(body) } : {}),
-      }),
-      params: { provider: "google" },
-    },
-  ]);
-  assert.ok(response instanceof Response);
-  return response;
-}
-function auth(method: string | undefined = "MagicAuth") {
-  return {
-    access_token: `header.${btoa(JSON.stringify({ iat: 1, exp: 301, sid: "session_test" }))}.signature`,
-    refresh_token: "test-refresh",
-    authentication_method: method === "missing" ? undefined : method,
-    user: { id: "user_test", email: "test@example.net", first_name: null, last_name: null },
-  };
-}
-function cookies(response: Response) {
-  return response.headers
-    .getSetCookie()
-    .map((value) => value.split(";")[0])
-    .join("; ");
-}
-async function transaction(returnTo = "/") {
-  const response = await call(
-    "oauth",
-    undefined,
-    `?client=web&returnTo=${encodeURIComponent(returnTo)}`,
-  );
-  assert.equal(response.status, 302);
-  const state = new URL(response.headers.get("location") ?? "").searchParams.get("state");
-  return { cookie: cookies(response), query: `?code=one-use&state=${state}` };
-}
-async function outside(work: () => Promise<void>, reply: typeof fetch) {
-  const original = globalThis.fetch;
-  globalThis.fetch = reply;
-  try {
-    await work();
-  } finally {
-    globalThis.fetch = original;
-  }
-}
 const verifyBody = (email = `test-${++sequence}@example.net`) => ({
   email,
   code: "123456",
@@ -321,7 +221,7 @@ void test("per-email and per-IP budgets stop requests before WorkOS, without enu
       assert.equal(calls, 10);
       calls = 0;
       for (let index = 0; index < 62; index++)
-        await call("verify", verifyBody(), "", "", "same-verify-ip");
+        await call("verify", verifyBody(), "", undefined, "same-verify-ip");
       assert.equal(calls, 60);
     },
     async () => {
@@ -385,6 +285,132 @@ void test("refresh grants are not retried on 5xx either", async () => {
       if (!failing) return Response.json(auth());
       calls++;
       return Response.json({}, { status: 502 });
+    },
+  );
+});
+
+void test("sign-out clears every transaction; late email, phone and OAuth grants never reach WorkOS", async () => {
+  let upstream = 0;
+  await outside(
+    async () => {
+      const email = "transaction@example.net";
+      const start = await call("start", { email });
+      assert.match(cookies(start), /q9_email=.+/);
+      const tx = await transaction();
+      const phone = await call("exchange", { codeVerifier: "a".repeat(43) }, "", "");
+      assert.match(cookies(phone), /q9_phone=.+/);
+      const logout = await call(
+        "signOut",
+        {},
+        "",
+        `${cookies(start)}; ${tx.cookie}; ${cookies(phone)}`,
+      );
+      for (const name of ["q9_session", "q9_email", "q9_oauth", "q9_phone"])
+        assert.ok(
+          logout.headers
+            .getSetCookie()
+            .some((value) => value.startsWith(`${name}=;`) && value.includes("Max-Age=0")),
+        );
+      upstream = 0;
+      const verify = await call("verify", verifyBody(email), "", "");
+      assert.deepEqual(await verify.json(), { error: "invalid_transaction" });
+      const exchange = await call(
+        "exchange",
+        { code: "late", codeVerifier: "a".repeat(43) },
+        "",
+        "",
+      );
+      assert.deepEqual(await exchange.json(), { error: "invalid_transaction" });
+      const callback = await call("callback", undefined, tx.query, "");
+      assert.equal(callback.headers.get("location"), `${origin}/auth/error?reason=invalid_state`);
+      assert.equal(upstream, 0);
+      const wrongEmail = await call("verify", verifyBody("other@example.net"), "", cookies(start));
+      assert.equal(wrongEmail.status, 401);
+      assert.equal(upstream, 0);
+    },
+    async () => {
+      upstream++;
+      return Response.json({ ok: true });
+    },
+  );
+});
+
+void test("refresh with an unchanged WorkOS refresh token sends no Set-Cookie", async () => {
+  await outside(
+    async () => {
+      const signedIn = await call("verify", verifyBody());
+      const refreshed = await call("token", {}, "", cookies(signedIn));
+      assert.equal(refreshed.status, 200);
+      assert.deepEqual(refreshed.headers.getSetCookie(), []);
+    },
+    async () => Response.json(auth()),
+  );
+});
+
+void test("refresh with a rotated WorkOS refresh token updates the session cookie", async () => {
+  let rotate = false;
+  await outside(
+    async () => {
+      const signedIn = await call("verify", verifyBody());
+      rotate = true;
+      const refreshed = await call("token", {}, "", cookies(signedIn));
+      assert.equal(refreshed.status, 200);
+      assert.equal(refreshed.headers.getSetCookie().length, 1);
+      assert.match(
+        refreshed.headers.get("set-cookie") ?? "",
+        /q9_session=.+HttpOnly; Secure; SameSite=Lax; Path=\/api\/auth/,
+      );
+      assert.notEqual(cookies(refreshed), cookies(signedIn));
+    },
+    async () =>
+      Response.json({ ...auth(), refresh_token: rotate ? "rotated-refresh" : "test-refresh" }),
+  );
+});
+
+void test("terminal refresh failures never delete the shared session cookie", async () => {
+  for (const code of [
+    "invalid_grant",
+    "invalid_refresh_token",
+    "session_revoked",
+    "session_expired",
+  ]) {
+    let signedIn = false;
+    await outside(
+      async () => {
+        const initial = await call("verify", verifyBody());
+        signedIn = true;
+        const failed = await call("token", {}, "", cookies(initial));
+        assert.equal(failed.status, 401);
+        assert.deepEqual(await failed.json(), { error: "unauthenticated" });
+        assert.deepEqual(failed.headers.getSetCookie(), []);
+      },
+      async () => (signedIn ? Response.json({ code }, { status: 400 }) : Response.json(auth())),
+    );
+  }
+});
+
+void test("cancelled, expired and replaced email transactions request a new code without contacting WorkOS", async () => {
+  const email = "expired@example.net";
+  await outside(
+    async () => {
+      for (const value of [
+        "",
+        await seal({ subject: email, expiresAt: Date.now() - 1 }),
+        await seal({ subject: "other@example.net", expiresAt: Date.now() + 600_000 }),
+      ]) {
+        const response = await call(
+          "verify",
+          verifyBody(email),
+          "",
+          value ? `q9_email=${value}` : "",
+        );
+        assert.equal(response.status, 401);
+        assert.deepEqual(await response.json(), { error: "invalid_transaction" });
+        assert.deepEqual(response.headers.getSetCookie(), []);
+      }
+    },
+    async () => {
+      assert.fail("invalid email transactions must not reach WorkOS");
     },
   );
 });

@@ -61,6 +61,7 @@ interface EmailCodeProps {
   readonly onDigitsChange: (digits: readonly string[]) => void;
   /** Shows the rejected-code message and a red border. */
   readonly bad: boolean;
+  readonly errorMessage?: string;
   readonly onResend: () => void;
   readonly onUseDifferentEmail: () => void;
 }
@@ -71,6 +72,7 @@ export function EmailCode({
   digits,
   onDigitsChange,
   bad,
+  errorMessage = "That code didn't work. Check it and try again.",
   onResend,
   onUseDifferentEmail,
 }: EmailCodeProps) {
@@ -145,7 +147,7 @@ export function EmailCode({
           ))}
         </fieldset>
         <p className="code-error" role="alert">
-          {bad ? "That code didn't work. Check it and try again." : ""}
+          {bad ? errorMessage : ""}
         </p>
         <p className="fine">
           Didn't get it? Check spam, or{" "}

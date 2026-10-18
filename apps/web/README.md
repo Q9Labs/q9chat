@@ -23,18 +23,41 @@ await verifyEmail(email, code);
 ```
 
 `status` is `loading`, `authenticated`, or `unauthenticated`. `user` and `method`
-are null outside a session. `verifyEmail` throws `invalid_code` for a rejected
-code. Other request failures throw `auth_unavailable`. OAuth buttons redirect to
+are null outside a session. `verifyEmail` throws `EmailVerificationError` (exported
+from the same module) with `code: "invalid_code"` for a rejected code or
+`code: "invalid_transaction"` for a cancelled, expired or replaced email flow.
+Render its `message` in the code screen's alert. Invalid transactions say
+"That code has expired. Send a new one." and need `startEmail` again, not another
+attempt with the same code. Other request failures throw `auth_unavailable`. OAuth buttons redirect to
 `/api/auth/oauth/google?client=web` or `/api/auth/oauth/apple?client=web`.
 The optional `returnTo` accepts only same-origin paths.
 
+Only sign-out deletes `q9_session`. Terminal refresh failures return 401 without
+a cookie write, so an old response cannot delete a newer account cookie.
+
 Access tokens stay in provider memory. Convex calls `fetchAccessToken`, which
-refreshes when requested or within 30 seconds of expiry. A shared promise coalesces refreshes within the page. A Web Lock serializes
-all cookie writers (verification, refresh, and sign-out) across tabs. Session
-generations discard stale results; sign-out waits for older cookie writes before
-clearing the cookie. BroadcastChannel carries only signed-out/changed notices,
-invalidating other tabs without sending or storing tokens. No token enters
-localStorage, sessionStorage, or SSR markup.
+refreshes when requested or within 30 seconds of expiry. A shared promise coalesces
+refreshes within the page. There are no cross-tab locks or queued cookie writers.
+Sign-out dispatches immediately with `keepalive: true`, clears memory, and
+broadcasts. Session generations discard stale in-memory results. Each tab
+announces its user id on bootstrap or account change; peers holding a different
+user discard their token and refresh from the shared cookie. BroadcastChannel
+contains user ids only, never tokens. No token enters localStorage,
+sessionStorage, or SSR markup.
+
+Every sign-in requires a ten-minute httpOnly transaction cookie. Email start
+creates an email-bound cookie, OAuth start creates the state/PKCE cookie, and
+phone exchange preflight creates a verifier-bound cookie. Successful exchanges
+consume their transaction. Wrong email codes keep it so the person can retry.
+Sign-out clears the session and all three transaction cookies. A verify or
+callback arriving after completed sign-out cannot exchange a code without a
+transaction. A sign-in started before sign-out may still finish afterwards,
+including a delayed email-start response restoring its transaction or an exchange
+already running. Finishing still needs the emailed code or provider account;
+v1 accepts this regardless of timing, including slow WorkOS responses. Refresh writes a cookie only when WorkOS returns a different refresh token.
+An unchanged-token refresh cannot overwrite a newer account cookie; a genuinely
+rotated token can still write last. Tabs reconcile to the resulting shared cookie. There is no server-side
+transaction store.
 
 ## Worker endpoints
 
@@ -42,9 +65,11 @@ POST requests use JSON. Responses disable caching. Browser requests with a
 foreign Origin are rejected. No cross-origin CORS permission is granted.
 
 - `POST /api/auth/email/start { email }` returns `{ ok: true }` for a valid email,
-  including when WorkOS refuses the challenge.
+  including when WorkOS refuses the challenge. It sets the email transaction cookie.
 - `POST /api/auth/email/verify { email, code, client: "web" | "phone" }` returns a
-  session. A wrong or expired code returns `401 { error: "invalid_code" }`.
+  session while the matching email transaction exists. Missing, expired, or
+  mismatched transactions return `401 { error: "invalid_transaction" }`.
+  A wrong or expired code returns `401 { error: "invalid_code" }`.
 - `GET /api/auth/oauth/$provider?client=web` accepts `google` and `apple`, creates
   a ten-minute signed state and PKCE cookie, and redirects to WorkOS.
 - `GET /api/auth/callback?code&state` exchanges the code, sets the session cookie,
@@ -55,13 +80,20 @@ foreign Origin are rejected. No cross-origin CORS permission is granted.
   atomic transaction store.
 - `GET /auth/phone-callback?code&state` redirects to
   `q9chat://auth/callback?code&state`. The phone checks its own state.
-- `POST /api/auth/oauth/exchange { code, codeVerifier }` exchanges a phone code.
+- Before opening phone OAuth, `POST /api/auth/oauth/exchange { codeVerifier }`
+  creates the ten-minute phone transaction cookie and returns `{ ok: true }`.
+  The native HTTP client must retain that cookie, then send it with
+  `POST /api/auth/oauth/exchange { code, codeVerifier }` to exchange the code.
+  Missing, expired, or mismatched transactions return `invalid_transaction`.
+  This preflight is required because opening WorkOS directly cannot create a
+  first-party httpOnly transaction cookie on the Worker origin.
 - `POST /api/auth/token { refreshToken? }` refreshes the session and returns
   `{ accessToken, expiresAt, user: { id, email, firstName, lastName }, method }`.
   `expiresAt` is Unix time in milliseconds. `method` is `email`, `google`, or
   `apple`. Missing or invalid sessions return `401 { error: "unauthenticated" }`.
 - `POST /api/auth/sign-out { refreshToken? }` revokes the WorkOS session and
-  clears the web cookie. A transient upstream failure is retryable.
+  clears the web session and every sign-in transaction cookie. A transient
+  upstream failure throws `auth_unavailable`; retry sign-out to finish revocation.
 
 Web refresh tokens live only in the httpOnly, Secure, SameSite=Lax cookie at
 `Path=/api/auth`. Phone responses include `refreshToken` instead of a cookie.
@@ -69,7 +101,8 @@ Both forms wrap the WorkOS token and original method in an HMAC-signed value.
 Clients treat that value as opaque and replace it on every refresh. This keeps
 the method when WorkOS omits it in refresh responses. Signing uses the server-only
 WorkOS key. Rotating that key invalidates local sessions. The web cookie expires
-after 30 days; WorkOS also enforces its session expiry.
+after 30 days from sign-in or token rotation; unchanged-token refreshes do not
+extend it. WorkOS also enforces its session expiry.
 
 `workos.server.ts` owns all WorkOS calls. Each call has a ten-second deadline and typed errors.
 Only idempotent session revocation retries HTTP 5xx twice with exponential delay.
@@ -126,9 +159,17 @@ exact challenge. It never creates a replacement challenge.
 
 The focused Chromium checks are `pnpm exec playwright test e2e/auth-session.spec.ts
 --workers=1` (run on a disposable cloud box). They mount the real provider in a test-only harness
-and control its HTTP transport, testing cookie persistence, delayed verify versus
-logout, and two-tab invalidation. Public-route tests separately exercise the
-production server code with only WorkOS and rate-limit bindings substituted.
+and control its HTTP transport for cookie persistence, reload during pending
+verification/sign-out, and two-tab OAuth bootstrap/account changes. The late
+OAuth callback test uses the real Worker routes and Chromium cookie jar, with
+no WorkOS call needed. Public-route tests separately exercise production server
+code with only WorkOS and rate-limit bindings substituted.
+
+CI requires the focused Chromium suite and `client-bundle.test.ts` after an
+explicit app build (the contextual gate may skip its own build for docs-only changes). The bundle check scans built browser JavaScript for a
+server-only secret canary and server API identifiers. The canary is configured
+before the CI build; no staging secret is needed. These are mandatory CI steps,
+not optional scripts or part of the concurrently running root test graph.
 
 ## Journey 1 browser proof
 

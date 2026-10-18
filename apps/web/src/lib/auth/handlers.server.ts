@@ -1,7 +1,15 @@
 import { Either, Schema } from "effect";
 
 import { Client, Code, Email, Method, Nonempty, RefreshInput } from "./contracts.js";
-import { cookie, seal, setCookie, unseal } from "./cookies.server.js";
+import {
+  beginTransaction,
+  cookie,
+  hasTransaction,
+  seal,
+  setCookie,
+  transactionCookies,
+  unseal,
+} from "./cookies.server.js";
 import { emailBudget } from "./rate-limit.server.js";
 import { accessClaims, authenticate, WorkosError, workos } from "./workos.server.js";
 
@@ -91,14 +99,17 @@ export async function sessionResponse(
 export function emailStart(request: Request) {
   return boundary(request, async () => {
     const { email } = await input(request, Schema.Struct({ email: Email }));
-    if (!(await emailBudget(request, email, "start"))) return json({ ok: true });
+    const headers = new Headers({
+      "Set-Cookie": await beginTransaction("q9_email", email.toLowerCase()),
+    });
+    if (!(await emailBudget(request, email, "start"))) return json({ ok: true }, 200, headers);
     try {
       await workos("magic_auth", { email }, Schema.Unknown);
     } catch (error) {
       // Identical responses for every valid address, including unknown accounts.
       if (!(error instanceof WorkosError)) throw error;
     }
-    return json({ ok: true });
+    return json({ ok: true }, 200, headers);
   });
 }
 export function emailVerify(request: Request) {
@@ -107,10 +118,12 @@ export function emailVerify(request: Request) {
       request,
       Schema.Struct({ email: Email, code: Code, client: Client }),
     );
+    if (!(await hasTransaction(request, "q9_email", email.toLowerCase())))
+      return json({ error: "invalid_transaction" }, 401);
     if (!(await emailBudget(request, email, "verify")))
       return json({ error: "rate_limited" }, 429, new Headers({ "Retry-After": "60" }));
     try {
-      return await sessionResponse(
+      const response = await sessionResponse(
         await authenticate({
           grant_type: "urn:workos:oauth:grant-type:magic-auth:code",
           email,
@@ -118,6 +131,8 @@ export function emailVerify(request: Request) {
         }),
         client,
       );
+      response.headers.append("Set-Cookie", setCookie("q9_email", "", 0));
+      return response;
     } catch (error) {
       if (
         error instanceof WorkosError &&
@@ -153,7 +168,9 @@ export function token(request: Request) {
         grant_type: "refresh_token",
         refresh_token: credentials.refreshToken,
       });
-      return await sessionResponse(auth, credentials.client, credentials.method);
+      const response = await sessionResponse(auth, credentials.client, credentials.method);
+      if (auth.refresh_token === credentials.refreshToken) response.headers.delete("Set-Cookie");
+      return response;
     } catch (error) {
       if (
         error instanceof WorkosError &&
@@ -161,11 +178,8 @@ export function token(request: Request) {
           error.code,
         )
       )
-        return json(
-          { error: "unauthenticated" },
-          401,
-          new Headers({ "Set-Cookie": setCookie(sessionCookie, "", 0) }),
-        );
+        // Only sign-out deletes the cookie: this response may follow a newer sign-in.
+        return json({ error: "unauthenticated" }, 401);
       throw error;
     }
   });
@@ -185,6 +199,9 @@ export function signOut(request: Request) {
         if (!(error instanceof WorkosError) || error.status !== 404) throw error;
       }
     }
-    return json({ ok: true }, 200, new Headers({ "Set-Cookie": setCookie(sessionCookie, "", 0) }));
+    const headers = new Headers();
+    for (const name of [sessionCookie, ...transactionCookies])
+      headers.append("Set-Cookie", setCookie(name, "", 0));
+    return json({ ok: true }, 200, headers);
   });
 }

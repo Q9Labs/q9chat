@@ -9,6 +9,8 @@ import {
 
 import { createSessionClient } from "./session-client.js";
 
+export { EmailVerificationError } from "./session-client.js";
+
 function useSessionState() {
   const [client] = useState(createSessionClient);
   const { session, loading } = useSyncExternalStore(

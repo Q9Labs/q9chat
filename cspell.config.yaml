@@ -36,6 +36,7 @@ words:
   - oxlint
   - pnpm
   - PKCE
+  - keepalive
   - HMAC
   - q9gate
   - q9labs

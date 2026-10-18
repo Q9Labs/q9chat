@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 
-import { useSession } from "../lib/session.js";
+import { EmailVerificationError, useSession } from "../lib/session.js";
 import { EmailCode, SignIn } from "../screens/auth.js";
 import { Toast } from "../ui/overlay.js";
 
@@ -17,7 +17,7 @@ export function SignInJourney({
   const [email, setEmail] = useState("");
   const [codeEmail, setCodeEmail] = useState<string | null>(null);
   const [digits, setDigits] = useState<readonly string[]>(emptyDigits);
-  const [bad, setBad] = useState(false);
+  const [codeError, setCodeError] = useState("");
   const [notice, setNotice] = useState(
     authError ? "Sign-in wasn't completed. Try again." : signedOut ? "Signed out" : "",
   );
@@ -35,7 +35,7 @@ export function SignInJourney({
       await startEmail(target);
       setCodeEmail(target);
       setDigits(emptyDigits());
-      setBad(false);
+      setCodeError("");
       setNotice(resend ? "We sent a new code" : "");
     } catch {
       setNotice("Couldn't send a code. Try again.");
@@ -47,15 +47,15 @@ export function SignInJourney({
   async function enterDigits(next: readonly string[]) {
     if (busy.current) return;
     setDigits(next);
-    setBad(false);
+    setCodeError("");
     if (next.join("").length !== 6 || codeEmail === null) return;
     busy.current = true;
     try {
       await verifyEmail(codeEmail, next.join(""));
     } catch (error) {
-      if (error instanceof Error && error.message === "invalid_code") {
+      if (error instanceof EmailVerificationError) {
         setDigits(emptyDigits());
-        setBad(true);
+        setCodeError(error.message);
       } else setNotice("Sign-in wasn't completed. Try again.");
     } finally {
       busy.current = false;
@@ -80,7 +80,8 @@ export function SignInJourney({
           email={codeEmail}
           digits={digits}
           onDigitsChange={(next) => void enterDigits(next)}
-          bad={bad}
+          bad={codeError !== ""}
+          errorMessage={codeError}
           onResend={() => void sendCode(true)}
           onUseDifferentEmail={() => {
             if (!busy.current) {

@@ -32,47 +32,36 @@ async function until(condition: () => boolean) {
   assert.fail("session event did not settle");
 }
 
-void test("sign-out waits for delayed verify cookie write and stale verification never restores memory", async () => {
+void test("sign-out dispatches keepalive immediately during verify and ignores the stale result", async () => {
   const original = globalThis.fetch;
-  let cookie: string | null = null;
-  let verifyStarted = false;
   const release = Promise.withResolvers<void>();
-  const calls: string[] = [];
-  globalThis.fetch = async (url) => {
-    calls.push(typeof url === "string" ? url : url instanceof URL ? url.href : url.url);
+  let logout = false;
+  globalThis.fetch = async (url, options) => {
     if (
-      (typeof url === "string" ? url : url instanceof URL ? url.href : url.url).endsWith(
-        "email/verify",
-      )
+      (typeof url === "string" ? url : url instanceof URL ? url.href : url.url).endsWith("sign-out")
     ) {
-      verifyStarted = true;
-      await release.promise;
-      cookie = "refresh-cookie";
-      return Response.json(session());
+      assert.equal(options?.keepalive, true);
+      logout = true;
+      return Response.json({ ok: true });
     }
-    assert.equal(cookie, "refresh-cookie", "logout must run after the pending Set-Cookie");
-    cookie = null;
-    return Response.json({ ok: true });
+    await release.promise;
+    return Response.json(session());
   };
   try {
     const client = createSessionClient();
     const verifying = client.verifyEmail("test@example.net", "123456");
-    await until(() => verifyStarted);
-    const signingOut = client.signOut();
-    await setTimeout(5);
-    assert.equal(calls.length, 1);
+    await client.signOut();
+    assert.equal(logout, true);
     release.resolve();
-    await Promise.all([verifying, signingOut]);
+    await verifying;
     assert.equal(client.getSnapshot().session, null);
-    assert.equal(cookie, null);
-    assert.deepEqual(calls, ["/api/auth/email/verify", "/api/auth/sign-out"]);
   } finally {
     release.resolve();
     globalThis.fetch = original;
   }
 });
 
-void test("refresh caches outside expiry buffer, single-flights inside it, and serializes across tabs", async () => {
+void test("refresh caches outside expiry buffer, single-flights inside it, without locking other tabs", async () => {
   const original = globalThis.fetch;
   let calls = 0;
   let active = 0;
@@ -93,11 +82,11 @@ void test("refresh caches outside expiry buffer, single-flights inside it, and s
     const b = first.fetchAccessToken({ forceRefreshToken: true });
     assert.equal(a, b);
     const c = second.fetchAccessToken({ forceRefreshToken: true });
-    await until(() => calls === 1);
+    await until(() => calls === 2);
     release.resolve();
     await Promise.all([a, b, c]);
     assert.equal(calls, 2);
-    assert.equal(maximum, 1);
+    assert.equal(maximum, 2);
     await first.fetchAccessToken({ forceRefreshToken: false });
     assert.equal(calls, 2);
     globalThis.fetch = async () => {
@@ -218,7 +207,7 @@ void test("a delayed refresh cannot restore another tab after logout invalidatio
   }
 });
 
-void test("failed server revocation throws and restores the still-active session instead of reporting completed logout", async () => {
+void test("failed server revocation throws without restoring local tokens", async () => {
   const original = globalThis.fetch;
   globalThis.fetch = async (url) => {
     const path = typeof url === "string" ? url : url instanceof URL ? url.href : url.url;
@@ -233,7 +222,7 @@ void test("failed server revocation throws and restores the still-active session
   try {
     await until(() => second.getSnapshot().session !== null);
     await assert.rejects(first.signOut(), /auth_unavailable/);
-    assert.equal(first.getSnapshot().session?.user.id, "user_one");
+    assert.equal(first.getSnapshot().session, null);
     await until(() => second.getSnapshot().session?.user.id === "user_one");
   } finally {
     closeFirst();
@@ -275,7 +264,6 @@ void test("concurrent account verifications reconcile every successful cookie wr
     });
     await verifyingFirst;
     await until(() => secondStarted || secondSettled);
-    await until(() => second.getSnapshot().session === null || secondSettled);
     release.resolve();
     await verifyingSecond;
     await until(() => second.getSnapshot().session?.user.id === identity);
@@ -284,6 +272,108 @@ void test("concurrent account verifications reconcile every successful cookie wr
     release.resolve();
     closeFirst();
     closeSecond();
+    globalThis.fetch = original;
+  }
+});
+
+void test("completed sign-out invalidates peers that refreshed while revocation was pending", async () => {
+  const original = globalThis.fetch;
+  const release = Promise.withResolvers<void>();
+  let signedOut = false;
+  let reads = 0;
+  globalThis.fetch = async (url) => {
+    if (
+      (typeof url === "string" ? url : url instanceof URL ? url.href : url.url).endsWith("sign-out")
+    ) {
+      await release.promise;
+      signedOut = true;
+      return Response.json({ ok: true });
+    }
+    reads++;
+    return signedOut ? Response.json({}, { status: 401 }) : Response.json(session());
+  };
+  const first = createSessionClient();
+  const second = createSessionClient();
+  const closeFirst = first.start();
+  const closeSecond = second.start();
+  try {
+    await until(
+      () => first.getSnapshot().session !== null && second.getSnapshot().session !== null,
+    );
+    const before = reads;
+    const signingOut = first.signOut();
+    await until(() => reads > before && second.getSnapshot().session !== null);
+    release.resolve();
+    await signingOut;
+    await until(
+      () => first.getSnapshot().session === null && second.getSnapshot().session === null,
+    );
+  } finally {
+    release.resolve();
+    closeFirst();
+    closeSecond();
+    globalThis.fetch = original;
+  }
+});
+
+void test("sign-out invalidates a peer's initial bootstrap even before it has a user id", async () => {
+  const original = globalThis.fetch;
+  const release = Promise.withResolvers<void>();
+  let delay = false;
+  let started = false;
+  let signedOut = false;
+  globalThis.fetch = async (url) => {
+    const path = typeof url === "string" ? url : url instanceof URL ? url.href : url.url;
+    if (path.endsWith("sign-out")) {
+      signedOut = true;
+      return Response.json({ ok: true });
+    }
+    if (signedOut) return Response.json({}, { status: 401 });
+    if (delay) {
+      started = true;
+      await release.promise;
+    }
+    return Response.json(session());
+  };
+  const first = createSessionClient();
+  const second = createSessionClient();
+  const closeFirst = first.start();
+  let closeSecond: (() => void) | undefined;
+  try {
+    await until(() => first.getSnapshot().session !== null);
+    delay = true;
+    closeSecond = second.start();
+    await until(() => started);
+    await first.signOut();
+    closeFirst();
+    await setTimeout(20);
+    release.resolve();
+    await until(() => !second.getSnapshot().loading);
+    assert.equal(second.getSnapshot().session, null);
+  } finally {
+    release.resolve();
+    closeFirst();
+    closeSecond?.();
+    globalThis.fetch = original;
+  }
+});
+
+void test("email verification preserves expired transaction errors and actionable copy", async () => {
+  const original = globalThis.fetch;
+  try {
+    for (const code of ["invalid_transaction", "invalid_code"] as const) {
+      globalThis.fetch = async () => Response.json({ error: code }, { status: 401 });
+      const client = createSessionClient();
+      await assert.rejects(client.verifyEmail("test@example.net", "123456"), {
+        code,
+        message:
+          code === "invalid_transaction"
+            ? "That code has expired. Send a new one."
+            : "That code didn't work. Check it and try again.",
+      });
+      assert.equal(client.getSnapshot().session, null);
+    }
+  } finally {
     globalThis.fetch = original;
   }
 });

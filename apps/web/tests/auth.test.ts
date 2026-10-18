@@ -85,7 +85,10 @@ void test("real staging email sign-in, refresh persistence and sign-out", async 
     ?.slice("WORKOS_API_KEY=".length);
   assert.ok(key, "staging Worker credentials required");
   const email = `q9-auth-${Date.now()}@example.net`;
-  assert.deepEqual(await (await post("email/start", { email })).json(), { ok: true });
+  const started = await post("email/start", { email });
+  assert.deepEqual(await started.json(), { ok: true });
+  const transaction = started.headers.getSetCookie()[0]?.split(";")[0];
+  assert.ok(transaction);
   // Discover the challenge produced by our public start route, never create a replacement.
   let magicId: string | undefined;
   for (let attempt = 0; attempt < 10 && !magicId; attempt++) {
@@ -118,10 +121,10 @@ void test("real staging email sign-in, refresh persistence and sign-out", async 
   );
   const wrong = code === "000000" ? "111111" : "000000";
   assert.deepEqual(
-    await (await post("email/verify", { email, code: wrong, client: "web" })).json(),
+    await (await post("email/verify", { email, code: wrong, client: "web" }, transaction)).json(),
     { error: "invalid_code" },
   );
-  const verified = await post("email/verify", { email, code, client: "web" });
+  const verified = await post("email/verify", { email, code, client: "web" }, transaction);
   assert.equal(verified.status, 200);
   const first = Schema.decodeUnknownSync(Session)(await verified.json());
   const firstCookie = sessionCookie(verified);
@@ -141,7 +144,9 @@ void test("real staging email sign-in, refresh persistence and sign-out", async 
   const refreshed = await post("token", {}, firstCookie);
   assert.equal(refreshed.status, 200);
   const second = Schema.decodeUnknownSync(Session)(await refreshed.json());
-  const rotatedCookie = sessionCookie(refreshed);
+  const rotatedCookie = refreshed.headers.has("set-cookie")
+    ? sessionCookie(refreshed)
+    : firstCookie;
   console.warn(`Observed WorkOS refresh token changed: ${firstCookie !== rotatedCookie}`);
   const payload = second.accessToken.split(".")[1];
   assert.ok(payload);
