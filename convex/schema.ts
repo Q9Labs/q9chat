@@ -14,12 +14,16 @@ export const profileValidator = v.union(
     email: v.string(),
     photoStorageId: v.optional(v.id("_storage")),
   }),
-  // Deletion locks the account at once, then a job deletes the sign-in
-  // account and the person's data in batches.
+  // Deletion locks the account at once; a cron drives the deletion steps
+  // until done. authUserId stays until every access token issued before the
+  // sign-in account was deleted has expired, so an old token can't set up a
+  // new profile.
   v.object({
     status: v.literal("deleting"),
     authUserId: v.string(),
     requestedAt: v.number(),
+    photoStorageId: v.optional(v.id("_storage")),
+    signInAccountDeletedAt: v.optional(v.number()),
   }),
   // The tombstone keeps old messages attributed, shown as "Deleted account".
   // It holds no personal data and no link to the sign-in account.
@@ -88,25 +92,43 @@ const removals = defineTable({
   .index("by_profile", ["profileId"]);
 
 // Kept apart from memberships so marking a group read does not re-run every
-// query that checks membership. unreadCount counts other people's posts after
-// lastReadSequence; member events and the person's own posts don't count.
-// lastNeedsYouSequence is the latest message that mentions this person or
-// replies to them; it drives the "@" badge.
+// query that checks membership. lastNeedsYouSequence is the latest message
+// that mentioned this person or replied to them when it was sent; it drives
+// the "@" badge.
 const readStates = defineTable({
   groupId: v.id("groups"),
   profileId: v.id("profiles"),
   lastReadSequence: v.number(),
-  unreadCount: v.number(),
   lastNeedsYouSequence: v.number(),
 })
   .index("by_group_profile", ["groupId", "profileId"])
   .index("by_profile", ["profileId"]);
+
+// One row per post a member hasn't read yet: other people's posts, including
+// ones deleted since. Marking read deletes the rows up to the new position, so
+// counting unread reads only unread rows, never the history between them.
+const unreadPosts = defineTable({
+  profileId: v.id("profiles"),
+  groupId: v.id("groups"),
+  sequence: v.number(),
+}).index("by_profile_group_sequence", ["profileId", "groupId", "sequence"]);
+
+// A file uploaded through the authenticated upload route and not yet used.
+// Sending a post or setting a photo consumes it, so each upload is used once
+// and only by its uploader. A cron deletes uploads left unused for a day.
+const uploads = defineTable({
+  ownerId: v.id("profiles"),
+  storageId: v.id("_storage"),
+  contentType: v.string(),
+  size: v.number(),
+}).index("by_owner", ["ownerId"]);
 
 export const attachmentValidator = v.union(
   v.object({
     kind: v.literal("image"),
     storageId: v.id("_storage"),
     contentType: v.string(),
+    size: v.number(),
     width: v.number(),
     height: v.number(),
   }),
@@ -121,6 +143,7 @@ export const attachmentValidator = v.union(
     kind: v.literal("voice"),
     storageId: v.id("_storage"),
     contentType: v.string(),
+    size: v.number(),
     durationMs: v.number(),
     // Peak levels from 0 to 1, measured while recording, drawn as the waveform.
     waveform: v.array(v.number()),
@@ -214,12 +237,16 @@ export const deviceValidator = v.union(
     profileId: v.id("profiles"),
     expoPushToken: v.string(),
   }),
+  // A browser must show every push it receives, so it can't skip one for the
+  // group on screen. Instead a focused tab reports the group it shows here,
+  // privately, and delivery skips this device for that group until expiry.
   v.object({
     kind: v.literal("web"),
     profileId: v.id("profiles"),
     endpoint: v.string(),
     p256dh: v.string(),
     auth: v.string(),
+    viewing: v.optional(v.object({ groupId: v.id("groups"), until: v.number() })),
   }),
 );
 
@@ -234,11 +261,13 @@ export const reportReasonValidator = v.union(
   v.literal("other"),
 );
 
-// The author is never told who reported their message.
+// The author is never told who reported their message. The excerpt keeps
+// the reported text for review even if the author deletes the message.
 const reports = defineTable({
   messageId: v.id("messages"),
   reporterId: v.id("profiles"),
   reason: reportReasonValidator,
+  excerpt: v.string(),
 })
   .index("by_message_reporter", ["messageId", "reporterId"])
   .index("by_reporter", ["reporterId"]);
@@ -254,4 +283,6 @@ export default defineSchema({
   removals,
   reports,
   typing,
+  unreadPosts,
+  uploads,
 });
