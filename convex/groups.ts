@@ -84,7 +84,7 @@ export const get = query({
   args: { groupId: v.id("groups") },
   returns: v.union(
     v.null(),
-    v.object({ status: v.literal("removed"), ...validators.removed }),
+    v.object({ status: v.literal("removed"), ...validators.removed, memberCount: v.number() }),
     v.object({
       status: v.literal("member"),
       groupId: v.id("groups"),
@@ -114,6 +114,7 @@ export const get = query({
         avatar: display.avatar,
         removedBy: await p.person(ctx, removed.removedBy, access.profile._id),
         removedAt: removed.removedAt,
+        memberCount: (await g.memberships(ctx, group._id)).length,
       };
     }
     const group = await ctx.db.get(args.groupId);

@@ -157,6 +157,7 @@ describe("identity and access classes", () => {
     await alice.client.mutation(api.groups.removeMember, { groupId, profileId: bob.id });
     expect(await bob.client.query(api.groups.get, { groupId })).toMatchObject({
       status: "removed",
+      memberCount: 1,
       removedBy: { id: alice.id },
     });
     await expect(
@@ -991,4 +992,33 @@ describe("bounded API limits", () => {
     expect(rows[0]).toMatchObject({ profileId: bob.id });
     expect(rows[0]).not.toHaveProperty("viewing");
   });
+});
+
+it("deleted reply quotes retain the original author and viewer identity", async () => {
+  const t = fixture();
+  const { alice, bob, groupId } = await group(t);
+  const original = await send(alice.client, groupId, "original");
+  const reply = await bob.client.mutation(api.messages.send, {
+    groupId,
+    clientKey: "quote",
+    body: "reply",
+    replyToId: original.messageId,
+    attachments: [],
+  });
+  await alice.client.mutation(api.messages.remove, { messageId: original.messageId });
+  const args = { groupId, fromSequence: reply.sequence, toSequence: reply.sequence };
+  expect(await alice.client.query(api.messages.range, args)).toMatchObject([
+    {
+      replyTo: {
+        id: original.messageId,
+        sequence: original.sequence,
+        deleted: true,
+        author: { id: alice.id, name: "Alice", isYou: true },
+      },
+    },
+  ]);
+  expect(await bob.client.query(api.messages.range, args)).toMatchObject([
+    { replyTo: { deleted: true, author: { id: alice.id, isYou: false } } },
+  ]);
+  await drain(t);
 });

@@ -65,7 +65,12 @@ export const message = v.union(
     attachments: v.array(attachment),
     replyTo: v.union(
       v.null(),
-      v.object({ id: v.id("messages"), sequence: v.number(), deleted: v.literal(true) }),
+      v.object({
+        id: v.id("messages"),
+        sequence: v.number(),
+        author: person,
+        deleted: v.literal(true),
+      }),
       v.object({ id: v.id("messages"), sequence: v.number(), author: person, summary: v.string() }),
     ),
     reactions: v.array(

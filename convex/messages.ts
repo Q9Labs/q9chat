@@ -139,7 +139,12 @@ export const range = query({
           !quote || quote.kind === "event"
             ? null
             : quote.kind === "deleted"
-              ? { id: quote._id, sequence: quote.sequence, deleted: true as const }
+              ? {
+                  id: quote._id,
+                  sequence: quote.sequence,
+                  author: await p.person(ctx, quote.authorId, profile._id),
+                  deleted: true as const,
+                }
               : {
                   id: quote._id,
                   sequence: quote.sequence,
