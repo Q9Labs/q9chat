@@ -10,9 +10,7 @@
   "authKit": {
     "dev": {
       "configure": {
-        "redirectUris": [
-          "http://localhost:3000/api/auth/callback"
-        ],
+        "redirectUris": ["http://localhost:3000/api/auth/callback"],
         "appHomepageUrl": "http://localhost:3000"
       }
     }
