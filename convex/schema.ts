@@ -14,11 +14,17 @@ export const profileValidator = v.union(
     email: v.string(),
     photoStorageId: v.optional(v.id("_storage")),
   }),
-  // Account deletion keeps a tombstone so old messages still have an author,
-  // shown as "Deleted account". It holds no personal data.
+  // Deletion locks the account at once, then a job deletes the sign-in
+  // account and the person's data in batches.
+  v.object({
+    status: v.literal("deleting"),
+    authUserId: v.string(),
+    requestedAt: v.number(),
+  }),
+  // The tombstone keeps old messages attributed, shown as "Deleted account".
+  // It holds no personal data and no link to the sign-in account.
   v.object({
     status: v.literal("deleted"),
-    authUserId: v.string(),
     deletedAt: v.number(),
   }),
 );
@@ -82,14 +88,19 @@ const removals = defineTable({
   .index("by_profile", ["profileId"]);
 
 // Kept apart from memberships so marking a group read does not re-run every
-// query that checks membership. lastNeedsYouSequence is the latest message
-// that mentions this person or replies to them; it drives the "@" badge.
+// query that checks membership. unreadCount counts other people's posts after
+// lastReadSequence; member events and the person's own posts don't count.
+// lastNeedsYouSequence is the latest message that mentions this person or
+// replies to them; it drives the "@" badge.
 const readStates = defineTable({
   groupId: v.id("groups"),
   profileId: v.id("profiles"),
   lastReadSequence: v.number(),
+  unreadCount: v.number(),
   lastNeedsYouSequence: v.number(),
-}).index("by_group_profile", ["groupId", "profileId"]);
+})
+  .index("by_group_profile", ["groupId", "profileId"])
+  .index("by_profile", ["profileId"]);
 
 export const attachmentValidator = v.union(
   v.object({
@@ -124,16 +135,14 @@ export const reactionEmojiValidator = v.union(
   v.literal("🙏"),
 );
 
-// A person has at most one reaction on a message; a new one replaces it.
-export const reactionValidator = v.object({
-  profileId: v.id("profiles"),
-  emoji: reactionEmojiValidator,
-});
-
 // The group's own history of who joined and left, shown as quiet lines.
 export const memberEventValidator = v.union(
   v.object({ type: v.literal("created"), by: v.id("profiles") }),
-  v.object({ type: v.literal("added"), by: v.id("profiles"), profileId: v.id("profiles") }),
+  v.object({
+    type: v.literal("added"),
+    by: v.id("profiles"),
+    profileIds: v.array(v.id("profiles")),
+  }),
   v.object({ type: v.literal("joined"), profileId: v.id("profiles") }),
   v.object({ type: v.literal("removed"), by: v.id("profiles"), profileId: v.id("profiles") }),
   v.object({ type: v.literal("left"), profileId: v.id("profiles") }),
@@ -156,7 +165,6 @@ export const messageValidator = v.union(
     replyToId: v.optional(v.id("messages")),
     mentions: v.array(v.id("profiles")),
     attachments: v.array(attachmentValidator),
-    reactions: v.array(reactionValidator),
     editedAt: v.optional(v.number()),
   }),
   // Deleting a post drops its content and files but keeps its place, so
@@ -182,15 +190,22 @@ const messages = defineTable(messageValidator)
   .index("by_author_client_key", ["authorId", "clientKey"])
   .searchIndex("search_text", { searchField: "searchText", filterFields: ["groupId"] });
 
-// Who is typing right now. A row lives a few seconds unless the typist
-// refreshes it; it is the only presence Q9 Chat shows.
+// A person has at most one reaction on a post; a new one replaces it.
+const reactions = defineTable({
+  messageId: v.id("messages"),
+  profileId: v.id("profiles"),
+  emoji: reactionEmojiValidator,
+})
+  .index("by_message_profile", ["messageId", "profileId"])
+  .index("by_profile", ["profileId"]);
+
+// Who is typing right now: the only presence Q9 Chat shows. The apps hide a
+// row once expiresAt passes, and a cron deletes expired rows.
 const typing = defineTable({
   groupId: v.id("groups"),
   profileId: v.id("profiles"),
   expiresAt: v.number(),
-})
-  .index("by_group", ["groupId"])
-  .index("by_group_profile", ["groupId", "profileId"]);
+}).index("by_group_profile", ["groupId", "profileId"]);
 
 // Expo's push service delivers to APNs and FCM; browsers use Web Push.
 export const deviceValidator = v.union(
@@ -224,7 +239,9 @@ const reports = defineTable({
   messageId: v.id("messages"),
   reporterId: v.id("profiles"),
   reason: reportReasonValidator,
-}).index("by_message", ["messageId"]);
+})
+  .index("by_message_reporter", ["messageId", "reporterId"])
+  .index("by_reporter", ["reporterId"]);
 
 export default defineSchema({
   devices,
@@ -232,6 +249,7 @@ export default defineSchema({
   memberships,
   messages,
   profiles,
+  reactions,
   readStates,
   removals,
   reports,
