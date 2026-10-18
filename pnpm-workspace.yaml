@@ -24,8 +24,8 @@ catalog:
   "@cloudflare/vite-plugin": 1.59.0
   "@cloudflare/workers-types": 5.20260924.1
   wrangler: 4.138.0
+  effect: 3.22.2
   convex: 1.46.0
-  "@workos-inc/authkit-react": 0.16.3
   "@playwright/test": 1.63.0
   turbo: 2.11.3
   tsdown: 0.23.0
@@ -108,3 +108,7 @@ overrides:
   # GHSA-w5hq-g745-h8pq: Expo's prebuild tooling pulls uuid 7; 11.1.1 is the first fixed release with the same API.
   "uuid@7.0.3": 11.1.1
   "@tanstack/react-start": "catalog:"
+
+# Q9 packages are GitHub release tarballs, not registry publishes with provenance.
+trustPolicyExclude:
+  - "@q9labsai/*"

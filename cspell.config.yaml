@@ -35,6 +35,9 @@ words:
   - oxfmt
   - oxlint
   - pnpm
+  - PKCE
+  - keepalive
+  - HMAC
   - q9gate
   - q9labs
   - regclass
@@ -53,7 +56,9 @@ words:
   - vitest
   - workerd
   - worktree
+  - worktrees
   - Wrangler
+  - ratelimits
   # The people in the mock's seed data, used by the web gallery fixtures.
   - Bilal
   - Hasan

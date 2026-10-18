@@ -53,6 +53,17 @@
       "dependsOn": ["build"],
       "cache": false,
       "outputs": []
+    },
+    "@q9chat/convex#test": {
+      "dependsOn": [],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/convex/**",
+        "$TURBO_ROOT$/packages/domain/src/**",
+        "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/pnpm-lock.yaml"
+      ],
+      "outputs": []
     }
   }
 }
