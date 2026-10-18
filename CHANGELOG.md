@@ -6,6 +6,7 @@
 
 - **Project scaffold**: Generated `q9chat` with its selected backend, shared UI, and quality tooling.
 - **Headless sign-in endpoints and web sessions**: Sign in through email codes, Google or Apple with shared web and phone auth endpoints and a cookie-backed web session.
+- **Sign in and find your groups on the web**: Sign in by email code, set up a profile, see live group previews and unread counts, and manage your account and sign out. Google and Apple start the shared sign-in flow.
 
 ### Fixed
 

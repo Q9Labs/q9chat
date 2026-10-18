@@ -129,3 +129,34 @@ The focused Chromium checks are `pnpm exec playwright test e2e/auth-session.spec
 and control its HTTP transport, testing cookie persistence, delayed verify versus
 logout, and two-tab invalidation. Public-route tests separately exercise the
 production server code with only WorkOS and rate-limit bindings substituted.
+
+## Journey 1 browser proof
+
+The root route uses the session for sign-in identity, `profiles.me` for setup
+state, and a live `groups.list` subscription. Profile creation precedes an
+optional authenticated photo upload. The gallery stays development-only.
+
+The `e2e` suite uses real staging WorkOS and the `quixotic-crab-23` dev backend.
+It reads the UI-created email challenge through the staging WorkOS API, not an
+email inbox. A second user creates a group and sends a message through the
+public Convex API while the first browser stays on its groups list.
+
+With the web dev server on `http://localhost:3000` and staging credentials in
+the process environment, run from the repository root:
+
+```sh
+pnpm test:e2e
+```
+
+Required environment: `WORKOS_API_KEY` (a staging key). The server also requires
+`WORKOS_CLIENT_ID` in its ignored `.dev.vars`, and the root `.env.local` needs
+`VITE_CONVEX_URL=https://quixotic-crab-23.convex.cloud`.
+
+Run browser suites and full gates on test box. Never copy resolved credentials
+into source or command arguments. Screenshots are written to `.e2e/results/` and collected under `artifacts/e2e-report/` on test box.
+All interactions and assertions are exact, so no model provider or replay-cache
+entries are needed; `.e2e/cache/` is committed for future recorded steps.
+
+Group creation, opening a chat, search, notifications and account deletion are
+outside this web journey. Their existing controls currently show a coming-next
+notice. Name and photo updates and sign-out are live.

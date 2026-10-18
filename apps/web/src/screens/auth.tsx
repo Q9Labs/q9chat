@@ -1,4 +1,4 @@
-import { useRef, type ClipboardEvent, type KeyboardEvent } from "react";
+import { useEffect, useRef, type ClipboardEvent, type KeyboardEvent } from "react";
 
 import type { Avatar as AvatarData } from "../chat/types.js";
 import { Avatar } from "../ui/avatar.js";
@@ -75,6 +75,9 @@ export function EmailCode({
   onUseDifferentEmail,
 }: EmailCodeProps) {
   const cells = useRef<(HTMLInputElement | null)[]>([]);
+  useEffect(() => {
+    if (bad) cells.current[0]?.focus();
+  }, [bad]);
 
   const focusCell = (index: number) =>
     cells.current[Math.max(0, Math.min(index, CODE_LENGTH - 1))]?.focus();

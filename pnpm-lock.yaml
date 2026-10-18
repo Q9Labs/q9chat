@@ -201,6 +201,12 @@ importers:
       '@fontsource-variable/figtree':
         specifier: 'catalog:'
         version: 5.3.0
+      '@q9chat/convex':
+        specifier: workspace:*
+        version: link:../../packages/convex
+      '@q9chat/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       '@q9labsai/ui':
         specifier: https://github.com/Q9Labs/q9stack/releases/download/v0.3.0/q9labsai-ui-0.3.0.tgz
         version: https://github.com/Q9Labs/q9stack/releases/download/v0.3.0/q9labsai-ui-0.3.0.tgz(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(tailwindcss@4.3.3)
