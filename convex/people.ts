@@ -36,7 +36,7 @@ export const find = query({
       id: v.id("profiles"),
       name: v.string(),
       fullName: v.string(),
-      email: v.string(),
+      email: v.union(v.string(), v.null()),
       avatar,
     }),
   ),
@@ -64,7 +64,7 @@ export const find = query({
         id,
         name: resolved.name,
         fullName: resolved.fullName,
-        email: target.email,
+        email: target.email === term ? target.email : null,
         avatar: resolved.avatar,
       });
     }

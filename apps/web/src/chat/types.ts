@@ -29,7 +29,6 @@ export interface Author extends PersonRef {
 
 export interface Member extends Author {
   readonly fullName: string;
-  readonly email: string;
 }
 
 // ---------- groups.list ----------
@@ -187,7 +186,7 @@ export interface SearchHit {
 
 export interface PersonMatch extends Author {
   readonly fullName: string;
-  readonly email: string;
+  readonly email: string | null;
 }
 
 // ---------- profiles.me ----------

@@ -64,6 +64,7 @@ interface GroupInfoProps {
   readonly onAddPeople: () => void;
   readonly onCopyLink: () => void;
   readonly linkCopied: boolean;
+  readonly inviteUrl?: string;
   readonly onSearch: () => void;
   readonly notificationsOpen: boolean;
   readonly onNotificationsOpenChange: (open: boolean) => void;
@@ -87,8 +88,8 @@ function InfoHero({ group }: { readonly group: GroupDetail | RemovedGroup }) {
     <div className="info-hero">
       <Avatar avatar={group.avatar} size="xl" />
       <h3>{group.title}</h3>
-      {group.status === "member" ? (
-        <p>{group.kind === "pair" ? group.partner?.email : `${group.memberCount} members`}</p>
+      {group.status === "member" && group.kind === "group" ? (
+        <p>{group.memberCount} members</p>
       ) : null}
     </div>
   );
@@ -187,7 +188,6 @@ function MemberRow({
       <Avatar avatar={member.avatar} size="sm" />
       <span className="nm">
         <b>{member.isYou ? `${member.fullName} (you)` : member.fullName}</b>
-        <small>{member.email}</small>
       </span>
       {member.isYou ? null : (
         <span className="ma">
@@ -207,6 +207,7 @@ function MemberRow({
 function GroupSections({
   group,
   linkCopied,
+  inviteUrl,
   onAddPeople,
   onCopyLink,
   onMessageMember,
@@ -214,7 +215,13 @@ function GroupSections({
   onLeave,
 }: Pick<
   GroupInfoProps,
-  "linkCopied" | "onAddPeople" | "onCopyLink" | "onMessageMember" | "onRemoveMember" | "onLeave"
+  | "inviteUrl"
+  | "linkCopied"
+  | "onAddPeople"
+  | "onCopyLink"
+  | "onMessageMember"
+  | "onRemoveMember"
+  | "onLeave"
 > & { readonly group: GroupDetail }) {
   return (
     <>
@@ -236,7 +243,7 @@ function GroupSections({
       <div className="info-section">
         <h4>Invite link</h4>
         <LinkBox
-          url={`chat.q9labs.ai/join/${group.inviteToken ?? ""}`}
+          url={inviteUrl ?? `chat.q9labs.ai/join/${group.inviteToken ?? ""}`}
           copied={linkCopied}
           onCopy={onCopyLink}
         />
@@ -254,7 +261,7 @@ function GroupSections({
 
 /**
  * The Group info panel at the inline end. A group shows quick actions, notifications, members,
- * the invite link and Leave; a pair shows only the partner's email and the
+ * the invite link and Leave; a pair shows only its title and the
  * notification settings; a removed viewer sees only a note.
  */
 export function GroupInfo(props: GroupInfoProps) {

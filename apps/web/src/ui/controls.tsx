@@ -245,7 +245,7 @@ export function LinkBox({
 }) {
   return (
     <div className="link-box">
-      <code>{url}</code>
+      <code>{url.replace(/^https?:\/\//u, "")}</code>
       <button
         type="button"
         className={`cpy${copied ? " done" : ""}`}

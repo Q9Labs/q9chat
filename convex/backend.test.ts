@@ -358,7 +358,10 @@ describe("groups and people", () => {
     const t = fixture();
     const { alice, bob, carol } = await group(t);
     expect(await alice.client.query(api.people.find, { query: "bo" })).toMatchObject([
-      { id: bob.id },
+      { id: bob.id, email: null },
+    ]);
+    expect(await alice.client.query(api.people.find, { query: "BOB@example.com" })).toMatchObject([
+      { id: bob.id, email: "bob@example.com" },
     ]);
     expect(await alice.client.query(api.people.find, { query: "car" })).toEqual([]);
     expect(await alice.client.query(api.people.find, { query: "CAROL@example.com" })).toMatchObject(
