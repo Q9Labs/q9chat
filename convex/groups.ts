@@ -99,6 +99,7 @@ export const get = query({
       inviteToken: v.union(v.string(), v.null()),
       lastSequence: v.number(),
       lastReadSequence: v.number(),
+      firstUnreadSequence: v.union(v.number(), v.null()),
     }),
   ),
   handler: async (ctx, args) => {
@@ -122,6 +123,15 @@ export const get = query({
     if (!group) return null;
     const people = await g.memberships(ctx, group._id);
     const state = await g.readState(ctx, group._id, access.profile._id);
+    const firstUnread = await ctx.db
+      .query("unreadPosts")
+      .withIndex("by_profile_group_sequence", (q) =>
+        q
+          .eq("profileId", access.profile._id)
+          .eq("groupId", group._id)
+          .gt("sequence", state?.lastReadSequence ?? 0),
+      )
+      .first();
     return {
       status: "member" as const,
       groupId: group._id,
@@ -135,6 +145,7 @@ export const get = query({
       inviteToken: group.kind === "group" ? group.inviteToken : null,
       lastSequence: group.lastSequence,
       lastReadSequence: state?.lastReadSequence ?? 0,
+      firstUnreadSequence: firstUnread?.sequence ?? null,
     };
   },
 });

@@ -397,10 +397,19 @@ describe("posts, unread and mutations", () => {
     if (!first) throw new Error("Missing first post");
     expect(await row(alice.client, groupId)).toMatchObject({ unreadCount: 0 });
     expect(await row(bob.client, groupId)).toMatchObject({ unreadCount: 100 });
+    expect(await alice.client.query(api.groups.get, { groupId })).toMatchObject({
+      firstUnreadSequence: null,
+    });
+    expect(await bob.client.query(api.groups.get, { groupId })).toMatchObject({
+      firstUnreadSequence: first.sequence,
+    });
     await alice.client.mutation(api.messages.remove, { messageId: first.messageId });
     expect(await row(bob.client, groupId)).toMatchObject({ unreadCount: 100 });
     await bob.client.mutation(api.readStates.markRead, { groupId, sequence: 103 });
     expect(await row(bob.client, groupId)).toMatchObject({ unreadCount: 1 });
+    expect(await bob.client.query(api.groups.get, { groupId })).toMatchObject({
+      firstUnreadSequence: 104,
+    });
     await bob.client.mutation(api.readStates.markRead, { groupId, sequence: 3 });
     expect(await row(bob.client, groupId)).toMatchObject({ unreadCount: 1 });
     await expect(

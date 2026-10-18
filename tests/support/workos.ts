@@ -75,16 +75,23 @@ export async function removeTestUser(email: string) {
     { headers },
   );
   if (!response.ok) throw new Error(`WorkOS user lookup returned ${response.status}`);
-  const users = Schema.decodeUnknownSync(
-    Schema.Struct({ data: Schema.Array(Schema.Struct({ id: Schema.String })) }),
-  )(await response.json());
+  const Users = Schema.Struct({ data: Schema.Array(Schema.Struct({ id: Schema.String })) });
+  const users = Schema.decodeUnknownSync(Users)(await response.json());
   for (const user of users.data) {
     const deleted = await fetch(`https://api.workos.com/user_management/users/${user.id}`, {
       method: "DELETE",
       headers,
     });
-    if (!deleted.ok) throw new Error(`WorkOS test-user cleanup returned ${deleted.status}`);
+    if (!deleted.ok && deleted.status !== 404)
+      throw new Error(`WorkOS test-user cleanup returned ${deleted.status}`);
   }
+  const remaining = await fetch(
+    `https://api.workos.com/user_management/users?email=${encodeURIComponent(email)}`,
+    { headers },
+  );
+  if (!remaining.ok) throw new Error(`WorkOS cleanup verification returned ${remaining.status}`);
+  if (Schema.decodeUnknownSync(Users)(await remaining.json()).data.length !== 0)
+    throw new Error("Fresh WorkOS test user still exists after cleanup");
 }
 
 export type PhoneSession = Schema.Schema.Type<typeof phoneSession>;
