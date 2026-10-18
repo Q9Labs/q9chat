@@ -299,10 +299,11 @@ test(
       await app.screenshot("j2-06-join-open");
       await screen.getByRole("button", "Join group", { exact: true }).tap();
       await expect(browser.locator("[role=log] .sys").last()).toHaveText("Dalia joined");
-      await app.screenshot("j2-07-joined");
       await app.open(new URL(link).pathname);
       await expect(browser.locator(".chat-title b .tt")).toHaveText("Launch");
       await expect(screen.getByRole("button", "Join group", { exact: true })).toHaveCount(0);
+      await expect(browser.locator("[role=log] .sys").last()).toHaveText("Dalia joined");
+      await app.screenshot("j2-07-joined");
       clients.push(await clientFor(surface.context()));
       const d = required(
         (await a.query(api.people.find, { query: email("d") }))[0],
