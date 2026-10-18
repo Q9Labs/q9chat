@@ -89,7 +89,13 @@ export function AccountJourney({
       confirmDelete={false}
       toast={toast}
       onBack={() => router.back()}
-      onSignOut={signOut.leave}
+      onSignOut={() => {
+        // Sign out takes the same save-or-discard way out as the others; the draft is dropped so the redirect is not held back.
+        void editing.exit(() => {
+          editing.clear();
+          signOut.leave();
+        });
+      }}
       onAskDelete={() => showToast(COMING_NEXT)}
       onConfirmDelete={noop}
       onCancelDelete={noop}

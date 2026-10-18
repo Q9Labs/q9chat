@@ -104,12 +104,15 @@ async function copyToClipboard(text: string) {
 // uiautomator client (the e2e engine already holds the only one) can see, so its Paste item is tapped by
 // position. On this 1080 x 2400 emulator the floating toolbar opens just above the code cells, and Paste is
 // 278 px right of the field's left edge and 36 px above its top edge (measured from a screenshot).
-// A long press at the field's left edge puts the cursor in front of the first digit and opens the toolbar.
-async function longPressAtStart(field: ReturnType<Screen["getByLabel"]>) {
+async function startOf(field: ReturnType<Screen["getByLabel"]>) {
   const box = await field.boundingBox();
   if (!box) throw new Error("The code field has no bounding box");
-  const x = Math.round(box.x + 6);
-  const y = Math.round(box.y + box.height / 2);
+  return { x: Math.round(box.x + 6), y: Math.round(box.y + box.height / 2) };
+}
+
+// A long press at the left edge puts the cursor in front of the first digit and opens the toolbar.
+async function longPressAtStart(field: ReturnType<Screen["getByLabel"]>) {
+  const { x, y } = await startOf(field);
   adbShell(`input swipe ${x} ${y} ${x} ${y} 900`);
 }
 
@@ -213,10 +216,18 @@ test(
       ).toBeVisible();
       await expect(screen.getByLabel("6-digit code")).toHaveValue("");
       await expect(screen.getByLabel("6-digit code")).toBeFocused();
-      // The right code is pasted before a digit already in the field: the paste must give the code, not the code and that digit.
+      // A paste lands where the cursor is. Four digits pasted in front of the fifth must read as the first five, in order.
       const codeField = screen.getByLabel("6-digit code");
-      await codeField.pressSequentially("9");
+      await codeField.pressSequentially(code.slice(4, 5));
       shot("02b-one-digit");
+      await copyToClipboard(code.slice(0, 4));
+      await longPressAtStart(codeField);
+      await tapPasteItem(codeField);
+      await expect(codeField).toHaveValue(code.slice(0, 5));
+      // The whole code pasted in front of a digit that is the code's own first digit: a paste that guesses what
+      // was added reads "1234561" as "234561".
+      await codeField.fill("");
+      await codeField.pressSequentially(code.slice(0, 1));
       await copyToClipboard(code);
       await longPressAtStart(codeField);
       await tapPasteItem(codeField);
@@ -296,10 +307,21 @@ test(
       await screen.getByRole("button", "Account", { exact: true }).tap();
       await expect(name).toHaveValue("Nadia Key");
       shot("06c-account-after-key-back");
+      // Sign out takes the same save-or-discard way out: an unsaved edit is saved before the session ends.
+      await name.fill("Nadia Out");
+      await device.dismissKeyboard();
       await screen.getByRole("button", "Sign out", { exact: true }).tap();
       await expect(screen.getByRole("button", "Email me a code")).toBeVisible();
       await expect(screen.getByText("Signed out")).toBeVisible();
       shot("07-signed-out");
+      await screen.getByLabel("Email").fill(email);
+      await screen.getByRole("button", "Email me a code").tap();
+      await expect(screen.getByRole("heading", "Check your email")).toBeVisible();
+      await screen.getByLabel("6-digit code").pressSequentially(await magicCode(email));
+      await expect(screen.getByText("Journey live group", { exact: false })).toBeVisible();
+      await screen.getByRole("button", "Account", { exact: true }).tap();
+      await expect(name).toHaveValue("Nadia Out");
+      shot("08-name-saved-through-sign-out");
     } finally {
       if (peerSession) await deletePhoneProfile(peerSession);
       if (firstAuthenticated) await deletePhoneProfile(await signInPhone(email));

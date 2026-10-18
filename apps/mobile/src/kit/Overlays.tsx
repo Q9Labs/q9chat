@@ -286,6 +286,8 @@ export function Toast({ text, action }: ToastNotice) {
     >
       <Animated.View
         accessibilityRole="alert"
+        // Only a toast with an action takes touches; a plain one lets taps through to the screen under it.
+        pointerEvents={action ? "auto" : "none"}
         style={{
           minHeight: 44,
           paddingStart: 12,

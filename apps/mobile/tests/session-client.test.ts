@@ -276,6 +276,24 @@ void test("a restarted app retries the sign-out the server never confirmed", asy
   assert.equal(again.revokeStatus(), "idle");
 });
 
+void test("a crash between the pending write and the active delete leaves the person signed out, and the revoke is retried", async () => {
+  const { worker, keychain, restart } = harness({
+    refreshToken: "refresh-a",
+    pendingRevoke: JSON.stringify(["refresh-a"]),
+  });
+  const client = restart();
+  const starting = client.bootstrap();
+  const revoke = await worker.next("sign-out");
+  assert.equal(revoke.body.refreshToken, "refresh-a");
+  revoke.reply(json({}));
+  await starting;
+  assert.equal(worker.count("token"), 0);
+  assert.equal(statusOf(client), "unauthenticated");
+  assert.equal(keychain.value("refreshToken"), null);
+  assert.equal(keychain.value("pendingRevoke"), null);
+  assert.equal(client.revokeStatus(), "idle");
+});
+
 void test("signing out cancels the refresh in flight and revokes the token it was using", async () => {
   const { worker, keychain, client } = harness({ refreshToken: "refresh-a" });
   const starting = client.bootstrap();

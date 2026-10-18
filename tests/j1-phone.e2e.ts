@@ -194,18 +194,28 @@ test(
       ).toBeVisible();
       await expect(screen.getByLabel("6-digit code")).toHaveValue("");
       await expect(screen.getByLabel("6-digit code")).toBeFocused();
-      // The right code is pasted before a digit already in the field: the paste must give the code, not the code and that digit.
+      // A paste lands where the cursor is. Four digits pasted in front of the fifth must read as the first five, in order.
       const codeField = screen.getByLabel("6-digit code");
-      await codeField.pressSequentially("9", { delay: 80 });
-      await device.setClipboard(code);
       const box = await codeField.boundingBox();
       if (!box) throw new Error("The code field has no bounding box");
-      const beforeDigit = { x: 2, y: box.height / 2 };
-      // The first tap puts the cursor in front of the digit, the second opens the edit menu on it.
-      await codeField.tap({ position: beforeDigit });
-      await codeField.tap({ position: beforeDigit });
-      await app.screenshot("02b-paste-menu-at-start");
-      await screen.getByText("Paste", { exact: true }).tap();
+      // The first tap puts the cursor in front of the first digit, the second opens the edit menu on it.
+      const pasteAtStart = async () => {
+        const beforeDigit = { x: 2, y: box.height / 2 };
+        await codeField.tap({ position: beforeDigit });
+        await codeField.tap({ position: beforeDigit });
+        await screen.getByText("Paste", { exact: true }).tap();
+      };
+      await codeField.pressSequentially(code.slice(4, 5), { delay: 80 });
+      await device.setClipboard(code.slice(0, 4));
+      await pasteAtStart();
+      await expect(codeField).toHaveValue(code.slice(0, 5));
+      // The whole code pasted in front of a digit that is the code's own first digit: a paste that guesses what
+      // was added reads "1234561" as "234561".
+      await codeField.fill("");
+      await codeField.pressSequentially(code.slice(0, 1), { delay: 80 });
+      await device.setClipboard(code);
+      await app.screenshot("02b-paste-at-start");
+      await pasteAtStart();
 
       await expect(screen.getByText("Set up your profile")).toBeVisible();
       await expect(
@@ -277,10 +287,23 @@ test(
       await expect(screen.getByText("Journey live group", { exact: false })).toBeVisible();
       await screen.getByRole("button", "Account", { exact: true }).tap();
       await expect(name).toHaveValue("Nadia Arrow");
+      // Sign out takes the same save-or-discard way out: an unsaved edit is saved before the session ends.
+      await name.fill("Nadia Out");
+      await device.dismissKeyboard();
       await screen.getByRole("button", "Sign out", { exact: true }).tap();
       await expect(screen.getByRole("button", "Email me a code")).toBeVisible();
       await expect(screen.getByText("Signed out")).toBeVisible();
       await app.screenshot("07-signed-out");
+      await enter(screen.getByLabel("Email"), email);
+      await screen.getByRole("button", "Email me a code").tap();
+      await expect(screen.getByText("Check your email")).toBeVisible();
+      await screen
+        .getByLabel("6-digit code")
+        .pressSequentially(await magicCode(email), { delay: 80 });
+      await expect(screen.getByText("Journey live group", { exact: false })).toBeVisible();
+      await screen.getByRole("button", "Account", { exact: true }).tap();
+      await expect(name).toHaveValue("Nadia Out");
+      await app.screenshot("08-name-saved-through-sign-out");
     } finally {
       if (peerSession) await deletePhoneProfile(peerSession);
       if (firstAuthenticated) await deletePhoneProfile(await signInPhone(email));

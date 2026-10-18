@@ -10,6 +10,7 @@ import { config } from "../session/config";
 import { groupRows, profileAvatar } from "./groupRows";
 import { Loading } from "./Loading";
 import { takeNotice } from "./notice";
+import { useOffline } from "./useOffline";
 import type { ReadyProfile } from "./useStage";
 import { useToday } from "./useToday";
 
@@ -25,6 +26,7 @@ export function GroupsJourney({ profile }: { profile: ReadyProfile }) {
     if (notice) showToast(notice);
   }, [showToast]);
   const today = useToday();
+  const offline = useOffline();
   const rows = useMemo(
     () => (groups ? groupRows(groups, config.siteUrl, today) : []),
     [groups, today],
@@ -34,7 +36,7 @@ export function GroupsJourney({ profile }: { profile: ReadyProfile }) {
     <GroupsScreen
       me={profileAvatar(profile, config.siteUrl)}
       rows={rows}
-      offline={false}
+      offline={offline}
       showPermissionBanner={false}
       toast={toast}
       onOpenGroup={() => showToast(COMING_NEXT)}

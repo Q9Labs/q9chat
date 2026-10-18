@@ -194,9 +194,25 @@ export function createSessionClient(edges: SessionEdges) {
     }
   }
 
+  /**
+   * A crash can land between a sign-out writing its pending token and deleting the active one. The
+   * pending token wins: that session stays signed out, and nothing refreshes it.
+   */
+  async function dropSignedOutToken() {
+    try {
+      const active = await store.get("refreshToken");
+      if (active && (await readPending(store)).includes(active)) await store.delete("refreshToken");
+    } catch {
+      // An unreadable keychain surfaces as offline in the restore that follows.
+    }
+  }
+
   /** Restores the saved session at launch, then retries any sign-out the server never confirmed. */
   async function bootstrap() {
-    await refresh();
+    await enqueue(async () => {
+      await dropSignedOutToken();
+      return restore();
+    });
     await enqueue(revokeOrFail).catch(noop);
   }
 

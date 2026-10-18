@@ -52,10 +52,15 @@ export function useNameEditing(savedName: string, save: (name: string) => Promis
       setUnsaved({ text: UNSAVED_TEXT[outcome], leave });
   }
 
-  function discard() {
-    const leave = unsaved?.leave;
+  /** Drops the draft, so nothing holds the screen back from leaving. */
+  function clear() {
     typed.current = savedName;
     setDraft(null);
+  }
+
+  function discard() {
+    const leave = unsaved?.leave;
+    clear();
     setUnsaved(null);
     leave?.();
   }
@@ -66,6 +71,7 @@ export function useNameEditing(savedName: string, save: (name: string) => Promis
     saving,
     dirty: draft !== null && draft.trim() !== savedName,
     exit,
+    clear,
     unsaved,
     keepEditing: () => setUnsaved(null),
     discard,
