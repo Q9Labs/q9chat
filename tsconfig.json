@@ -1,5 +1,9 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
   "extends": "@q9labsai/config-tsconfig/tsconfig.base.json",
-  "files": []
+  "compilerOptions": {
+    "types": ["node"],
+    "lib": ["ES2024", "DOM", "DOM.Iterable"]
+  },
+  "include": ["tests", "e2e.config.ts"]
 }

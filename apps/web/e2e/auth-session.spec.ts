@@ -113,8 +113,16 @@ test("real Worker rejects a late OAuth callback after sign-out consumes the tran
   const logout = await context.request.post("/api/auth/sign-out", { data: {} });
   expect(logout.ok()).toBe(true);
   expect((await context.cookies()).some((value) => value.name === "q9_oauth")).toBe(false);
-  await page.goto(`/api/auth/callback?code=late-code&state=${state}`);
-  await expect(page).toHaveURL(/\/auth\/error\?reason=invalid_state$/);
+  const callback = await context.request.get(`/api/auth/callback?code=late-code&state=${state}`, {
+    maxRedirects: 0,
+  });
+  expect(callback.status()).toBe(302);
+  expect(callback.headers()["location"]).toBe(
+    new URL("/auth/error?reason=invalid_state", callback.url()).href,
+  );
+  await page.goto("/auth/error?reason=invalid_state");
+  await expect(page).toHaveURL(new URL("/?authError=true", callback.url()).href);
+  await expect(page.locator(".toast")).toHaveText("Sign-in wasn't completed. Try again.");
   expect((await context.cookies()).some((value) => value.name === "q9_session")).toBe(false);
 });
 
@@ -234,4 +242,23 @@ test("cancelled email transaction shows request-new-code copy rather than retryi
     await page.getByRole("button", { name: "Verify", exact: true }).click();
     await expect(page.getByRole("alert")).toHaveText("That code has expired. Send a new one.");
   }
+});
+
+test("phone OAuth cancellation keeps the phone return page; web errors return to sign in", async ({
+  page,
+  request,
+}) => {
+  const phone = await request.get("/auth/error?reason=phone_failed", { maxRedirects: 0 });
+  expect(phone.status()).toBe(200);
+  expect(phone.headers()["cache-control"]).toBe("no-store");
+  expect(phone.headers()["referrer-policy"]).toBe("no-referrer");
+  await page.goto("/auth/error?reason=phone_failed");
+  await expect(page.getByRole("heading")).toHaveText("Sign-in wasn’t completed");
+  await expect(page.locator("p")).toHaveText(
+    "Close this page to return to your phone, or try signing in again on the web.",
+  );
+  const web = await request.get("/auth/error?reason=cancelled", { maxRedirects: 0 });
+  expect(web.status()).toBe(302);
+  expect(web.headers()["location"]).toBe("/?authError=1");
+  expect(web.headers()["cache-control"]).toBe("no-store");
 });

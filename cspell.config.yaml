@@ -73,3 +73,4 @@ words:
   - wordmark
   # The mock's screen name for the New group dialog, kept as the gallery state id.
   - newgroup
+  - ratelimits

@@ -1,4 +1,3 @@
-import { avatarColors } from "@q9chat/domain";
 import { v } from "convex/values";
 import { Effect } from "effect";
 
@@ -6,6 +5,7 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { action, mutation, query, internalQuery, internalMutation } from "./_generated/server";
 import { anyone, identity, active, fail } from "./lib/access";
+import { profileAvatarColors } from "./lib/presentation";
 import { consume, imageTypes } from "./lib/uploads";
 import { getUser } from "./lib/workos";
 export const byAuth = internalQuery({
@@ -20,7 +20,7 @@ export const me = query({
   args: {},
   returns: v.union(
     v.null(),
-    v.object({ status: v.literal("needsSetup"), email: v.string(), suggestedName: v.string() }),
+    v.object({ status: v.literal("needsSetup") }),
     v.object({ status: v.literal("unavailable") }),
     v.object({
       status: v.literal("ready"),
@@ -41,12 +41,7 @@ export const me = query({
       .query("profiles")
       .withIndex("by_auth_user", (q) => q.eq("authUserId", user.subject))
       .unique();
-    if (!profile)
-      return {
-        status: "needsSetup" as const,
-        email: user.email ?? "",
-        suggestedName: user.name ?? [user.givenName, user.familyName].filter(Boolean).join(" "),
-      };
+    if (!profile) return { status: "needsSetup" as const };
     if (profile.status !== "active") return { status: "unavailable" as const };
     return {
       status: "ready" as const,
@@ -55,7 +50,7 @@ export const me = query({
         displayName: profile.displayName,
         email: profile.email,
         photo: profile.photoStorageId ? `/photos/${profile._id}` : null,
-        ...avatarColors(profile._id),
+        ...profileAvatarColors(profile, profile._id),
       },
     };
   },

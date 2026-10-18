@@ -170,3 +170,34 @@ explicit app build (the contextual gate may skip its own build for docs-only cha
 server-only secret canary and server API identifiers. The canary is configured
 before the CI build; no staging secret is needed. These are mandatory CI steps,
 not optional scripts or part of the concurrently running root test graph.
+
+## Journey 1 browser proof
+
+The root route uses the session for sign-in identity, `profiles.me` for setup
+state, and a live `groups.list` subscription. Profile creation precedes an
+optional authenticated photo upload. The gallery stays development-only.
+
+The `e2e` suite uses real staging WorkOS and the `quixotic-crab-23` dev backend.
+It reads the UI-created email challenge through the staging WorkOS API, not an
+email inbox. A second user creates a group and sends a message through the
+public Convex API while the first browser stays on its groups list.
+
+With the web dev server on `http://localhost:3000` and staging credentials in
+the process environment, run from the repository root:
+
+```sh
+pnpm test:e2e
+```
+
+Required environment: `WORKOS_API_KEY` (a staging key). The server also requires
+`WORKOS_CLIENT_ID` in its ignored `.dev.vars`, and the root `.env.local` needs
+`VITE_CONVEX_URL=https://quixotic-crab-23.convex.cloud`.
+
+Run browser suites and full gates on test box. Never copy resolved credentials
+into source or command arguments. Screenshots are written to `.e2e/results/` and collected under `artifacts/e2e-report/` on test box.
+All interactions and assertions are exact, so no model provider or replay-cache
+entries are needed; `.e2e/cache/` is committed for future recorded steps.
+
+Group creation, opening a chat, search, notifications and account deletion are
+outside this web journey. Their existing controls currently show a coming-next
+notice. Name and photo updates and sign-out are live.

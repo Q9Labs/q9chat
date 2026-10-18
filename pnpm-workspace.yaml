@@ -76,5 +76,6 @@ overrides:
   "@tanstack/react-start": "catalog:"
 
 # Q9 packages are GitHub release tarballs, not registry publishes with provenance.
+
 trustPolicyExclude:
   - "@q9labsai/*"

@@ -6,13 +6,7 @@ import type { attachmentValidator } from "../schema";
 import { fail } from "./access";
 import type { uploadAttachment } from "./validators";
 export const MAX_BYTES = 20_000_000;
-export const imageTypes = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/gif",
-  "image/heic",
-]);
+export const imageTypes = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 export const voiceTypes = new Set([
   "audio/aac",
   "audio/mp4",

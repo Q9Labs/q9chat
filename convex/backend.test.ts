@@ -17,6 +17,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import crons from "./crons";
+import { sniff } from "./lib/sniff";
 import schema from "./schema";
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts", "!./vitest.config.ts"]);
 const outbound = vi.fn<typeof fetch>();
@@ -124,6 +125,62 @@ async function row(client: Test, groupId: Id<"groups">) {
   return rows.find((value) => value.groupId === groupId);
 }
 describe("identity and access classes", () => {
+  it("uses sign-in account colors until the profile becomes a tombstone, without changing groups", async () => {
+    const t = fixture();
+    const { alice, bob, groupId } = await group(t);
+    expect(await bob.client.query(api.profiles.me, {})).toMatchObject({
+      status: "ready",
+      profile: avatarColors("Bob"),
+    });
+    for (const status of ["active", "deleting", "deleted"] as const) {
+      if (status !== "active")
+        await t.run((ctx) =>
+          ctx.db.replace(
+            bob.id,
+            status === "deleting"
+              ? { status, authUserId: "Bob", requestedAt: Date.now() }
+              : { status, deletedAt: Date.now() },
+          ),
+        );
+      const info = await alice.client.query(api.groups.get, { groupId });
+      if (info?.status !== "member") throw new Error("Expected group membership");
+      expect(info.avatar).toMatchObject(avatarColors(groupId));
+      expect(info.members.find((person) => person.id === bob.id)?.avatar).toMatchObject(
+        avatarColors(status === "deleted" ? bob.id : "Bob"),
+      );
+    }
+  });
+  it("sniffs HEIC as a file before MP4 voice and rejects it as a profile photo", async () => {
+    const bytes = new Uint8Array([0, 0, 0, 24, ...new TextEncoder().encode("ftypheic0000mif1")]);
+    expect(sniff(bytes)).toEqual({ kind: "file", contentType: "image/heic" });
+    const t = fixture();
+    const alice = await account(t, "Alice");
+    const response = await alice.client.fetch("/upload", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer test",
+        "Content-Type": "image/heic",
+        Origin: "http://localhost:3000",
+      },
+      body: bytes,
+    });
+    expect(response.status).toBe(200);
+    const data: unknown = await response.json();
+    if (
+      !data ||
+      typeof data !== "object" ||
+      !("uploadId" in data) ||
+      typeof data.uploadId !== "string"
+    )
+      throw new Error("Missing HEIC upload");
+    const uploadId = await t.run(async (ctx) =>
+      ctx.db.normalizeId("uploads", String(data.uploadId)),
+    );
+    if (!uploadId) throw new Error("Invalid HEIC upload id");
+    await expect(
+      alice.client.mutation(api.profiles.update, { photoUploadId: uploadId }),
+    ).rejects.toThrow("bad_attachment");
+  });
   it("permits anyone only me, rejects signed-out and profileless active calls", async () => {
     const t = fixture();
     expect(await t.query(api.profiles.me, {})).toBeNull();
@@ -134,8 +191,6 @@ describe("identity and access classes", () => {
     const client = t.withIdentity({ subject: "new", email: "new@example.com", name: "New" });
     expect(await client.query(api.profiles.me, {})).toEqual({
       status: "needsSetup",
-      email: "new@example.com",
-      suggestedName: "New",
     });
     await expect(client.query(api.groups.list, {})).rejects.toThrow("account_unavailable");
   });
