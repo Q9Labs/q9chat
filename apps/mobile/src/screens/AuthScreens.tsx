@@ -173,21 +173,39 @@ export function SignInScreen({
   );
 }
 
-/** A link of its own line, 44 points tall, so two of them stack without sharing a touch area. */
-function LinkText({ children, onPress }: { children: string; onPress: () => void }) {
+const TOUCH_TARGET = 44;
+const LINK_LINE = 19.2;
+/** What a link line lacks to reach a 44-point touch box. */
+const LINK_EXTRA = TOUCH_TARGET - LINK_LINE;
+
+/**
+ * A link whose touch box is 44 tall. The extra height goes above the text (`up`) or below it (`down`),
+ * so each link keeps its own box and the text keeps its place on the page.
+ */
+function LinkText({
+  children,
+  onPress,
+  extend,
+  weight,
+}: {
+  children: string;
+  onPress: () => void;
+  extend: "up" | "down";
+  weight: 600 | 700;
+}) {
   const { c } = useTheme();
   return (
     <Press
-      accessibilityRole="link"
+      accessibilityRole="button"
       accessibilityLabel={children}
       onPress={onPress}
       scaleTo={1}
-      style={{ minWidth: 44, minHeight: 44, paddingHorizontal: 8, justifyContent: "center" }}
+      style={extend === "up" ? { paddingTop: LINK_EXTRA } : { paddingBottom: LINK_EXTRA }}
     >
       <T
         size={12}
-        weight={600}
-        lineHeight={19.2}
+        weight={weight}
+        lineHeight={LINK_LINE}
         style={{ textDecorationLine: "underline", textDecorationColor: c.ln2 }}
       >
         {children}
@@ -307,12 +325,29 @@ export function CodeScreen({
       >
         {error}
       </T>
-      <View style={{ alignItems: "center", marginTop: 12 }}>
-        <T size={12} color="mu" lineHeight={19.2} style={{ textAlign: "center" }}>
-          Didn't get it? Check spam.
-        </T>
-        <LinkText onPress={onResend}>Send a new code</LinkText>
-        <LinkText onPress={onChangeEmail}>Use a different email</LinkText>
+      {/* Two 44-point touch boxes around two text lines: the margins cancel the padding so the lines sit where the mock puts them. */}
+      <View style={{ alignItems: "center", marginTop: 12 - LINK_EXTRA, marginBottom: -LINK_EXTRA }}>
+        <View
+          style={{
+            flexDirection: "row",
+            flexWrap: "wrap",
+            justifyContent: "center",
+            alignItems: "flex-end",
+          }}
+        >
+          <T size={12} color="mu" lineHeight={LINK_LINE}>
+            {"Didn't get it? Check spam, or "}
+          </T>
+          <LinkText onPress={onResend} extend="up" weight={700}>
+            send a new code
+          </LinkText>
+          <T size={12} color="mu" lineHeight={LINK_LINE}>
+            .
+          </T>
+        </View>
+        <LinkText onPress={onChangeEmail} extend="down" weight={600}>
+          Use a different email
+        </LinkText>
       </View>
     </AuthFrame>
   );

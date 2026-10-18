@@ -8,7 +8,7 @@ import { api } from "@q9chat/convex";
 import { ConvexHttpClient } from "convex/browser";
 import { expect, type Locator } from "e2e";
 
-import { expectLinkHeights } from "./support/targets.js";
+import { expectButtonHeights } from "./support/targets.js";
 import {
   deletePhoneProfile,
   magicCode,
@@ -142,11 +142,11 @@ test(
       await expect(screen.getByLabel("6-digit code")).toBeFocused();
       await expect(screen.getByText(`Enter the 6-digit code we sent to ${email}.`)).toBeVisible();
       // The two links are separate press targets, each at least 44 points tall.
-      await expectLinkHeights(screen, ["Send a new code", "Use a different email"], 44);
+      await expectButtonHeights(screen, ["send a new code", "Use a different email"], 44);
       await app.screenshot("02-code");
 
       await magicCode(email);
-      await screen.getByRole("link", "Send a new code").tap();
+      await screen.getByRole("button", "send a new code").tap();
       await expect(screen.getByText("We sent a new code")).toBeVisible();
       await expect(screen.getByLabel("6-digit code")).toBeFocused();
       const code = await magicCode(email);

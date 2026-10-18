@@ -9,7 +9,7 @@ import { api } from "@q9chat/convex";
 import { ConvexHttpClient } from "convex/browser";
 import { expect, type Screen } from "e2e";
 
-import { expectLinkHeights } from "./support/targets.js";
+import { expectButtonHeights } from "./support/targets.js";
 import {
   deletePhoneProfile,
   magicCode,
@@ -182,16 +182,15 @@ test(
       await expect(screen.getByLabel("6-digit code")).toBeFocused();
       await expect(screen.getByText(`Enter the 6-digit code we sent to ${email}.`)).toBeVisible();
       // The two links are separate press targets, each 44 dp tall (one pixel of rounding allowed).
-      await expectLinkHeights(
+      await expectButtonHeights(
         screen,
-        ["Send a new code", "Use a different email"],
+        ["send a new code", "Use a different email"],
         Math.floor(44 * screenDensity()) - 1,
-        "group",
       );
       shot("02-code");
 
       await magicCode(email);
-      await screen.getByText("Send a new code").tap();
+      await screen.getByText("send a new code").tap();
       await expect(screen.getByText("We sent a new code")).toBeVisible();
       await expect(screen.getByLabel("6-digit code")).toBeFocused();
       const code = await magicCode(email);
