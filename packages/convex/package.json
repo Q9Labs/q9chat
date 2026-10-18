@@ -28,8 +28,8 @@
     "dev:convex": "pnpm -w run convex:dev",
     "deploy": "pnpm -w run convex:deploy",
     "codegen": "pnpm -w run convex:codegen",
-    "typecheck": "pnpm -w run convex:codegen && pnpm -w run typecheck:convex",
-    "build": "pnpm -w run convex:codegen && tsdown"
+    "typecheck": "pnpm -w run typecheck:convex",
+    "build": "tsdown"
   },
   "dependencies": {
     "convex": "catalog:"

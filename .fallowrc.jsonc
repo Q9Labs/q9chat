@@ -7,6 +7,7 @@
     "**/.wrangler/**",
     "**/.output/**",
     "**/routeTree.gen.ts",
+    "convex/_generated/**",
   ],
   // Same ceilings as q9stack itself: split functions instead of raising these.
   "health": {

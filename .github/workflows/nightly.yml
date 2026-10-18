@@ -11,6 +11,10 @@ permissions:
 jobs:
   full-gate:
     runs-on: ubuntu-latest
+    env:
+      # The codegen drift lane regenerates convex/_generated against the dev
+      # deployment; codegen never changes the code running there.
+      CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEV_DEPLOY_KEY }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -25,6 +29,9 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
+
+      - name: Install gate tools
+        uses: ./.github/actions/gate-tools
 
       - name: Install
         run: pnpm install --frozen-lockfile

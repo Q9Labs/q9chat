@@ -13,6 +13,7 @@ ignorePaths:
   - pnpm-lock.yaml
   - cspell-baseline.txt
   - .worktrees/**
+  - convex/_generated/**
 words:
   - APP
   - AuthKit

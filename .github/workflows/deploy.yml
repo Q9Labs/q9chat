@@ -1,19 +1,9 @@
 name: Deploy web
 
+# Manual until the first release sets up production; then deploys follow pushes
+# to main that touch the app, packages or Convex.
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - apps/web/**
-      - packages/**
-      - convex/**
-      - convex.json
-      - package.json
-      - pnpm-workspace.yaml
-      - pnpm-lock.yaml
-      - turbo.json
-      - .github/workflows/deploy.yml
 
 permissions:
   contents: read

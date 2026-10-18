@@ -56,6 +56,11 @@ packageExtensions:
 # q9stack packages depend on each other through GitHub release tarball URLs.
 blockExoticSubdeps: false
 
+# q9stack packages ship only as GitHub release tarballs, so the npm registry has
+# no release time for pnpm's minimum release age check to read.
+minimumReleaseAgeExclude:
+  - "@q9labsai/*"
+
 overrides:
   # q9stack packages are GitHub release tarballs (see catalog), also for their own dependencies.
   "@q9labsai/cli": "catalog:"
