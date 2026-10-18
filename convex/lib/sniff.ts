@@ -3,7 +3,8 @@ export function sniff(bytes: Uint8Array): Sniffed {
   const text = (offset: number, length: number) =>
     String.fromCharCode(...bytes.slice(offset, offset + length));
   const prefix = text(0, Math.min(bytes.length, 65536));
-  const starts = (...prefix: number[]) => prefix.every((byte, index) => bytes[index] === byte);
+  const starts = (...signature: number[]) =>
+    signature.every((byte, index) => bytes[index] === byte);
   if (starts(0xff, 0xd8, 0xff)) return { kind: "image", contentType: "image/jpeg" };
   if (starts(137, 80, 78, 71, 13, 10, 26, 10)) return { kind: "image", contentType: "image/png" };
   if (["GIF87a", "GIF89a"].includes(text(0, 6))) return { kind: "image", contentType: "image/gif" };

@@ -69,7 +69,7 @@ export const deleteUser = (id: string) =>
       { method: "DELETE", headers: auth },
     );
     if (!response.ok && response.status !== 404)
-      return yield* Effect.fail(
+      yield* Effect.fail(
         new ServiceError({
           operation: "delete WorkOS user",
           status: response.status,

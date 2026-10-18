@@ -4,6 +4,15 @@ import type { Id } from "./_generated/dataModel";
 import { mutation } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
 import { active } from "./lib/access";
+function decode(value: string) {
+  try {
+    return Uint8Array.from(atob(value.replaceAll("-", "+").replaceAll("_", "/")), (char) =>
+      char.charCodeAt(0),
+    );
+  } catch {
+    throw new Error("Invalid push subscription");
+  }
+}
 async function cap(ctx: MutationCtx, profileId: Id<"profiles">) {
   const rows = await ctx.db
     .query("devices")
@@ -64,10 +73,6 @@ export const registerWeb = mutation({
       !/^[A-Za-z0-9_-]+={0,2}$/u.test(args.auth)
     )
       throw new Error("Invalid push subscription");
-    const decode = (value: string) =>
-      Uint8Array.from(atob(value.replaceAll("-", "+").replaceAll("_", "/")), (char) =>
-        char.charCodeAt(0),
-      );
     const publicKey = decode(args.p256dh);
     if (publicKey.length !== 65 || publicKey[0] !== 4 || decode(args.auth).length !== 16)
       throw new Error("Invalid push subscription");

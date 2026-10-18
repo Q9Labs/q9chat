@@ -735,7 +735,6 @@ describe("cron recovery and web dispatch", () => {
     const t = fixture();
     const { alice, bob, groupId } = await group(t);
     const { generateVAPIDKeys } = await import("web-push");
-    const { createECDH, randomBytes } = await import("node:crypto");
     const vapid = generateVAPIDKeys();
     vi.stubEnv("VAPID_PUBLIC_KEY", vapid.publicKey);
     vi.stubEnv("VAPID_PRIVATE_KEY", vapid.privateKey);
@@ -1035,9 +1034,9 @@ it("review probe groups.list with 42 disjoint 100-member groups", async () => {
   const owner = await account(t, "Owner");
   for (let i = 0; i < 42; i++) {
     const ids = await t.run(async (ctx) => {
-      const ids = [];
+      const inserted = [];
       for (let j = 0; j < 99; j++)
-        ids.push(
+        inserted.push(
           await ctx.db.insert("profiles", {
             status: "active",
             authUserId: `g${i}m${j}`,
@@ -1045,7 +1044,7 @@ it("review probe groups.list with 42 disjoint 100-member groups", async () => {
             displayName: `Member${j} Person`,
           }),
         );
-      return ids;
+      return inserted;
     });
     await owner.client.mutation(api.groups.create, {
       name: "Team",
@@ -1059,9 +1058,9 @@ it("review probe messages.range with 100 mentions in each of 100 posts", async (
   const t = fixture();
   const owner = await account(t, "Owner", "A Owner");
   const ids = await t.run(async (ctx) => {
-    const ids = [owner.id];
+    const inserted = [owner.id];
     for (let i = 0; i < 99; i++)
-      ids.push(
+      inserted.push(
         await ctx.db.insert("profiles", {
           status: "active",
           authUserId: `p${i}`,
@@ -1069,7 +1068,7 @@ it("review probe messages.range with 100 mentions in each of 100 posts", async (
           displayName: "A Person",
         }),
       );
-    return ids;
+    return inserted;
   });
   const groupId = await owner.client.mutation(api.groups.create, {
     name: "Team",
@@ -1132,7 +1131,7 @@ it("review probe push retry rechecks eligibility after muting", async () => {
     throw new Error("unexpected call");
   });
   await send(alice.client, groupId, "@Bob private message");
-  await t.finishAllScheduledFunctions(vi.runAllTimersAsync);
+  await drain(t);
 
   expect(pushes).toBe(1);
 });
@@ -1141,9 +1140,9 @@ it("review probe deleting name matches do not hide an active result", async () =
   const t = fixture();
   const owner = await account(t, "Owner");
   const ids = await t.run(async (ctx) => {
-    const ids = [];
+    const inserted = [];
     for (let i = 0; i < 5; i++)
-      ids.push(
+      inserted.push(
         await ctx.db.insert("profiles", {
           status: "active",
           authUserId: `match${i}`,
@@ -1151,7 +1150,7 @@ it("review probe deleting name matches do not hide an active result", async () =
           displayName: "Match Person",
         }),
       );
-    return ids;
+    return inserted;
   });
   const groupId = await owner.client.mutation(api.groups.create, {
     name: "Team",
@@ -1165,8 +1164,8 @@ it("review probe deleting name matches do not hide an active result", async () =
       .collect(),
   );
   const matches = ordered.filter((r) => r.profileId !== owner.id);
-  for (const row of matches.slice(0, 4)) {
-    const profile = await t.run((ctx) => ctx.db.get(row.profileId));
+  for (const match of matches.slice(0, 4)) {
+    const profile = await t.run((ctx) => ctx.db.get(match.profileId));
     if (profile?.status !== "active") throw new Error("Missing active fixture");
     await t.withIdentity({ subject: profile.authUserId }).mutation(api.profiles.deleteAccount, {});
   }
@@ -1206,7 +1205,7 @@ it("review probe push retry rechecks membership after removal", async () => {
     throw new Error("unexpected call");
   });
   await send(alice.client, groupId, "@Bob private message");
-  await t.finishAllScheduledFunctions(vi.runAllTimersAsync);
+  await drain(t);
   expect(pushes).toBe(1);
 });
 
@@ -1251,9 +1250,9 @@ it("bounds timeline added events to three people and an others count", async () 
   });
   for (let i = 2; i <= 101; i++) {
     await t.run(async (ctx) => {
-      const ids = [];
+      const inserted = [];
       for (let j = 0; j < 99; j++)
-        ids.push(
+        inserted.push(
           await ctx.db.insert("profiles", {
             status: "active",
             authUserId: `event${i}-${j}`,
@@ -1265,7 +1264,7 @@ it("bounds timeline added events to three people and an others count", async () 
         kind: "event",
         groupId,
         sequence: i,
-        event: { type: "added", by: owner.id, profileIds: ids },
+        event: { type: "added", by: owner.id, profileIds: inserted },
       });
     });
   }

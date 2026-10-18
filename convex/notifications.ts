@@ -98,7 +98,7 @@ export const dispatch = internalAction({
               yield* Effect.promise(discard);
               return;
             }
-            return yield* Effect.fail(
+            yield* Effect.fail(
               new ServiceError({
                 operation: "Expo ticket",
                 status: 400,
@@ -137,7 +137,7 @@ export const dispatch = internalAction({
         }
       }
       if (!response.ok)
-        return yield* Effect.fail(
+        yield* Effect.fail(
           new ServiceError({ operation: "Push", status: response.status, detail: "Push rejected" }),
         );
     });
