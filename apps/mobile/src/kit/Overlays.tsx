@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Animated,
   BackHandler,
+  Keyboard,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -48,6 +49,11 @@ export function Sheet({
     return () => subscription.remove();
   }, [onDismiss]);
 
+  // The sheet is anchored to the screen bottom, so an open keyboard would cover its actions.
+  useEffect(() => {
+    Keyboard.dismiss();
+  }, []);
+
   useEffect(() => {
     if (!measured) return;
     if (reduced) {
@@ -77,6 +83,7 @@ export function Sheet({
       <RaisedSurface>
         <SheetPanel
           label={label}
+          onDismiss={onDismiss}
           y={y}
           onMeasured={() => setMeasured(true)}
           bottomInset={insets.bottom}
@@ -94,12 +101,14 @@ function SheetPanel({
   onMeasured,
   bottomInset,
   label,
+  onDismiss,
 }: {
   children: ReactNode;
   y: Animated.Value;
   onMeasured: () => void;
   bottomInset: number;
   label: string;
+  onDismiss: () => void;
 }) {
   const { c } = useTheme();
   const { height } = useWindowDimensions();
@@ -108,6 +117,8 @@ function SheetPanel({
     <Animated.View
       accessibilityViewIsModal
       accessibilityLabel={label}
+      // VoiceOver ignores the backdrop's Close button while the panel is modal; the two-finger scrub closes it.
+      onAccessibilityEscape={onDismiss}
       onLayout={(event) => {
         if (!first.current) return;
         first.current = false;

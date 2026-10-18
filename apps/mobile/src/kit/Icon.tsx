@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { I18nManager } from "react-native";
 import Svg, { Circle, G, Path, Rect } from "react-native-svg";
 
 import { useTheme } from "../theme";
@@ -219,6 +220,9 @@ export type IconName = keyof typeof outline | SolidName;
 
 const isSolid = (name: IconName): name is SolidName => name in solid;
 
+/** Arrows that point along the reading direction, so they flip in a right-to-left layout. */
+const directional: readonly IconName[] = ["back", "chev"];
+
 export function Icon({
   name,
   size = 20,
@@ -233,7 +237,14 @@ export function Icon({
   const { c } = useTheme();
   const tint = resolveColor(c, color);
   return (
-    <Svg width={size} height={size} viewBox="0 0 24 24">
+    <Svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      style={
+        I18nManager.isRTL && directional.includes(name) ? { transform: [{ scaleX: -1 }] } : null
+      }
+    >
       {isSolid(name) ? (
         <G fill={tint} stroke="none">
           {solid[name]}
