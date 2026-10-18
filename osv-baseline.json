@@ -10,6 +10,17 @@
       "version": "3.0.3",
       "acceptedAt": "2026-10-16T13:35:15.024Z",
       "message": "braces@3.0.3 (GHSA-vfj7-8cjw-p6xm) has no fixed release; it is a development-only dependency of the q9 gates through micromatch and never ships in the web or Convex bundles. Remove when braces publishes a fix."
+    },
+    {
+      "ecosystem": "npm",
+      "id": "GHSA-86w9-cpqp-85rv",
+      "package": "node-forge",
+      "severity": "HIGH",
+      "source": "pnpm-lock.yaml",
+      "summary": "node-forge RSA PKCS#1 v1.5 signature verification accepts extra nested DigestAlgorithm elements",
+      "version": "1.4.0",
+      "acceptedAt": "2026-10-18T15:00:00.000Z",
+      "message": "node-forge@1.4.0 (GHSA-86w9-cpqp-85rv) has no fixed release; it is a development-only dependency of the Expo CLI (local dev-server certificates) and never ships in the phone, web or Convex bundles. Remove when node-forge publishes a fix."
     }
   ]
 }

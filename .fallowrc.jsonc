@@ -16,7 +16,16 @@
     "maxCrap": 60,
   },
   // Consumed by q9gate lane commands and config extends rather than imports.
-  "ignoreDependencies": ["@q9labsai/config-oxlint", "@q9labsai/config-semgrep", "react-doctor"],
+  // Expo loads expo-dev-client and expo-system-ui through app.json plugins and native autolinking, and
+  // expo-font through @expo-google-fonts, so no source file imports them.
+  "ignoreDependencies": [
+    "@q9labsai/config-oxlint",
+    "@q9labsai/config-semgrep",
+    "react-doctor",
+    "expo-dev-client",
+    "expo-font",
+    "expo-system-ui",
+  ],
   "audit": {
     "gate": "all",
   },

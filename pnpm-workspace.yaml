@@ -60,6 +60,38 @@ blockExoticSubdeps: false
 # no release time for pnpm's minimum release age check to read.
 minimumReleaseAgeExclude:
   - "@q9labsai/*"
+  # Expo SDK 58 and React Native 0.88 shipped within the 3-day window. Pin exact versions so
+  # nothing else skips the check, and delete these lines once they are three days old.
+  - "@expo/cli@58.1.11"
+  - "@expo/metro-config@58.0.14"
+  - "@expo/package-manager@1.14.2"
+  - "@expo/prebuild-config@58.0.14"
+  - "@expo/router-server@58.0.14"
+  - "@expo/schema-utils@58.0.2"
+  - "@react-native/asset-utils@0.88.0"
+  - "@react-native/babel-plugin-codegen@0.88.0"
+  - "@react-native/codegen@0.88.0"
+  - "@react-native/community-cli-plugin@0.88.0"
+  - "@react-native/debugger-frontend@0.88.0"
+  - "@react-native/debugger-shell@0.88.0"
+  - "@react-native/dev-middleware@0.88.0"
+  - "@react-native/gradle-plugin@0.88.0"
+  - "@react-native/js-polyfills@0.88.0"
+  - "@react-native/normalize-colors@0.88.0"
+  - "@react-native/virtualized-lists@0.88.0"
+  - "babel-preset-expo@58.0.17"
+  - "expo-asset@58.0.16"
+  - "expo-modules-core@58.0.22"
+  - "expo-modules-jsi@58.0.15"
+  - "expo@58.0.14"
+  - "react-native@0.88.0"
+  - "react-native-svg@15.16.0"
+  - "expo-system-ui@58.0.6"
+  - "expo-splash-screen@58.0.10"
+  - "expo-router@58.0.23"
+  - "expo-glass-effect@58.0.4"
+  - "expo-dev-launcher@58.0.14"
+  - "expo-dev-client@58.0.14"
 
 overrides:
   # q9stack packages are GitHub release tarballs (see catalog), also for their own dependencies.
@@ -74,4 +106,6 @@ overrides:
   # Security fixes: undici and sharp advisories in wrangler/miniflare; one TanStack Start for GHSA-qx66-fv34-fjm8.
   undici: 7.30.0
   sharp: 0.35.5
+  # GHSA-w5hq-g745-h8pq: Expo's prebuild tooling pulls uuid 7; 11.1.1 is the first fixed release with the same API.
+  "uuid@7.0.3": 11.1.1
   "@tanstack/react-start": "catalog:"

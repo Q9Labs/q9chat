@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "@q9labsai/config-tsconfig/tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "lib": ["ES2024"],
+    "module": "preserve",
+    "customConditions": ["react-native"],
+    "noEmit": true,
+    "types": []
+  },
+  "include": ["app", "src", "expo-env.d.ts", "metro.config.js"],
+  "exclude": ["node_modules", "ios", "android"]
+}
