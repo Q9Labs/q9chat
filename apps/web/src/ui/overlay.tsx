@@ -41,20 +41,24 @@ function useFocusScope(panel: HTMLElement | null) {
   }, [panel]);
 }
 
+/** Where Tab should wrap to: the far end, when focus sits on the near one. */
+function wrapTarget(items: readonly HTMLElement[], backwards: boolean): HTMLElement | null {
+  const first = items[0];
+  const last = items.at(-1);
+  if (first === undefined || last === undefined) return null;
+  const near = backwards ? first : last;
+  if (document.activeElement !== near) return null;
+  return backwards ? last : first;
+}
+
 /** Keeps Tab and Shift+Tab inside the panel. */
 function trapTab(event: KeyboardEvent<HTMLElement>) {
   if (event.key !== "Tab") return;
   const items = [...event.currentTarget.querySelectorAll<HTMLElement>(FOCUSABLE)];
-  const first = items[0];
-  const last = items.at(-1);
-  if (first === undefined || last === undefined) return;
-  if (event.shiftKey && document.activeElement === first) {
-    event.preventDefault();
-    last.focus();
-  } else if (!event.shiftKey && document.activeElement === last) {
-    event.preventDefault();
-    first.focus();
-  }
+  const target = wrapTarget(items, event.shiftKey);
+  if (target === null) return;
+  event.preventDefault();
+  target.focus();
 }
 
 export function InRoot({ children }: { readonly children: ReactNode }) {
@@ -115,7 +119,10 @@ export function DialogActions({
   readonly spread?: boolean;
 }) {
   return (
-    <div className="dacts" style={spread ? { justifyContent: "space-between" } : undefined}>
+    <div
+      className="dialog-actions"
+      style={spread ? { justifyContent: "space-between" } : undefined}
+    >
       {children}
     </div>
   );
@@ -236,7 +243,7 @@ export function MenuItem({
 }
 
 export function MenuSeparator() {
-  return <hr className="msep" />;
+  return <hr className="menu-separator" />;
 }
 
 interface PopoverProps {
@@ -258,7 +265,7 @@ export function Popover({ label, anchor, onClose, children }: PopoverProps) {
       <dialog
         ref={setPanel}
         open
-        className="npop enter"
+        className="notifications-popover enter"
         aria-label={label}
         tabIndex={-1}
         onKeyDown={trapTab}

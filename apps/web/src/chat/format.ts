@@ -1,4 +1,4 @@
-import type { MemberEvent, PersonRef, Preview } from "./types.js";
+import type { PersonRef, Preview } from "./types.js";
 
 /** The reader's "now" and zone. The gallery fixes both so shots are repeatable. */
 export interface Clock {
@@ -58,9 +58,6 @@ export function dayLabel(ms: number, clock: Clock): string {
   return parts(ms, clock.timeZone, { day: "numeric", month: "long" }).format(ms);
 }
 
-/** The search-result stamp: the time today, otherwise the same words as a row. */
-export const resultStamp = rowStamp;
-
 /** "0:24" from milliseconds. */
 export function durationLabel(ms: number): string {
   const seconds = Math.floor(ms / 1000);
@@ -78,25 +75,13 @@ export function fileMeta(bytes: number, name: string): string {
   return `${size} · ${kind}`;
 }
 
-export function joinNames(names: readonly string[]): string {
+function joinNames(names: readonly string[]): string {
   if (names.length < 2) return names.join("");
   return `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
 }
 
 export function authorLabel(author: PersonRef): string {
   return author.isYou ? "You" : author.name;
-}
-
-/** "Shoaib removed Omar" as plain text, for previews and quotes. */
-export function eventText(event: MemberEvent): string {
-  const people = joinNames(("people" in event ? event.people : []).map(authorLabel));
-  const by = "by" in event ? authorLabel(event.by) : "";
-  if (event.type === "created") return `${by} created this group`;
-  if (event.type === "added") return `${by} added ${people}`;
-  if (event.type === "removed") return `${by} removed ${people}`;
-  if (event.type === "joined") return `${people} joined`;
-  if (event.type === "left") return `${people} left`;
-  return `This is the start of your group with ${people}`;
 }
 
 /** The group-row preview line: "You: ...", "Sara: ..." or the bare summary in a pair or event. */

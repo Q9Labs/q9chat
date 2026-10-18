@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { ChatView } from "../chat/chat-view.js";
 import type { ComposerMode, ComposerProps, Recording } from "../chat/composer.js";
 import type { MessageHandlers } from "../chat/message.js";
+import type { TimelineProps } from "../chat/timeline-view.js";
 import type {
   GroupDetail,
   GroupListRow,
@@ -18,7 +19,7 @@ import { CLOCK, groupRows, launchGroup, launchMessages, me, type Options } from 
 
 const noop = () => {};
 
-export const HANDLERS: MessageHandlers = {
+const HANDLERS: MessageHandlers = {
   onReact: noop,
   onReply: noop,
   onEdit: noop,
@@ -61,95 +62,128 @@ export interface ChatScene {
   readonly composerHandlers?: Partial<ComposerProps>;
 }
 
+const NO_OPTIONS: Options = {};
+const SHOAIB_TYPING: readonly string[] = ["Shoaib"];
+
+function SceneSidebar({ scene }: { readonly scene: ChatScene }) {
+  const options = scene.options ?? NO_OPTIONS;
+  const { selected = "launch" } = scene;
+  return (
+    <Sidebar
+      me={me(options)}
+      rows={scene.rows ?? groupRows(options, ["launch", selected ?? "launch"])}
+      selectedGroupId={selected}
+      onSelect={noop}
+      onNewGroup={noop}
+      onSearch={noop}
+      onAccount={noop}
+    />
+  );
+}
+
+function sceneTimeline(scene: ChatScene, options: Options): TimelineProps {
+  const {
+    messages = launchMessages(options),
+    newFromSequence = 10,
+    typing = SHOAIB_TYPING,
+    menuMessageId = null,
+    highlightId = null,
+    playing = null,
+  } = scene;
+  return {
+    messages,
+    newFromSequence,
+    typing,
+    handlers: HANDLERS,
+    onOpenAuthor: noop,
+    menuMessageId,
+    highlightId,
+    playing,
+  };
+}
+
+function sceneComposer(scene: ChatScene, title: string): ComposerProps {
+  const { draft = "", mode = null, attachOpen = false, recording = null } = scene;
+  return {
+    title,
+    value: draft,
+    onChange: noop,
+    onSend: noop,
+    mode,
+    onCancelMode: noop,
+    onEditLast: noop,
+    attachOpen,
+    onAttachOpenChange: noop,
+    onPickAttachment: noop,
+    onRecord: noop,
+    recording,
+    onCancelRecording: noop,
+    onSendRecording: noop,
+    ...scene.composerHandlers,
+  };
+}
+
+function SceneMain({ scene }: { readonly scene: ChatScene }) {
+  const options = scene.options ?? NO_OPTIONS;
+  const group = scene.group ?? launchGroup(options);
+  return (
+    <ChatView
+      group={group}
+      offline={scene.offline === true}
+      onOpenInfo={noop}
+      onSearchGroup={noop}
+      onForget={noop}
+      timeline={sceneTimeline(scene, options)}
+      composer={sceneComposer(scene, group.title)}
+    />
+  );
+}
+
+type InfoScene = NonNullable<ChatScene["info"]>;
+
+function infoGroup(scene: ChatScene, info: InfoScene): GroupDetail | RemovedGroup {
+  const group = info.group ?? scene.group ?? launchGroup(scene.options);
+  return group.status === "member" && info.notify !== undefined
+    ? { ...group, notify: info.notify }
+    : group;
+}
+
+function SceneInfo({ scene, info }: { readonly scene: ChatScene; readonly info: InfoScene }) {
+  return (
+    <GroupInfo
+      group={infoGroup(scene, info)}
+      onClose={noop}
+      onAddPeople={noop}
+      onCopyLink={noop}
+      linkCopied={info.linkCopied === true}
+      onSearch={noop}
+      notificationsOpen={info.notificationsOpen === true}
+      onNotificationsOpenChange={noop}
+      onNotifyChange={noop}
+      onMessageMember={noop}
+      onRemoveMember={noop}
+      onLeave={noop}
+    />
+  );
+}
+
 /** The signed-in app with a chat open: sidebar, history, composer and optionally Group info. */
 export function ChatScene(scene: ChatScene) {
-  const options = scene.options ?? {};
-  const group = scene.group ?? launchGroup(options);
-  const info = scene.info;
-  const infoGroup = info?.group ?? group;
   return (
     <>
       <ChatShell
         onOpenSearch={scene.onOpenSearch ?? noop}
-        sidebar={
-          <Sidebar
-            me={me(options)}
-            rows={scene.rows ?? groupRows(options, ["launch", scene.selected ?? "launch"])}
-            selectedGroupId={scene.selected === undefined ? "launch" : scene.selected}
-            onSelect={noop}
-            onNewGroup={noop}
-            onSearch={noop}
-            onAccount={noop}
-          />
-        }
+        sidebar={<SceneSidebar scene={scene} />}
         banner={
           scene.banner === true ? <PermissionBanner onLater={noop} onTurnOn={noop} /> : undefined
         }
-        main={
-          <ChatView
-            group={group}
-            offline={scene.offline === true}
-            onOpenInfo={noop}
-            onSearchGroup={noop}
-            onForget={noop}
-            timeline={{
-              messages: scene.messages ?? launchMessages(options),
-              newFromSequence: scene.newFromSequence === undefined ? 10 : scene.newFromSequence,
-              typing: scene.typing ?? ["Shoaib"],
-              handlers: HANDLERS,
-              onOpenAuthor: noop,
-              menuMessageId: scene.menuMessageId ?? null,
-              highlightId: scene.highlightId ?? null,
-              playing: scene.playing ?? null,
-            }}
-            composer={{
-              title: group.title,
-              value: scene.draft ?? "",
-              onChange: noop,
-              onSend: noop,
-              mode: scene.mode ?? null,
-              onCancelMode: noop,
-              onEditLast: noop,
-              attachOpen: scene.attachOpen === true,
-              onAttachOpenChange: noop,
-              onPickAttachment: noop,
-              onRecord: noop,
-              recording: scene.recording ?? null,
-              onCancelRecording: noop,
-              onSendRecording: noop,
-              ...scene.composerHandlers,
-            }}
-          />
-        }
-        info={
-          info === null || info === undefined ? undefined : (
-            <GroupInfo
-              group={
-                infoGroup.status === "member" && info.notify !== undefined
-                  ? { ...infoGroup, notify: info.notify }
-                  : infoGroup
-              }
-              onClose={noop}
-              onAddPeople={noop}
-              onCopyLink={noop}
-              linkCopied={info.linkCopied === true}
-              onSearch={noop}
-              notificationsOpen={info.notificationsOpen === true}
-              onNotificationsOpenChange={noop}
-              onNotifyChange={noop}
-              onMessageMember={noop}
-              onRemoveMember={noop}
-              onLeave={noop}
-            />
-          )
-        }
+        main={<SceneMain scene={scene} />}
+        info={scene.info ? <SceneInfo scene={scene} info={scene.info} /> : undefined}
       />
       {scene.overlay}
     </>
   );
 }
-
-const NO_OPTIONS: Options = {};
 
 /** The signed-in app with no chat open. */
 export function GroupsScene({

@@ -5,10 +5,13 @@ interface GallerySearch {
   readonly theme: "light" | "dark";
 }
 
-function parseSearch(search: Record<string, unknown>): GallerySearch {
+function parseSearch(search: {
+  readonly state?: unknown;
+  readonly theme?: unknown;
+}): GallerySearch {
   return {
-    state: typeof search["state"] === "string" ? search["state"] : undefined,
-    theme: search["theme"] === "dark" ? "dark" : "light",
+    state: typeof search.state === "string" ? search.state : undefined,
+    theme: search.theme === "dark" ? "dark" : "light",
   };
 }
 
@@ -22,6 +25,6 @@ function NotInProduction(): never {
 export const Route = createFileRoute("/gallery")({
   validateSearch: parseSearch,
   component: import.meta.env.DEV
-    ? lazyRouteComponent(() => import("../gallery/gallery.js"), "Gallery")
+    ? lazyRouteComponent(() => import("../gallery/gallery.js"))
     : NotInProduction,
 });

@@ -1,5 +1,5 @@
 import { countLabel, previewLine, rowStamp } from "../chat/format.js";
-import type { GroupListRow, Me } from "../chat/types.js";
+import type { GroupListRow, GroupRow, Me } from "../chat/types.js";
 import { Avatar } from "../ui/avatar.js";
 import { Wordmark } from "../ui/brand.js";
 import { Button } from "../ui/controls.js";
@@ -19,8 +19,31 @@ function rowLabel(row: GroupListRow): string {
     .join(", ");
 }
 
+function rowClass(row: GroupListRow, selected: boolean): string {
+  const loud = row.status === "member" && row.unreadCount > 0 && row.notify !== "muted";
+  return `row${selected ? " sel" : ""}${loud ? " unread" : ""}`;
+}
+
+function rowPreview(row: GroupListRow): string {
+  if (row.status === "removed") return `${row.removedBy} removed you`;
+  return previewLine(row.preview, row.kind);
+}
+
+/** The mute bell, the @ badge and the unread count; a muted group shows them in grey. */
+function RowPills({ row }: { readonly row: GroupRow }) {
+  const quiet = row.notify === "muted" ? " qt" : "";
+  const unread = row.unreadCount > 0;
+  return (
+    <span className="pills">
+      {row.notify === "muted" ? <Icon name="bellOff" /> : null}
+      {unread && row.needsYou ? <span className={`badge at${quiet}`}>@</span> : null}
+      {unread ? <span className={`badge${quiet}`}>{countLabel(row.unreadCount)}</span> : null}
+    </span>
+  );
+}
+
 /** One group: avatar, name, last-message preview, date, unread count, @ badge and mute bell. */
-export function GroupRowButton({
+function GroupRowButton({
   row,
   selected,
   onSelect,
@@ -30,14 +53,11 @@ export function GroupRowButton({
   readonly onSelect: () => void;
 }) {
   const { clock } = useRoot();
-  const member = row.status === "member" ? row : null;
-  const muted = member?.notify === "muted";
-  const unread = member !== null && member.unreadCount > 0;
-  const loud = unread && !muted;
+  const stamp = row.status === "removed" ? row.removedAt : row.lastActivityAt;
   return (
     <button
       type="button"
-      className={`row${selected ? " sel" : ""}${loud ? " unread" : ""}`}
+      className={rowClass(row, selected)}
       aria-label={rowLabel(row)}
       aria-current={selected ? "true" : undefined}
       onClick={onSelect}
@@ -45,25 +65,11 @@ export function GroupRowButton({
       <Avatar avatar={row.avatar} />
       <span className="rt">
         <span className="ttl">{row.title}</span>
-        <span className="pv">
-          {row.status === "removed"
-            ? `${row.removedBy} removed you`
-            : previewLine(row.preview, row.kind)}
-        </span>
+        <span className="pv">{rowPreview(row)}</span>
       </span>
       <span className="meta">
-        <span>
-          {rowStamp(row.status === "removed" ? row.removedAt : row.lastActivityAt, clock)}
-        </span>
-        <span className="pills">
-          {muted ? <Icon name="bellOff" /> : null}
-          {unread && member.needsYou ? (
-            <span className={`badge at${muted ? " qt" : ""}`}>@</span>
-          ) : null}
-          {unread ? (
-            <span className={`badge${muted ? " qt" : ""}`}>{countLabel(member.unreadCount)}</span>
-          ) : null}
-        </span>
+        <span>{rowStamp(stamp, clock)}</span>
+        {row.status === "member" ? <RowPills row={row} /> : <span className="pills" />}
       </span>
     </button>
   );
@@ -95,7 +101,7 @@ export function Sidebar({
         <Wordmark />
         <button
           type="button"
-          className="newg"
+          className="new-group-button"
           aria-label="New group"
           data-tip="New group"
           onClick={onNewGroup}
@@ -103,7 +109,7 @@ export function Sidebar({
           <Icon name="plus" />
         </button>
       </div>
-      <button type="button" className="sbox" onClick={onSearch}>
+      <button type="button" className="search-box" onClick={onSearch}>
         <Icon name="search" />
         <span>Search</span>
         <kbd>⌘K</kbd>
@@ -124,8 +130,8 @@ export function Sidebar({
           ))
         )}
       </nav>
-      <div className="sfoot">
-        <button type="button" className="mebtn" aria-label="Account" onClick={onAccount}>
+      <div className="sidebar-foot">
+        <button type="button" className="account-button" aria-label="Account" onClick={onAccount}>
           <Avatar avatar={me.avatar} size="sm" />
           <span>
             <b>{me.displayName}</b>
@@ -146,7 +152,7 @@ export function PermissionBanner({
   readonly onTurnOn: () => void;
 }) {
   return (
-    <section className="fbanner" aria-label="Turn on notifications">
+    <section className="notice-banner" aria-label="Turn on notifications">
       <Icon name="bell" />
       <span>Turn on desktop notifications to hear about mentions and replies.</span>
       <Button onClick={onLater}>Not now</Button>
@@ -161,7 +167,7 @@ export function PermissionBanner({
 export function NoGroupsYet({ onNewGroup }: { readonly onNewGroup: () => void }) {
   return (
     <div className="center">
-      <span className="ebadge">
+      <span className="empty-badge">
         <Icon name="users" />
       </span>
       <h2>No groups yet</h2>

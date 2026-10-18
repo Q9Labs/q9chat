@@ -1,17 +1,5 @@
 import type { Avatar as AvatarData } from "../chat/types.js";
 
-// The eight fixed avatar colors and the lightened name color used in dark mode.
-export const AVATAR_COLORS: Readonly<Record<string, string>> = {
-  "#0369a1": "#38bdf8",
-  "#be185d": "#f472b6",
-  "#b45309": "#fbbf24",
-  "#0f766e": "#2dd4bf",
-  "#6d28d9": "#a78bfa",
-  "#c2410c": "#fb923c",
-  "#4d7c0f": "#a3e635",
-  "#b91c1c": "#f87171",
-};
-
 type AvatarSize = "xs" | "sm" | "md" | "lg" | "xl";
 
 const SIZE_CLASS: Readonly<Record<AvatarSize, string>> = {

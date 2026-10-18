@@ -15,6 +15,103 @@ export type TimelineItem =
       readonly messages: readonly RunMessage[];
     };
 
+interface Run {
+  readonly author: Author;
+  readonly time: string;
+  readonly messages: RunMessage[];
+  last: number;
+}
+
+interface Builder {
+  readonly items: TimelineItem[];
+  day: number | null;
+  run: Run | null;
+  dividerPlaced: boolean;
+}
+
+function closeRun(builder: Builder): void {
+  const { run } = builder;
+  if (run === null) return;
+  builder.items.push({
+    type: "run",
+    key: `run-${run.messages[0]?.id ?? ""}`,
+    author: run.author,
+    time: run.time,
+    messages: run.messages,
+  });
+  builder.run = null;
+}
+
+function addDay(builder: Builder, message: MessageView, clock: Clock): void {
+  const today = dayNumber(message.createdAt, clock.timeZone);
+  if (today === builder.day) return;
+  closeRun(builder);
+  builder.items.push({
+    type: "day",
+    key: `day-${today}`,
+    label: dayLabel(message.createdAt, clock),
+  });
+  builder.day = today;
+}
+
+/** The divider goes before the first unread message from someone else. */
+function opensDivider(
+  builder: Builder,
+  message: MessageView,
+  newFromSequence: number | null,
+): boolean {
+  return (
+    !builder.dividerPlaced &&
+    newFromSequence !== null &&
+    message.sequence >= newFromSequence &&
+    message.kind !== "event" &&
+    !message.author.isYou
+  );
+}
+
+function continuesRun(run: Run | null, message: RunMessage): run is Run {
+  return (
+    run !== null &&
+    run.author.id === message.author.id &&
+    message.createdAt - run.last < RUN_WINDOW_MS
+  );
+}
+
+function addToRun(builder: Builder, message: RunMessage, clock: Clock): void {
+  if (continuesRun(builder.run, message)) {
+    builder.run.messages.push(message);
+    builder.run.last = message.createdAt;
+    return;
+  }
+  closeRun(builder);
+  builder.run = {
+    author: message.author,
+    time: clockTime(message.createdAt, clock.timeZone),
+    messages: [message],
+    last: message.createdAt,
+  };
+}
+
+function addMessage(
+  builder: Builder,
+  message: MessageView,
+  clock: Clock,
+  newFromSequence: number | null,
+): void {
+  addDay(builder, message, clock);
+  if (opensDivider(builder, message, newFromSequence)) {
+    closeRun(builder);
+    builder.items.push({ type: "new", key: "new" });
+    builder.dividerPlaced = true;
+  }
+  if (message.kind !== "event") {
+    addToRun(builder, message, clock);
+    return;
+  }
+  closeRun(builder);
+  builder.items.push({ type: "event", key: message.id, message });
+}
+
 /**
  * Lays messages out as date separators, the "new since you last looked" divider,
  * system lines and runs. A run is one person's messages, each less than five
@@ -27,63 +124,8 @@ export function buildTimeline(
   clock: Clock,
   newFromSequence: number | null,
 ): readonly TimelineItem[] {
-  const items: TimelineItem[] = [];
-  let day: number | null = null;
-  let run: { author: Author; time: string; messages: RunMessage[]; last: number } | null = null;
-  let dividerPlaced = false;
-
-  const close = () => {
-    if (run === null) return;
-    items.push({
-      type: "run",
-      key: `run-${run.messages[0]?.id ?? ""}`,
-      author: run.author,
-      time: run.time,
-      messages: run.messages,
-    });
-    run = null;
-  };
-
-  for (const message of messages) {
-    const today = dayNumber(message.createdAt, clock.timeZone);
-    if (today !== day) {
-      close();
-      items.push({ type: "day", key: `day-${today}`, label: dayLabel(message.createdAt, clock) });
-      day = today;
-    }
-    if (
-      !dividerPlaced &&
-      newFromSequence !== null &&
-      message.sequence >= newFromSequence &&
-      message.kind !== "event" &&
-      !message.author.isYou
-    ) {
-      close();
-      items.push({ type: "new", key: "new" });
-      dividerPlaced = true;
-    }
-    if (message.kind === "event") {
-      close();
-      items.push({ type: "event", key: message.id, message });
-      continue;
-    }
-    if (
-      run !== null &&
-      run.author.id === message.author.id &&
-      message.createdAt - run.last < RUN_WINDOW_MS
-    ) {
-      run.messages.push(message);
-      run.last = message.createdAt;
-    } else {
-      close();
-      run = {
-        author: message.author,
-        time: clockTime(message.createdAt, clock.timeZone),
-        messages: [message],
-        last: message.createdAt,
-      };
-    }
-  }
-  close();
-  return items;
+  const builder: Builder = { items: [], day: null, run: null, dividerPlaced: false };
+  for (const message of messages) addMessage(builder, message, clock, newFromSequence);
+  closeRun(builder);
+  return builder.items;
 }

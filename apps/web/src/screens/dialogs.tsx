@@ -1,5 +1,6 @@
-import { splitMatches } from "../chat/format.js";
-import { rowStamp } from "../chat/format.js";
+import type { KeyboardEvent } from "react";
+
+import { rowStamp, splitMatches } from "../chat/format.js";
 import type { Me, PersonMatch, SearchHit } from "../chat/types.js";
 import { Avatar } from "../ui/avatar.js";
 import {
@@ -42,46 +43,172 @@ interface NewGroupDialogProps {
   readonly onClose: () => void;
 }
 
-function primaryLabel(props: NewGroupDialogProps): string {
-  const { mode, people, name, pairExists } = props;
+function addLabel(people: readonly PersonMatch[]): string {
   const first = people[0];
-  if (mode === "add") {
-    if (first === undefined) return "Add people";
-    return people.length === 1 ? `Add ${first.name}` : `Add ${people.length} people`;
+  if (first === undefined) return "Add people";
+  return people.length === 1 ? `Add ${first.name}` : `Add ${people.length} people`;
+}
+
+function createLabel(people: readonly PersonMatch[], name: string, pairExists: boolean): string {
+  const first = people[0];
+  if (people.length !== 1 || first === undefined || name.trim() !== "") return "Create group";
+  return pairExists ? `Open your group with ${first.name}` : `Start a group with ${first.name}`;
+}
+
+function primaryLabel({ mode, people, name, pairExists }: NewGroupDialogProps): string {
+  return mode === "add" ? addLabel(people) : createLabel(people, name, pairExists);
+}
+
+function canSubmit({ mode, people, name }: NewGroupDialogProps): boolean {
+  if (mode === "add") return people.length > 0;
+  return name.trim() !== "" || people.length > 0;
+}
+
+function Suggestions({
+  suggestions,
+  onPick,
+}: {
+  readonly suggestions: readonly PersonMatch[];
+  readonly onPick: (person: PersonMatch) => void;
+}) {
+  if (suggestions.length === 0) return null;
+  return (
+    <div className="suggestions">
+      {suggestions.map((person) => (
+        <button key={person.id} type="button" onClick={() => onPick(person)}>
+          <Avatar avatar={person.avatar} size="sm" />
+          <span>
+            <b>{person.name}</b>
+            <small>{person.email}</small>
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Under the picker: the invite-link nudge for an unknown email, or the first-use tip. */
+function PickerHint({
+  unknownEmail,
+  idle,
+}: {
+  readonly unknownEmail: string | null;
+  readonly idle: boolean;
+}) {
+  if (unknownEmail !== null) {
+    return (
+      <output className="hint">
+        <Icon name="alert" />
+        <span>
+          <b>{unknownEmail}</b> doesn't have an account yet. Share the invite link, and they join
+          once they sign up.
+        </span>
+      </output>
+    );
   }
-  if (people.length === 1 && first !== undefined && name.trim() === "") {
-    return pairExists ? `Open your group with ${first.name}` : `Start a group with ${first.name}`;
-  }
-  return "Create group";
+  if (!idle) return null;
+  return (
+    <div className="hint">
+      <Icon name="info" />
+      <span>
+        People with an account can be added by name or email. For anyone else, share the invite
+        link.
+      </span>
+    </div>
+  );
+}
+
+type PeoplePickerProps = Pick<
+  NewGroupDialogProps,
+  | "people"
+  | "onRemovePerson"
+  | "query"
+  | "onQueryChange"
+  | "suggestions"
+  | "onPick"
+  | "unknownEmail"
+> & { readonly focusOnOpen: boolean };
+
+/** Chips for who is added, the name-or-email input and its suggestions. */
+function PeoplePicker({
+  people,
+  onRemovePerson,
+  query,
+  onQueryChange,
+  suggestions,
+  onPick,
+  unknownEmail,
+  focusOnOpen,
+}: PeoplePickerProps) {
+  const last = people.at(-1);
+  const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    const top = suggestions[0];
+    if (event.key === "Enter") {
+      event.preventDefault();
+      if (top !== undefined) onPick(top);
+    } else if (event.key === "Backspace" && query === "" && last !== undefined) {
+      onRemovePerson(last);
+    }
+  };
+  return (
+    <Field label="Add people" htmlFor="new-group-people">
+      <div className="chips">
+        {people.map((person) => (
+          <PeopleChip
+            key={person.id}
+            name={person.name}
+            avatar={person.avatar}
+            onRemove={() => onRemovePerson(person)}
+          />
+        ))}
+        <input
+          id="new-group-people"
+          data-autofocus={focusOnOpen ? "" : undefined}
+          value={query}
+          placeholder={people.length > 0 ? "Add another" : "Name or email"}
+          autoComplete="off"
+          spellCheck={false}
+          onChange={(event) => onQueryChange(event.target.value)}
+          onKeyDown={onKeyDown}
+        />
+      </div>
+      <Suggestions suggestions={suggestions} onPick={onPick} />
+      <PickerHint unknownEmail={unknownEmail} idle={query.trim() === "" && people.length === 0} />
+    </Field>
+  );
+}
+
+function InviteField({
+  add,
+  inviteToken,
+  linkCopied,
+  onCopyLink,
+}: {
+  readonly add: boolean;
+  readonly inviteToken: string;
+  readonly linkCopied: boolean;
+  readonly onCopyLink: () => void;
+}) {
+  return (
+    <Field label="Invite link">
+      <LinkBox url={`chat.q9labs.ai/join/${inviteToken}`} copied={linkCopied} onCopy={onCopyLink} />
+      <small className="note" style={{ margin: "0 2px" }}>
+        {add
+          ? "Anyone with the link can join and read the whole group."
+          : "Anyone with the link can join once the group exists."}
+      </small>
+    </Field>
+  );
 }
 
 /** Name the group, pick people by name or email, and share the link. */
 export function NewGroupDialog(props: NewGroupDialogProps) {
-  const {
-    mode,
-    groupTitle,
-    name,
-    onNameChange,
-    people,
-    onRemovePerson,
-    query,
-    onQueryChange,
-    suggestions,
-    onPick,
-    unknownEmail,
-    inviteToken,
-    linkCopied,
-    onCopyLink,
-    onSubmit,
-    onClose,
-  } = props;
+  const { mode, groupTitle, name, onNameChange, inviteToken, linkCopied, onCopyLink } = props;
   const add = mode === "add";
-  const canSubmit = add ? people.length > 0 : name.trim() !== "" || people.length > 0;
   const title = add ? `Add people to ${groupTitle ?? ""}` : "New group";
-  const last = people.at(-1);
 
   return (
-    <Dialog label={title} size="wide" onClose={onClose}>
+    <Dialog label={title} size="wide" onClose={props.onClose}>
       <h3>{title}</h3>
       <p className="sub">
         {add
@@ -99,82 +226,16 @@ export function NewGroupDialog(props: NewGroupDialogProps) {
           />
         </Field>
       )}
-      <Field label="Add people" htmlFor="new-group-people">
-        <div className="chips">
-          {people.map((person) => (
-            <PeopleChip
-              key={person.id}
-              name={person.name}
-              avatar={person.avatar}
-              onRemove={() => onRemovePerson(person)}
-            />
-          ))}
-          <input
-            id="new-group-people"
-            data-autofocus={add ? "" : undefined}
-            value={query}
-            placeholder={people.length > 0 ? "Add another" : "Name or email"}
-            autoComplete="off"
-            spellCheck={false}
-            onChange={(event) => onQueryChange(event.target.value)}
-            onKeyDown={(event) => {
-              const top = suggestions[0];
-              if (event.key === "Enter") {
-                event.preventDefault();
-                if (top !== undefined) onPick(top);
-              } else if (event.key === "Backspace" && query === "" && last !== undefined) {
-                onRemovePerson(last);
-              }
-            }}
-          />
-        </div>
-        {suggestions.length > 0 ? (
-          <div className="sugg">
-            {suggestions.map((person) => (
-              <button key={person.id} type="button" onClick={() => onPick(person)}>
-                <Avatar avatar={person.avatar} size="sm" />
-                <span>
-                  <b>{person.name}</b>
-                  <small>{person.email}</small>
-                </span>
-              </button>
-            ))}
-          </div>
-        ) : null}
-        {unknownEmail === null ? null : (
-          <output className="hint">
-            <Icon name="alert" />
-            <span>
-              <b>{unknownEmail}</b> doesn't have an account yet. Share the invite link, and they
-              join once they sign up.
-            </span>
-          </output>
-        )}
-        {unknownEmail === null && query.trim() === "" && people.length === 0 ? (
-          <div className="hint">
-            <Icon name="info" />
-            <span>
-              People with an account can be added by name or email. For anyone else, share the
-              invite link.
-            </span>
-          </div>
-        ) : null}
-      </Field>
-      <Field label="Invite link">
-        <LinkBox
-          url={`chat.q9labs.ai/join/${inviteToken}`}
-          copied={linkCopied}
-          onCopy={onCopyLink}
-        />
-        <small className="note" style={{ margin: "0 2px" }}>
-          {add
-            ? "Anyone with the link can join and read the whole group."
-            : "Anyone with the link can join once the group exists."}
-        </small>
-      </Field>
+      <PeoplePicker {...props} focusOnOpen={add} />
+      <InviteField
+        add={add}
+        inviteToken={inviteToken}
+        linkCopied={linkCopied}
+        onCopyLink={onCopyLink}
+      />
       <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button variant="solid" disabled={!canSubmit} onClick={onSubmit}>
+        <Button onClick={props.onClose}>Cancel</Button>
+        <Button variant="solid" disabled={!canSubmit(props)} onClick={props.onSubmit}>
           {primaryLabel(props)}
         </Button>
       </DialogActions>
@@ -207,6 +268,67 @@ function Snippet({ text, query }: { readonly text: string; readonly query: strin
   });
 }
 
+function scopeLabel(title: string): string {
+  return title.length > 22 ? `${title.slice(0, 21)}…` : title;
+}
+
+function HitRow({
+  hit,
+  query,
+  onOpen,
+}: {
+  readonly hit: SearchHit;
+  readonly query: string;
+  readonly onOpen: () => void;
+}) {
+  const { clock } = useRoot();
+  return (
+    <button type="button" className="ri" onClick={onOpen}>
+      <Avatar avatar={hit.groupAvatar} size="sm" />
+      <span style={{ minWidth: 0 }}>
+        <span className="rm">
+          <b>{hit.groupTitle}</b>
+          <span>· {hit.author.isYou ? "You" : hit.author.name}</span>
+          <span className="t">{rowStamp(hit.createdAt, clock)}</span>
+        </span>
+        <span className="sn">
+          <Snippet text={hit.snippet} query={query} />
+        </span>
+      </span>
+    </button>
+  );
+}
+
+function SearchResults({
+  query,
+  scopeTitle,
+  hits,
+  onOpenHit,
+}: Pick<SearchDialogProps, "query" | "scopeTitle" | "hits" | "onOpenHit">) {
+  const trimmed = query.trim();
+  if (trimmed === "") {
+    return (
+      <div className="search-empty">Search messages in {scopeTitle ?? "all your groups"}.</div>
+    );
+  }
+  if (hits.length === 0) return <div className="search-empty">No messages match “{trimmed}”.</div>;
+  return (
+    <>
+      <div className="result-head">
+        {hits.length} {hits.length === 1 ? "message" : "messages"}
+      </div>
+      {hits.map((hit) => (
+        <HitRow
+          key={`${hit.groupId}-${hit.sequence}`}
+          hit={hit}
+          query={trimmed}
+          onOpen={() => onOpenHit(hit)}
+        />
+      ))}
+    </>
+  );
+}
+
 /** Search messages in all groups, or in one. Enter opens the first result, Esc closes. */
 export function SearchDialog({
   query,
@@ -217,15 +339,6 @@ export function SearchDialog({
   onOpenHit,
   onClose,
 }: SearchDialogProps) {
-  const { clock } = useRoot();
-  const trimmed = query.trim();
-  const chip =
-    scopeTitle === null
-      ? null
-      : scopeTitle.length > 22
-        ? `${scopeTitle.slice(0, 21)}…`
-        : scopeTitle;
-
   return (
     <Dialog label="Search messages" size="top" onClose={onClose}>
       <div className="sin">
@@ -246,9 +359,9 @@ export function SearchDialog({
             }
           }}
         />
-        {chip === null ? null : (
-          <span className="schip">
-            In {chip}
+        {scopeTitle === null ? null : (
+          <span className="scope-chip">
+            In {scopeLabel(scopeTitle)}
             <button type="button" aria-label="Search all groups" onClick={onClearScope}>
               <Icon name="x" />
             </button>
@@ -256,39 +369,9 @@ export function SearchDialog({
         )}
       </div>
       <div className="res">
-        {trimmed === "" ? (
-          <div className="sempty">Search messages in {scopeTitle ?? "all your groups"}.</div>
-        ) : hits.length === 0 ? (
-          <div className="sempty">No messages match “{trimmed}”.</div>
-        ) : (
-          <>
-            <div className="rhead">
-              {hits.length} {hits.length === 1 ? "message" : "messages"}
-            </div>
-            {hits.map((hit) => (
-              <button
-                key={`${hit.groupId}-${hit.sequence}`}
-                type="button"
-                className="ri"
-                onClick={() => onOpenHit(hit)}
-              >
-                <Avatar avatar={hit.groupAvatar} size="sm" />
-                <span style={{ minWidth: 0 }}>
-                  <span className="rm">
-                    <b>{hit.groupTitle}</b>
-                    <span>· {hit.author.isYou ? "You" : hit.author.name}</span>
-                    <span className="t">{rowStamp(hit.createdAt, clock)}</span>
-                  </span>
-                  <span className="sn">
-                    <Snippet text={hit.snippet} query={trimmed} />
-                  </span>
-                </span>
-              </button>
-            ))}
-          </>
-        )}
+        <SearchResults query={query} scopeTitle={scopeTitle} hits={hits} onOpenHit={onOpenHit} />
       </div>
-      <div className="sfoot2">
+      <div className="search-hints">
         <span>
           <kbd>Enter</kbd> opens the first result
         </span>
@@ -334,15 +417,15 @@ export function AccountDialog({
   const togglePhoto = hasPhoto ? onRemovePhoto : onUploadPhoto;
   return (
     <Dialog label="Account" onClose={onClose}>
-      <div className="dhead">
+      <div className="dialog-head">
         <h3>Account</h3>
         <IconButton icon="x" label="Close" onClick={onClose} />
       </div>
-      <div className="ihero" style={{ paddingTop: 4 }}>
+      <div className="info-hero" style={{ paddingTop: 4 }}>
         <button
           type="button"
-          className="pfav"
-          aria-label={hasPhoto ? "Remove a photo" : "Add a photo"}
+          className="profile-avatar"
+          aria-label={hasPhoto ? "Remove photo" : "Add a photo"}
           onClick={togglePhoto}
         >
           <Avatar avatar={me.avatar} size="xl" />
@@ -469,7 +552,7 @@ export function DeleteAccountDialog(props: Closable) {
   );
 }
 
-export type ReportReason = "spam" | "harassment" | "other";
+type ReportReason = "spam" | "harassment" | "other";
 
 interface ReportDialogProps {
   readonly authorName: string;

@@ -18,18 +18,18 @@ interface SignInProps {
 export function SignIn({ email, onEmailChange, onGoogle, onApple, onEmailCode }: SignInProps) {
   return (
     <div className="auth">
-      <div className="acard">
-        <div className="ahero">
+      <div className="auth-card">
+        <div className="auth-hero">
           <span className="awm">
             <Wordmark />
           </span>
           <p>Sign in, or create an account if you're new.</p>
         </div>
-        <button type="button" className="abtn" onClick={onGoogle}>
+        <button type="button" className="auth-button" onClick={onGoogle}>
           <GoogleMark />
           Continue with Google
         </button>
-        <button type="button" className="abtn" onClick={onApple}>
+        <button type="button" className="auth-button" onClick={onApple}>
           <AppleMark />
           Continue with Apple
         </button>
@@ -106,9 +106,9 @@ export function EmailCode({
 
   return (
     <div className="auth">
-      <div className="acard">
-        <div className="ahero">
-          <span className="ebadge">
+      <div className="auth-card">
+        <div className="auth-hero">
+          <span className="empty-badge">
             <Icon name="mail" />
           </span>
           <h1>Check your email</h1>
@@ -141,7 +141,7 @@ export function EmailCode({
             />
           ))}
         </fieldset>
-        <p className="cerr" role="alert">
+        <p className="code-error" role="alert">
           {bad ? "That code didn't work. Check it and try again." : ""}
         </p>
         <p className="fine">
@@ -179,16 +179,16 @@ export function SetUpProfile({
 }: SetUpProfileProps) {
   return (
     <div className="auth">
-      <div className="acard">
-        <div className="ahero">
+      <div className="auth-card">
+        <div className="auth-hero">
           <h1>Set up your profile</h1>
           <p>This is how people see you in groups.</p>
         </div>
-        <div className="pfwrap">
+        <div className="profile-wrap">
           <button
             type="button"
-            className="pfav"
-            aria-label={avatar.photoUrl === null ? "Add a photo" : "Remove a photo"}
+            className="profile-avatar"
+            aria-label={avatar.photoUrl === null ? "Add a photo" : "Remove photo"}
             onClick={onTogglePhoto}
           >
             <Avatar avatar={avatar} size="xl" />

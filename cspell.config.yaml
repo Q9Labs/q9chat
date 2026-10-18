@@ -54,3 +54,17 @@ words:
   - workerd
   - worktree
   - Wrangler
+  # The people in the mock's seed data, used by the web gallery fixtures.
+  - Bilal
+  - Hasan
+  - Rahmatullah
+  - Rana
+  - Shoaib
+  - Siddiqui
+  - Yahya
+  # Product and vendor words: the Figtree font, the CollabEZ Apple account, the logo "wordmark".
+  - CollabEZ
+  - Figtree
+  - wordmark
+  # The mock's screen name for the New group dialog, kept as the gallery state id.
+  - newgroup

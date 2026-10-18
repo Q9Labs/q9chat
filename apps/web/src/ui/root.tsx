@@ -35,7 +35,7 @@ function tipFor(target: HTMLElement, root: HTMLElement): TipState | null {
   if (text === undefined) return null;
   const rootBox = root.getBoundingClientRect();
   const box = target.getBoundingClientRect();
-  const side = target.dataset["tipside"];
+  const side = target.dataset["tipSide"];
   if (side === "start" || side === "end") {
     return {
       text,
@@ -63,7 +63,7 @@ interface AppRootProps {
 /**
  * The positioned root every screen renders in. It carries the theme, anchors
  * overlays, and shows the one shared tooltip for any element with `data-tip`
- * (and `data-tipside="start" | "end"` to place it beside the element).
+ * (and `data-tip-side="start" | "end"` to place it beside the element).
  */
 export function AppRoot({ children, theme = "system", clock }: AppRootProps) {
   const [root, setRoot] = useState<HTMLElement | null>(null);
@@ -107,7 +107,7 @@ function Tip({ tip }: { readonly tip: TipState }) {
   return (
     <div
       ref={measure}
-      className={`tip${tip.side === null ? "" : " tside"}`}
+      className={`tip${tip.side === null ? "" : " tip-side"}`}
       role="tooltip"
       style={{ left, top: tip.top }}
     >

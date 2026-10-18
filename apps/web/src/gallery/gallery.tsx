@@ -9,7 +9,7 @@ const route = getRouteApi("/gallery");
  * Dev-only: every screen and state with fixture data, drawn at the mock's
  * 1280 by 800 so each can be shot next to the mock. `?state=<id>&theme=<light|dark>`.
  */
-export function Gallery() {
+export default function Gallery() {
   const { state, theme } = route.useSearch();
   const current = STATES.find((entry) => entry.id === state);
   if (current !== undefined) {

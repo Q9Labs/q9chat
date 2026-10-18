@@ -7,7 +7,7 @@ interface ChatShellProps {
   /** The permission banner, shown above the main pane. */
   readonly banner?: ReactNode;
   readonly main: ReactNode;
-  /** The right-hand Group info panel; when set, the layout gains a third column. */
+  /** The Group info panel at the inline end; when set, the layout gains a third column. */
   readonly info?: ReactNode;
   /** ⌘K (or Ctrl+K) anywhere in the app. */
   readonly onOpenSearch: () => void;
@@ -28,7 +28,7 @@ export function ChatShell({ sidebar, banner, main, info, onOpenSearch }: ChatShe
   }, []);
 
   return (
-    <div className={`wl${info === undefined ? "" : " withinfo"}`}>
+    <div className={`wl${info === undefined ? "" : " with-info"}`}>
       {sidebar}
       <main className="main">
         {banner}

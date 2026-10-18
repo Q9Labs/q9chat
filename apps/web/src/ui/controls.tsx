@@ -151,7 +151,7 @@ export function SwitchRow({
   return (
     <button
       type="button"
-      className="irow"
+      className="info-row"
       role="switch"
       aria-checked={checked}
       onClick={() => onChange(!checked)}
@@ -163,7 +163,7 @@ export function SwitchRow({
   );
 }
 
-export interface RadioOption<Value extends string> {
+interface RadioOption<Value extends string> {
   readonly value: Value;
   readonly label: string;
   readonly description?: string;
@@ -200,7 +200,9 @@ export function RadioList<Value extends string>({
           <span>
             <b>
               {option.label}
-              {option.suffix === undefined ? null : <span className="dflt"> {option.suffix}</span>}
+              {option.suffix === undefined ? null : (
+                <span className="option-suffix"> {option.suffix}</span>
+              )}
             </b>
             {option.description === undefined ? null : <small>{option.description}</small>}
           </span>
@@ -221,7 +223,7 @@ export function PeopleChip({
   readonly onRemove: () => void;
 }) {
   return (
-    <span className="pchip">
+    <span className="person-chip">
       <Avatar avatar={avatar} size="xs" />
       {name}
       <button type="button" aria-label={`Remove ${name}`} onClick={onRemove}>
@@ -242,7 +244,7 @@ export function LinkBox({
   readonly onCopy: () => void;
 }) {
   return (
-    <div className="linkbox">
+    <div className="link-box">
       <code>{url}</code>
       <button
         type="button"

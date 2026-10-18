@@ -16,7 +16,6 @@ import { Toast } from "../ui/overlay.js";
 import {
   avatarOf,
   createdLines,
-  failedMessage,
   groupRows,
   launchGroup,
   launchMessages,
@@ -24,14 +23,13 @@ import {
   me,
   pairGroup,
   pairMessages,
-  queuedMessage,
   recordingLevels,
   removalLine,
   removedGroup,
   searchHits,
-  sendingMessage,
   withMuted,
   withRemoved,
+  unsentMessage,
   type Options,
 } from "./fixtures.js";
 import { Playground } from "./playground.js";
@@ -194,17 +192,17 @@ export const STATES: readonly GalleryState[] = [
   {
     id: "chat-offline",
     title: "Chat, offline",
-    render: () => <ChatScene offline messages={[...launchMessages(), queuedMessage()]} />,
+    render: () => <ChatScene offline messages={[...launchMessages(), unsentMessage("queued")]} />,
   },
   {
     id: "chat-failed",
     title: "Chat, failed send",
-    render: () => <ChatScene messages={[...launchMessages(), failedMessage()]} />,
+    render: () => <ChatScene messages={[...launchMessages(), unsentMessage("failed")]} />,
   },
   {
     id: "chat-sending",
     title: "Chat, sending",
-    render: () => <ChatScene messages={[...launchMessages(), sendingMessage()]} />,
+    render: () => <ChatScene messages={[...launchMessages(), unsentMessage("sending")]} />,
   },
   {
     id: "chat-muted",

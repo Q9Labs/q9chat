@@ -80,7 +80,7 @@ const PATHS = {
       <path d="m21 15-5-5L5 21" />
     </>
   ),
-  chev: <path d="m9 18 6-6-6-6" />,
+  chevron: <path d="m9 18 6-6-6-6" />,
   down: (
     <>
       <path d="M12 5v14" />

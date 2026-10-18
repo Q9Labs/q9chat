@@ -105,14 +105,14 @@ function ref(key: PersonKey, options: Options): PersonRef {
   return { id: key, name: nameOf(key, options), isYou: key === (options.me ?? "hasan") };
 }
 
-export function author(key: PersonKey, options: Options = {}): Author {
+function author(key: PersonKey, options: Options = {}): Author {
   return {
     ...ref(key, options),
     avatar: avatarOf(key, key === (options.me ?? "hasan") && options.photo === true),
   };
 }
 
-export function member(key: PersonKey, options: Options = {}): Member {
+function member(key: PersonKey, options: Options = {}): Member {
   return {
     ...author(key, options),
     fullName: options.long === true && key === "bilal" ? LONG_BILAL : PEOPLE[key].full,
@@ -195,10 +195,8 @@ interface PostInit {
   readonly time: string;
   readonly body: string;
   readonly attachments?: readonly Attachment[];
-  readonly replyTo?: PostView["replyTo"];
   readonly reactions?: readonly (readonly [Emoji, readonly PersonKey[]])[];
   readonly edited?: boolean;
-  readonly sendState?: PostView["sendState"];
 }
 
 function reactions(list: PostInit["reactions"], options: Options): readonly Reaction[] {
@@ -221,11 +219,11 @@ function post(init: PostInit, options: Options): PostView {
     body: init.body,
     mentions,
     attachments: init.attachments ?? [],
-    replyTo: init.replyTo ?? null,
+    replyTo: null,
     reactions: reactions(init.reactions, options),
     editedAt: init.edited === true ? at(init.day, init.time) + 60_000 : null,
   } as const;
-  return init.sendState === undefined ? base : { ...base, sendState: init.sendState };
+  return base;
 }
 
 function quote(of: PostView): NonNullable<PostView["replyTo"]> {
@@ -237,12 +235,19 @@ function quote(of: PostView): NonNullable<PostView["replyTo"]> {
   };
 }
 
+function replying(message: PostView, to: PostView): PostView {
+  return { ...message, replyTo: quote(to) };
+}
+
+function attachmentSummary(attachment: Attachment, body: string): string {
+  if (attachment.kind === "file") return attachment.name;
+  if (attachment.kind === "voice") return "Voice note · 0:24";
+  return body === "" ? "Photo" : `Photo · ${body}`;
+}
+
 function summaryOf(message: PostView): string {
   const first = message.attachments[0];
-  if (first?.kind === "image") return message.body === "" ? "Photo" : `Photo · ${message.body}`;
-  if (first?.kind === "file") return first.name;
-  if (first?.kind === "voice") return "Voice note · 0:24";
-  return message.body;
+  return first === undefined ? message.body : attachmentSummary(first, message.body);
 }
 
 function event(
@@ -277,16 +282,18 @@ export function launchMessages(options: Options = {}): readonly MessageView[] {
     },
     2,
   );
-  const l8 = l(
-    {
-      id: "l8",
-      by: "hasan",
-      day: 0,
-      time: "10:01",
-      body: "Web goes up on chat.q9labs.ai tonight. Phone builds are going through EAS.",
-      replyTo: quote(l7),
-    },
-    8,
+  const l8 = replying(
+    l(
+      {
+        id: "l8",
+        by: "hasan",
+        day: 0,
+        time: "10:01",
+        body: "Web goes up on chat.q9labs.ai tonight. Phone builds are going through EAS.",
+      },
+      8,
+    ),
+    l7,
   );
   const list: MessageView[] = [
     l(
@@ -366,28 +373,32 @@ export function launchMessages(options: Options = {}): readonly MessageView[] {
       },
       10,
     ),
-    l(
-      {
-        id: "l11",
-        by: "sara",
-        day: 0,
-        time: "10:36",
-        body: "Done. Muted groups now show a grey count everywhere.",
-        replyTo: quote(l2),
-        edited: true,
-      },
-      11,
+    replying(
+      l(
+        {
+          id: "l11",
+          by: "sara",
+          day: 0,
+          time: "10:36",
+          body: "Done. Muted groups now show a grey count everywhere.",
+          edited: true,
+        },
+        11,
+      ),
+      l2,
     ),
-    l(
-      {
-        id: "l12",
-        by: "bilal",
-        day: 0,
-        time: "10:40",
-        body: "Build 1 is up on TestFlight. @Hasan can you try sign in with Apple?",
-        replyTo: quote(l8),
-      },
-      12,
+    replying(
+      l(
+        {
+          id: "l12",
+          by: "bilal",
+          day: 0,
+          time: "10:40",
+          body: "Build 1 is up on TestFlight. @Hasan can you try sign in with Apple?",
+        },
+        12,
+      ),
+      l8,
     ),
     l(
       {
@@ -413,50 +424,23 @@ export function launchMessages(options: Options = {}): readonly MessageView[] {
   return list;
 }
 
-/** The mock's failed-send fixture (C3). */
-export function failedMessage(options: Options = {}): PostView {
-  return post(
+/** A message the client has not delivered yet: the mock's failed-send fixture (C3) and its queued and sending kin. */
+export function unsentMessage(
+  sendState: "sending" | "queued" | "failed",
+  options: Options = {},
+): PostView {
+  const draft = post(
     {
       seq: 99,
-      id: "f1",
+      id: sendState.slice(0, 1) + "1",
       by: "hasan",
       day: 0,
       time: "10:45",
       body: "Trying sign in with Apple now.",
-      sendState: "failed",
     },
     options,
   );
-}
-
-export function queuedMessage(options: Options = {}): PostView {
-  return post(
-    {
-      seq: 99,
-      id: "q1",
-      by: "hasan",
-      day: 0,
-      time: "10:45",
-      body: "Trying sign in with Apple now.",
-      sendState: "queued",
-    },
-    options,
-  );
-}
-
-export function sendingMessage(options: Options = {}): PostView {
-  return post(
-    {
-      seq: 99,
-      id: "s1",
-      by: "hasan",
-      day: 0,
-      time: "10:45",
-      body: "Trying sign in with Apple now.",
-      sendState: "sending",
-    },
-    options,
-  );
+  return { ...draft, sendState };
 }
 
 /** A removal event, as "Shoaib removed Omar". */
@@ -665,8 +649,9 @@ export function groupRows(
 
 /** Opening a group reads it: the mock clears the count and the @ when the chat is on screen. */
 function readOpened(rows: readonly GroupRow[], opened: readonly string[]): readonly GroupRow[] {
+  const read = new Set(opened);
   return rows.map((entry) =>
-    opened.includes(entry.groupId) ? { ...entry, unreadCount: 0, needsYou: false } : entry,
+    read.has(entry.groupId) ? { ...entry, unreadCount: 0, needsYou: false } : entry,
   );
 }
 
@@ -738,8 +723,6 @@ export function removedGroup(options: Options = {}): RemovedGroup {
     removedAt: at(0, "10:44"),
   };
 }
-
-export const TYPING_SHOAIB: readonly string[] = ["Shoaib"];
 
 // ---------- search ----------
 

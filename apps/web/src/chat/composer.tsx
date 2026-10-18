@@ -42,24 +42,107 @@ function recordingBars(levels: readonly number[]): readonly number[] {
   });
 }
 
-/** The message pill: attach, a textarea that grows with its text, then a mic that becomes send. */
-export function Composer(props: ComposerProps) {
-  const {
-    title,
-    value,
-    onChange,
-    onSend,
-    mode,
-    onCancelMode,
-    onEditLast,
-    attachOpen,
-    onAttachOpenChange,
-    onPickAttachment,
-    onRecord,
-    recording,
-    onCancelRecording,
-    onSendRecording,
-  } = props;
+function RecordingBar({
+  recording,
+  onCancel,
+  onSend,
+}: {
+  readonly recording: Recording;
+  readonly onCancel: () => void;
+  readonly onSend: () => void;
+}) {
+  return (
+    <div className="composer">
+      <output className="recording-bar">
+        <span className="recording-dot" aria-hidden="true" />
+        <span>Recording</span>
+        <span className="dur">{recording.elapsed}</span>
+        <span className="wave" aria-hidden="true">
+          {recordingBars(recording.levels).map((height, bar) => (
+            // oxlint-disable-next-line react/no-array-index-key -- fixed bars that never reorder
+            <i key={bar} className="on" style={{ height }} />
+          ))}
+        </span>
+        <Button onClick={onCancel}>Cancel</Button>
+        <button type="button" className="send" aria-label="Send voice note" onClick={onSend}>
+          <Icon name="up" />
+        </button>
+      </output>
+    </div>
+  );
+}
+
+/** "Replying to Bilal · …" or "Editing message · Esc to cancel", above the pill. */
+function ModeBar({
+  mode,
+  onCancel,
+}: {
+  readonly mode: ComposerMode | null;
+  readonly onCancel: () => void;
+}) {
+  if (mode === null) return null;
+  if (mode.type === "reply") {
+    return (
+      <div className="composer-bar">
+        <Icon name="reply" />
+        <span>
+          Replying to <b>{mode.to}</b> · {mode.summary}
+        </span>
+        <IconButton icon="x" label="Cancel reply" onClick={onCancel} />
+      </div>
+    );
+  }
+  return (
+    <div className="composer-bar">
+      <Icon name="pencil" />
+      <span>
+        <b>Editing message</b> · Esc to cancel
+      </span>
+      <IconButton icon="x" label="Cancel editing" onClick={onCancel} />
+    </div>
+  );
+}
+
+function SendButton({
+  editing,
+  onSend,
+}: {
+  readonly editing: boolean;
+  readonly onSend: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={`send${editing ? " keep" : ""}`}
+      aria-label={editing ? "Save edit" : "Send"}
+      onClick={onSend}
+    >
+      <Icon name={editing ? "check" : "up"} />
+    </button>
+  );
+}
+
+const isSendKey = (event: KeyboardEvent<HTMLTextAreaElement>) =>
+  event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing;
+
+const isCancelKey = (event: KeyboardEvent<HTMLTextAreaElement>, mode: ComposerMode | null) =>
+  event.key === "Escape" && mode !== null;
+
+const isEditLastKey = (
+  event: KeyboardEvent<HTMLTextAreaElement>,
+  value: string,
+  mode: ComposerMode | null,
+) => event.key === "ArrowUp" && value === "" && mode === null;
+
+type ComposerFieldProps = Omit<
+  ComposerProps,
+  "recording" | "onCancelRecording" | "onSendRecording"
+>;
+
+/** Attach, the textarea that grows with its text, then a mic, then send. */
+function ComposerField(props: ComposerFieldProps) {
+  const { title, value, onChange, onSend, mode, onCancelMode, onEditLast } = props;
+  const { attachOpen, onAttachOpenChange, onPickAttachment, onRecord } = props;
   const field = useRef<HTMLTextAreaElement>(null);
   const [attach, setAttach] = useState<HTMLButtonElement | null>(null);
   const editing = mode?.type === "edit";
@@ -76,66 +159,21 @@ export function Composer(props: ComposerProps) {
     if (inMode) field.current?.focus({ preventScroll: true });
   }, [inMode]);
 
-  if (recording !== null) {
-    return (
-      <div className="composer">
-        <output className="recbar">
-          <span className="recdot" aria-hidden="true" />
-          <span>Recording</span>
-          <span className="dur">{recording.elapsed}</span>
-          <span className="wave" aria-hidden="true">
-            {recordingBars(recording.levels).map((height, bar) => (
-              // oxlint-disable-next-line react/no-array-index-key -- fixed bars that never reorder
-              <i key={bar} className="on" style={{ height }} />
-            ))}
-          </span>
-          <Button onClick={onCancelRecording}>Cancel</Button>
-          <button
-            type="button"
-            className="send"
-            aria-label="Send voice note"
-            onClick={onSendRecording}
-          >
-            <Icon name="up" />
-          </button>
-        </output>
-      </div>
-    );
-  }
-
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+    if (isSendKey(event)) {
       event.preventDefault();
       onSend();
-    } else if (event.key === "Escape" && mode !== null) {
+    } else if (isCancelKey(event, mode)) {
       event.preventDefault();
       onCancelMode();
-    } else if (event.key === "ArrowUp" && value === "" && mode === null) {
+    } else if (isEditLastKey(event, value, mode)) {
       event.preventDefault();
       onEditLast();
     }
   };
 
   return (
-    <div className="composer">
-      {mode?.type === "reply" ? (
-        <div className="cbar">
-          <Icon name="reply" />
-          <span>
-            Replying to <b>{mode.to}</b> · {mode.summary}
-          </span>
-          <IconButton icon="x" label="Cancel reply" onClick={onCancelMode} />
-        </div>
-      ) : null}
-      {editing ? (
-        <div className="cbar">
-          <Icon name="pencil" />
-          <span>
-            <b>Editing message</b> · Esc to cancel
-          </span>
-          <IconButton icon="x" label="Cancel editing" onClick={onCancelMode} />
-        </div>
-      ) : null}
+    <>
       <div className="field">
         {editing ? null : (
           <button
@@ -169,14 +207,7 @@ export function Composer(props: ComposerProps) {
             <Icon name="mic" />
           </button>
         )}
-        <button
-          type="button"
-          className={`send${editing ? " keep" : ""}`}
-          aria-label={editing ? "Save edit" : "Send"}
-          onClick={onSend}
-        >
-          <Icon name={editing ? "check" : "up"} />
-        </button>
+        <SendButton editing={editing} onSend={onSend} />
       </div>
       {attachOpen ? (
         <Menu
@@ -193,6 +224,22 @@ export function Composer(props: ComposerProps) {
           </MenuItem>
         </Menu>
       ) : null}
+    </>
+  );
+}
+
+/** The message pill, with a reply or edit bar above it, or the recording bar in its place. */
+export function Composer(props: ComposerProps) {
+  const { recording, onCancelRecording, onSendRecording, mode, onCancelMode } = props;
+  if (recording !== null) {
+    return (
+      <RecordingBar recording={recording} onCancel={onCancelRecording} onSend={onSendRecording} />
+    );
+  }
+  return (
+    <div className="composer">
+      <ModeBar mode={mode} onCancel={onCancelMode} />
+      <ComposerField {...props} />
     </div>
   );
 }

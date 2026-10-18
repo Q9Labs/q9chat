@@ -13,31 +13,47 @@ interface ChatHeaderProps {
   readonly onSearchGroup: () => void;
 }
 
-/** Group avatar and name (opens Group info), the member count, and the two quiet tools. */
-export function ChatHeader({ group, onOpenInfo, onSearchGroup }: ChatHeaderProps) {
-  const member = group.status === "member" ? group : null;
-  const muted = member?.notify === "muted";
+function membersLabel(group: GroupDetail | RemovedGroup): string | null {
+  if (group.status === "removed" || group.kind === "pair") return null;
+  return `${group.memberCount} members`;
+}
+
+/** The group avatar, name and member count: one button that opens Group info. */
+function ChatTitle({
+  group,
+  onOpenInfo,
+}: {
+  readonly group: GroupDetail | RemovedGroup;
+  readonly onOpenInfo: () => void;
+}) {
+  const muted = group.status === "member" && group.notify === "muted";
+  const members = membersLabel(group);
   return (
-    <header className="chead">
-      <button
-        type="button"
-        className="ctitle"
-        aria-label={`Group info for ${group.title}${muted ? ", muted" : ""}`}
-        onClick={onOpenInfo}
-      >
-        <Avatar avatar={group.avatar} />
-        <span>
-          <b>
-            <span className="tt">{group.title}</span>
-            {muted ? <Icon name="bellOff" /> : null}
-          </b>
-          {member === null || member.kind === "pair" ? null : (
-            <small>{member.memberCount} members</small>
-          )}
-        </span>
-      </button>
+    <button
+      type="button"
+      className="chat-title"
+      aria-label={`Group info for ${group.title}${muted ? ", muted" : ""}`}
+      onClick={onOpenInfo}
+    >
+      <Avatar avatar={group.avatar} />
+      <span>
+        <b>
+          <span className="tt">{group.title}</span>
+          {muted ? <Icon name="bellOff" /> : null}
+        </b>
+        {members === null ? null : <small>{members}</small>}
+      </span>
+    </button>
+  );
+}
+
+/** Group avatar and name (opens Group info), the member count, and the two quiet tools. */
+function ChatHeader({ group, onOpenInfo, onSearchGroup }: ChatHeaderProps) {
+  return (
+    <header className="chat-header">
+      <ChatTitle group={group} onOpenInfo={onOpenInfo} />
       <span className="spacer" />
-      {member === null ? null : (
+      {group.status === "member" ? (
         <>
           <IconButton
             icon="search"
@@ -47,38 +63,18 @@ export function ChatHeader({ group, onOpenInfo, onSearchGroup }: ChatHeaderProps
           />
           <IconButton icon="info" label="Group info" tip="Group info" onClick={onOpenInfo} />
         </>
-      )}
+      ) : null}
     </header>
   );
 }
 
 /** "You're offline. Messages send when you're back." */
-export function OfflineBanner() {
+function OfflineBanner() {
   return (
-    <output className="offl">
+    <output className="offline-banner">
       <Icon name="wifiOff" />
       <span>You're offline. Messages send when you're back.</span>
     </output>
-  );
-}
-
-export function EmptyState({
-  icon,
-  title,
-  children,
-}: {
-  readonly icon: "users" | "ban";
-  readonly title?: string;
-  readonly children: React.ReactNode;
-}) {
-  return (
-    <div className="center">
-      <span className="ebadge">
-        <Icon name={icon} />
-      </span>
-      {title === undefined ? null : <h2>{title}</h2>}
-      {children}
-    </div>
   );
 }
 
@@ -106,7 +102,7 @@ export function ChatView({
       <>
         <ChatHeader group={group} onOpenInfo={onOpenInfo} onSearchGroup={onSearchGroup} />
         <div className="center">
-          <span className="ebadge">
+          <span className="empty-badge">
             <Icon name="ban" />
           </span>
           <h2>You were removed from this group</h2>

@@ -33,7 +33,7 @@ interface NotificationsPopoverProps {
 }
 
 /** The three notification choices for one group, anchored under the Notifications row. */
-export function NotificationsPopover({
+function NotificationsPopover({
   title,
   value,
   anchor,
@@ -73,44 +73,198 @@ interface GroupInfoProps {
   readonly onLeave: () => void;
 }
 
-/**
- * The right-hand panel. A group shows quick actions, notifications, members,
- * the invite link and Leave; a pair shows only the partner's email and the
- * notification settings; a removed viewer sees only a note.
- */
-export function GroupInfo(props: GroupInfoProps) {
-  const {
-    group,
-    onClose,
-    onAddPeople,
-    onCopyLink,
-    linkCopied,
-    onSearch,
-    notificationsOpen,
-    onNotificationsOpenChange,
-    onNotifyChange,
-    onMessageMember,
-    onRemoveMember,
-    onLeave,
-  } = props;
-  const [notifyRow, setNotifyRow] = useState<HTMLButtonElement | null>(null);
-
-  const head = (
-    <div className="ihead">
+function InfoHead({ onClose }: { readonly onClose: () => void }) {
+  return (
+    <div className="info-head">
       <span>Group info</span>
       <IconButton icon="x" label="Close group info" onClick={onClose} />
     </div>
   );
+}
 
+function InfoHero({ group }: { readonly group: GroupDetail | RemovedGroup }) {
+  return (
+    <div className="info-hero">
+      <Avatar avatar={group.avatar} size="xl" />
+      <h3>{group.title}</h3>
+      {group.status === "member" ? (
+        <p>{group.kind === "pair" ? group.partner?.email : `${group.memberCount} members`}</p>
+      ) : null}
+    </div>
+  );
+}
+
+function QuickActions({
+  onAddPeople,
+  onCopyLink,
+  onSearch,
+}: Pick<GroupInfoProps, "onAddPeople" | "onCopyLink" | "onSearch">) {
+  return (
+    <div className="iqa">
+      <button type="button" onClick={onAddPeople}>
+        <Icon name="userPlus" />
+        Add people
+      </button>
+      <button type="button" onClick={onCopyLink}>
+        <Icon name="link" />
+        Invite link
+      </button>
+      <button type="button" onClick={onSearch}>
+        <Icon name="search" />
+        Search
+      </button>
+    </div>
+  );
+}
+
+/** The current notification mode as a row that opens the popover, and the quick mute switch. */
+function NotificationSection({
+  title,
+  mode,
+  open,
+  onOpenChange,
+  onChange,
+}: {
+  readonly title: string;
+  readonly mode: NotifyMode;
+  readonly open: boolean;
+  readonly onOpenChange: (open: boolean) => void;
+  readonly onChange: (mode: NotifyMode) => void;
+}) {
+  const [row, setRow] = useState<HTMLButtonElement | null>(null);
+  return (
+    <>
+      <div className="info-section">
+        <h4>Notifications</h4>
+        <button
+          ref={setRow}
+          type="button"
+          className="info-row"
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          onClick={() => onOpenChange(true)}
+        >
+          <Icon name={NOTIFY_ICON[mode]} />
+          <span className="it">
+            {NOTIFY_LABEL[mode]}
+            <small>{NOTIFY_DESCRIPTION[mode]}</small>
+          </span>
+          <span className="chevron">
+            <Icon name="chevron" />
+          </span>
+        </button>
+        <SwitchRow
+          icon="bellOff"
+          label="Mute this group"
+          checked={mode === "muted"}
+          onChange={(muted) => onChange(muted ? "muted" : "mentions")}
+        />
+      </div>
+      {open ? (
+        <NotificationsPopover
+          title={title}
+          value={mode}
+          anchor={row}
+          onClose={() => onOpenChange(false)}
+          onChange={onChange}
+        />
+      ) : null}
+    </>
+  );
+}
+
+function MemberRow({
+  member,
+  onMessage,
+  onRemove,
+}: {
+  readonly member: Member;
+  readonly onMessage: (member: Member) => void;
+  readonly onRemove: (member: Member) => void;
+}) {
+  return (
+    <div className="mrow">
+      <Avatar avatar={member.avatar} size="sm" />
+      <span className="nm">
+        <b>{member.isYou ? `${member.fullName} (you)` : member.fullName}</b>
+        <small>{member.email}</small>
+      </span>
+      {member.isYou ? null : (
+        <span className="ma">
+          <button type="button" className="member-button" onClick={() => onMessage(member)}>
+            Message
+          </button>
+          <button type="button" className="member-button danger" onClick={() => onRemove(member)}>
+            Remove
+          </button>
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** Members, the invite link and Leave: the parts a pair does not have. */
+function GroupSections({
+  group,
+  linkCopied,
+  onAddPeople,
+  onCopyLink,
+  onMessageMember,
+  onRemoveMember,
+  onLeave,
+}: Pick<
+  GroupInfoProps,
+  "linkCopied" | "onAddPeople" | "onCopyLink" | "onMessageMember" | "onRemoveMember" | "onLeave"
+> & { readonly group: GroupDetail }) {
+  return (
+    <>
+      <div className="info-section">
+        <h4>{group.memberCount} members</h4>
+        <button type="button" className="info-row" onClick={onAddPeople}>
+          <Icon name="userPlus" />
+          <span className="it">Add people</span>
+        </button>
+        {group.members.map((member) => (
+          <MemberRow
+            key={member.id}
+            member={member}
+            onMessage={onMessageMember}
+            onRemove={onRemoveMember}
+          />
+        ))}
+      </div>
+      <div className="info-section">
+        <h4>Invite link</h4>
+        <LinkBox
+          url={`chat.q9labs.ai/join/${group.inviteToken ?? ""}`}
+          copied={linkCopied}
+          onCopy={onCopyLink}
+        />
+        <p className="note">Anyone with the link can join and read the whole group.</p>
+      </div>
+      <div className="info-section">
+        <button type="button" className="info-row danger" onClick={onLeave}>
+          <Icon name="logout" />
+          <span className="it">Leave group</span>
+        </button>
+      </div>
+    </>
+  );
+}
+
+/**
+ * The Group info panel at the inline end. A group shows quick actions, notifications, members,
+ * the invite link and Leave; a pair shows only the partner's email and the
+ * notification settings; a removed viewer sees only a note.
+ */
+export function GroupInfo(props: GroupInfoProps) {
+  const { group, onClose, notificationsOpen, onNotificationsOpenChange, onNotifyChange } = props;
   if (group.status === "removed") {
     return (
       <>
-        {head}
-        <div className="ibody">
-          <div className="ihero">
-            <Avatar avatar={group.avatar} size="xl" />
-            <h3>{group.title}</h3>
-          </div>
+        <InfoHead onClose={onClose} />
+        <div className="info-body">
+          <InfoHero group={group} />
           <p className="note" style={{ textAlign: "center" }}>
             You were removed from this group.
           </p>
@@ -118,123 +272,22 @@ export function GroupInfo(props: GroupInfoProps) {
       </>
     );
   }
-
   const pair = group.kind === "pair";
-  const mode = group.notify;
   return (
     <>
-      {head}
-      <div className="ibody">
-        <div className="ihero">
-          <Avatar avatar={group.avatar} size="xl" />
-          <h3>{group.title}</h3>
-          <p>{pair ? group.partner?.email : `${group.memberCount} members`}</p>
-        </div>
-        {pair ? null : (
-          <div className="iqa">
-            <button type="button" onClick={onAddPeople}>
-              <Icon name="userPlus" />
-              Add people
-            </button>
-            <button type="button" onClick={onCopyLink}>
-              <Icon name="link" />
-              Invite link
-            </button>
-            <button type="button" onClick={onSearch}>
-              <Icon name="search" />
-              Search
-            </button>
-          </div>
-        )}
-        <div className="isec">
-          <h4>Notifications</h4>
-          <button
-            ref={setNotifyRow}
-            type="button"
-            className="irow"
-            aria-haspopup="dialog"
-            aria-expanded={notificationsOpen}
-            onClick={() => onNotificationsOpenChange(true)}
-          >
-            <Icon name={NOTIFY_ICON[mode]} />
-            <span className="it">
-              {NOTIFY_LABEL[mode]}
-              <small>{NOTIFY_DESCRIPTION[mode]}</small>
-            </span>
-            <span className="chev">
-              <Icon name="chev" />
-            </span>
-          </button>
-          <SwitchRow
-            icon="bellOff"
-            label="Mute this group"
-            checked={mode === "muted"}
-            onChange={(muted) => onNotifyChange(muted ? "muted" : "mentions")}
-          />
-        </div>
-        {pair ? null : (
-          <>
-            <div className="isec">
-              <h4>{group.memberCount} members</h4>
-              <button type="button" className="irow" onClick={onAddPeople}>
-                <Icon name="userPlus" />
-                <span className="it">Add people</span>
-              </button>
-              {group.members.map((member) => (
-                <div key={member.id} className="mrow">
-                  <Avatar avatar={member.avatar} size="sm" />
-                  <span className="nm">
-                    <b>{member.isYou ? `${member.fullName} (you)` : member.fullName}</b>
-                    <small>{member.email}</small>
-                  </span>
-                  {member.isYou ? null : (
-                    <span className="ma">
-                      <button
-                        type="button"
-                        className="mbtn"
-                        onClick={() => onMessageMember(member)}
-                      >
-                        Message
-                      </button>
-                      <button
-                        type="button"
-                        className="mbtn danger"
-                        onClick={() => onRemoveMember(member)}
-                      >
-                        Remove
-                      </button>
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-            <div className="isec">
-              <h4>Invite link</h4>
-              <LinkBox
-                url={`chat.q9labs.ai/join/${group.inviteToken ?? ""}`}
-                copied={linkCopied}
-                onCopy={onCopyLink}
-              />
-              <p className="note">Anyone with the link can join and read the whole group.</p>
-            </div>
-            <div className="isec">
-              <button type="button" className="irow danger" onClick={onLeave}>
-                <Icon name="logout" />
-                <span className="it">Leave group</span>
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-      {notificationsOpen ? (
-        <NotificationsPopover
+      <InfoHead onClose={onClose} />
+      <div className="info-body">
+        <InfoHero group={group} />
+        {pair ? null : <QuickActions {...props} />}
+        <NotificationSection
           title={group.title}
-          value={mode}
-          anchor={notifyRow}
-          onClose={() => onNotificationsOpenChange(false)}
+          mode={group.notify}
+          open={notificationsOpen}
+          onOpenChange={onNotificationsOpenChange}
           onChange={onNotifyChange}
         />
-      ) : null}
+        {pair ? null : <GroupSections {...props} group={group} />}
+      </div>
     </>
   );
 }

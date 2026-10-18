@@ -50,20 +50,20 @@ function eventNodes(event: MemberEvent): ReactNode {
 }
 
 /** A quiet centered line for group events: "Shoaib removed Omar". */
-export function SystemLine({ message }: { readonly message: EventView }) {
+function SystemLine({ message }: { readonly message: EventView }) {
   return <div className="sys">{eventNodes(message.event)}</div>;
 }
 
 /** Who is typing, with the three-dot pulse. Three or more collapse to a count. */
-export function TypingLine({ names: typers }: { readonly names: readonly string[] }) {
-  const [first, second] = typers;
+function TypingLine({ names: people }: { readonly names: readonly string[] }) {
+  const [first, second] = people;
   if (first === undefined) return null;
   const text =
-    typers.length === 1
+    people.length === 1
       ? `${first} is typing`
-      : typers.length === 2 && second !== undefined
+      : people.length === 2 && second !== undefined
         ? `${first} and ${second} are typing`
-        : `${typers.length} people are typing`;
+        : `${people.length} people are typing`;
   return (
     <output className="typing">
       <span className="dots" aria-hidden="true">
