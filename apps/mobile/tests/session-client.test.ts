@@ -22,6 +22,7 @@ const RequestBody = Schema.Struct({
 });
 type Body = typeof RequestBody.Type;
 const SavedAttempt = Schema.Struct({ state: Schema.String, expiresAt: Schema.Number });
+const SavedEmail = Schema.Struct({ email: Schema.String, expiresAt: Schema.Number });
 type Pending = {
   path: string;
   body: Body;
@@ -612,4 +613,88 @@ void test("the auth window and the deep-link route deliver the same link and sha
   await Promise.all([route, signingIn]);
   assert.equal(accessTokenOf(client), "access-oauth");
   assert.equal(exchanges(worker).length, 1);
+});
+
+const startsEmailWithCookie = (worker: ReturnType<typeof createWorker>) => {
+  worker.auto("email/start", () =>
+    json({}, 200, { "set-cookie": "q9_email=email-transaction-1; Path=/; HttpOnly" }),
+  );
+  worker.auto("email/verify", () => json(phoneSession("b")));
+};
+
+void test("an old OAuth attempt cannot switch accounts after an email sign-in", async () => {
+  const { worker, keychain, restart, client, authWindow } = harness({});
+  startsEmailWithCookie(worker);
+  void client.startOAuth("google").catch(() => {});
+  const state = (await authWindow(0)).url.searchParams.get("state") ?? "";
+  assert.notEqual(keychain.value("oauthAttempt"), null);
+
+  const restarted = restart();
+  await restarted.verifyEmail("b@example.net", "123456");
+  assert.equal(keychain.value("oauthAttempt"), null);
+
+  await assert.rejects(restarted.finishOAuth({ code: "old", state }), SignInIncompleteError);
+  assert.equal(
+    worker.log.filter((entry) => entry.path === "oauth/exchange" && entry.body.code).length,
+    0,
+  );
+  assert.equal(accessTokenOf(restarted), "access-b");
+  assert.equal(keychain.value("refreshToken"), "refresh-b");
+});
+
+void test("an OAuth sign-in ends a saved email attempt, and so does signing out", async () => {
+  const { worker, keychain, client, authWindow, returnLink } = harness({});
+  startsEmailWithCookie(worker);
+  await client.startEmail("b@example.net");
+  assert.notEqual(keychain.value("emailAttempt"), null);
+
+  const signingIn = client.startOAuth("google");
+  const opened = await authWindow(0);
+  opened.finish({ type: "success", url: returnLink(opened, "real") });
+  await signingIn;
+  assert.equal(keychain.value("emailAttempt"), null);
+
+  await client.startEmail("b@example.net");
+  worker.auto("sign-out", () => json({}));
+  await client.signOut();
+  assert.equal(keychain.value("emailAttempt"), null);
+});
+
+void test("a sent email code survives the app being killed: a new client resumes the screen and verifies it", async () => {
+  const { worker, keychain, restart, client } = harness({});
+  startsEmailWithCookie(worker);
+  await client.startEmail("b@example.net");
+  const saved = Schema.decodeUnknownSync(SavedEmail)(
+    JSON.parse(keychain.value("emailAttempt") ?? "null"),
+  );
+  assert.equal(saved.email, "b@example.net");
+  assert.ok(
+    saved.expiresAt > Date.now() + 9 * 60_000 && saved.expiresAt <= Date.now() + 10 * 60_000,
+  );
+
+  const restarted = restart();
+  assert.equal(await restarted.resumeEmail(), "b@example.net");
+  await restarted.verifyEmail("b@example.net", "123456");
+  assert.equal(accessTokenOf(restarted), "access-b");
+  assert.equal(
+    worker.log.findLast((entry) => entry.path === "email/verify")?.cookie,
+    "q9_email=email-transaction-1",
+  );
+  assert.equal(keychain.value("emailAttempt"), null);
+  assert.equal(await restart().resumeEmail(), null);
+});
+
+void test("a saved email code expires after ten minutes, and a different email discards it", async () => {
+  const { worker, keychain, restart, clock, client } = harness({});
+  startsEmailWithCookie(worker);
+  await client.startEmail("b@example.net");
+
+  clock.skewMs = 10 * 60_000 + 1_000;
+  assert.equal(await restart().resumeEmail(), null);
+
+  clock.skewMs = 0;
+  assert.equal(await restart().resumeEmail(), "b@example.net");
+  await client.discardEmail();
+  assert.equal(keychain.value("emailAttempt"), null);
+  assert.equal(await restart().resumeEmail(), null);
 });

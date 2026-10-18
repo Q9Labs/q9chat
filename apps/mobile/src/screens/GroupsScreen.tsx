@@ -17,7 +17,8 @@ import type { Avatar, GroupRow } from "../types";
 
 export type GroupsScreenProps = {
   me: Avatar;
-  rows: readonly GroupRow[];
+  /** The groups, or null while they have never loaded (the live connection is down). */
+  rows: readonly GroupRow[] | null;
   offline: boolean;
   /** Shown until the person answers; the OS permission dialog is the system's own. */
   showPermissionBanner: boolean;
@@ -56,7 +57,7 @@ export function GroupsScreen(props: GroupsScreenProps) {
       {props.showPermissionBanner ? (
         <PermissionBanner onNotNow={props.onNotNow} onTurnOn={props.onTurnOn} />
       ) : null}
-      {props.rows.length ? (
+      {props.rows?.length ? (
         <FlatList
           accessibilityLabel="Your groups"
           data={props.rows}
@@ -64,6 +65,12 @@ export function GroupsScreen(props: GroupsScreenProps) {
           contentContainerStyle={{ paddingHorizontal: 8 }}
           renderItem={renderRow}
           ListFooterComponent={<View style={{ height: Math.max(insets.bottom, 8) }} />}
+        />
+      ) : props.rows === null ? (
+        <CenterState
+          icon="wifiOff"
+          title="Can't connect"
+          text="Your groups will load when you're back online."
         />
       ) : (
         <CenterState

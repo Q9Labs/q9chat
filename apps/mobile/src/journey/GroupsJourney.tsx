@@ -31,11 +31,12 @@ export function GroupsJourney({ profile }: { profile: ReadyProfile }) {
     () => (groups ? groupRows(groups, config.siteUrl, today) : []),
     [groups, today],
   );
-  if (groups === undefined) return <Loading />;
+  // Until the first result arrives a spinner is right, unless the connection has been down for a while.
+  if (groups === undefined && !offline) return <Loading />;
   return (
     <GroupsScreen
       me={profileAvatar(profile, config.siteUrl)}
-      rows={rows}
+      rows={groups === undefined ? null : rows}
       offline={offline}
       showPermissionBanner={false}
       toast={toast}

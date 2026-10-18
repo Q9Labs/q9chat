@@ -255,7 +255,7 @@ export function CenterState({
   text,
   action,
 }: {
-  icon: "users" | "ban" | "mail";
+  icon: "users" | "ban" | "mail" | "wifiOff";
   title: string;
   text: string;
   action?: ReactNode;

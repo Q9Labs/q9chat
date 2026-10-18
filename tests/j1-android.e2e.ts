@@ -7,7 +7,7 @@ import { crc32, deflateSync } from "node:zlib";
 import { test } from "@e2e-dev/mobile";
 import { api } from "@q9chat/convex";
 import { ConvexHttpClient } from "convex/browser";
-import { expect, type Screen } from "e2e";
+import { expect } from "e2e";
 
 import { expectButtonHeights } from "./support/targets.js";
 import {
@@ -100,27 +100,11 @@ async function copyToClipboard(text: string) {
   }
 }
 
-// The text-selection toolbar is a system window that neither the app's accessibility tree nor a second
-// uiautomator client (the e2e engine already holds the only one) can see, so its Paste item is tapped by
-// position. On this 1080 x 2400 emulator the floating toolbar opens just above the code cells, and Paste is
-// 278 px right of the field's left edge and 36 px above its top edge (measured from a screenshot).
-async function startOf(field: ReturnType<Screen["getByLabel"]>) {
-  const box = await field.boundingBox();
-  if (!box) throw new Error("The code field has no bounding box");
-  return { x: Math.round(box.x + 6), y: Math.round(box.y + box.height / 2) };
-}
-
-// A long press at the left edge puts the cursor in front of the first digit and opens the toolbar.
-async function longPressAtStart(field: ReturnType<Screen["getByLabel"]>) {
-  const { x, y } = await startOf(field);
-  adbShell(`input swipe ${x} ${y} ${x} ${y} 900`);
-}
-
-async function tapPasteItem(field: ReturnType<Screen["getByLabel"]>) {
-  const box = await field.boundingBox();
-  if (!box) throw new Error("The code field has no bounding box");
-  shot("paste-toolbar");
-  adbShell(`input tap ${Math.round(box.x + 278)} ${Math.round(box.y - 36)}`);
+// The field hides its cursor handle and the selection toolbar is a system window the runner cannot read, so the
+// cursor goes to the start with the Home key and the paste is the keyboard's own Paste key, which reaches the same
+// native paste path as the toolbar. (A long press would select the digit instead, and a paste would replace it.)
+function pasteAtStart() {
+  adbShell("input keyevent KEYCODE_MOVE_HOME; sleep 0.5; input keyevent KEYCODE_PASTE");
 }
 
 function pngChunk(type: string, data: Buffer) {
@@ -200,6 +184,11 @@ test(
         Math.floor(44 * screenDensity()) - 1,
       );
       shot("02-code");
+      // The code was sent: killing the app and opening it again within ten minutes returns to this screen.
+      await openDevClient(device);
+      await expect(screen.getByText(`Enter the 6-digit code we sent to ${email}.`)).toBeVisible({
+        timeout: 120_000,
+      });
 
       await magicCode(email);
       await screen.getByText("send a new code").tap();
@@ -221,16 +210,14 @@ test(
       await codeField.pressSequentially(code.slice(4, 5));
       shot("02b-one-digit");
       await copyToClipboard(code.slice(0, 4));
-      await longPressAtStart(codeField);
-      await tapPasteItem(codeField);
+      pasteAtStart();
       await expect(codeField).toHaveValue(code.slice(0, 5));
       // The whole code pasted in front of a digit that is the code's own first digit: a paste that guesses what
       // was added reads "1234561" as "234561".
       await codeField.fill("");
       await codeField.pressSequentially(code.slice(0, 1));
       await copyToClipboard(code);
-      await longPressAtStart(codeField);
-      await tapPasteItem(codeField);
+      pasteAtStart();
 
       await expect(screen.getByRole("heading", "Set up your profile")).toBeVisible();
       await expect(
@@ -239,6 +226,20 @@ test(
         ),
       ).toBeVisible();
       firstAuthenticated = true;
+      // Setup has a way out for someone who signed in as the wrong person, with a 44 dp target.
+      await expectButtonHeights(
+        screen,
+        ["Not you? Sign out"],
+        Math.floor(44 * screenDensity()) - 1,
+      );
+      await screen.getByRole("button", "Not you? Sign out").tap();
+      await expect(screen.getByRole("button", "Email me a code")).toBeVisible();
+      await expect(screen.getByText("Signed out")).toBeVisible();
+      await screen.getByLabel("Email").fill(email);
+      await screen.getByRole("button", "Email me a code").tap();
+      await expect(screen.getByRole("heading", "Check your email")).toBeVisible();
+      await screen.getByLabel("6-digit code").pressSequentially(await magicCode(email));
+      await expect(screen.getByRole("heading", "Set up your profile")).toBeVisible();
       await screen.getByRole("textbox", "Your name").fill("");
       await expect(screen.getByRole("button", "Continue", { exact: true })).toBeDisabled();
       await screen.getByRole("textbox", "Your name").fill("Nadia Journey");
@@ -285,6 +286,11 @@ test(
       ).toBeVisible();
       await expect(screen.getByTestId("avatar-photo")).toBeVisible();
       shot("05-live-groups");
+      // Screens that still run on sample data are not reachable by a link: it lands on Groups.
+      await device.openLink("q9chat:///g/anything");
+      await expect(
+        screen.getByRole("button", "Journey live group, Sara: Welcome to the live group, 1 unread"),
+      ).toBeVisible();
 
       await screen.getByRole("button", "Account", { exact: true }).tap();
       await expect(screen.getByText("Signed in with")).toBeVisible();

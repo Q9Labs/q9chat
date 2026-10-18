@@ -236,6 +236,7 @@ export const STATES: GalleryState[] = [
         hasPhoto={false}
         onTogglePhoto={noop}
         onContinue={noop}
+        onSignOut={noop}
       />
     ),
   },
@@ -252,6 +253,7 @@ export const STATES: GalleryState[] = [
         hasPhoto
         onTogglePhoto={noop}
         onContinue={noop}
+        onSignOut={noop}
       />
     ),
   },
@@ -262,6 +264,21 @@ export const STATES: GalleryState[] = [
     title: "Groups, offline",
     group: "Groups",
     render: () => groupsScreen({ offline: true }),
+  },
+  {
+    id: "groups-offline-unloaded",
+    title: "Groups, offline before the first load",
+    group: "Groups",
+    render: () => (
+      <GroupsScreen
+        {...groupsHandlers}
+        me={avatarOf(ME)}
+        rows={null}
+        offline
+        showPermissionBanner={false}
+        toast={null}
+      />
+    ),
   },
   {
     id: "groups-long",

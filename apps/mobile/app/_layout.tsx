@@ -37,6 +37,9 @@ function Navigator() {
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.s0 } }}>
         <Stack.Protected guard={ready}>
           <Stack.Screen name="account" />
+        </Stack.Protected>
+        {/* Still backed by sample data until their journeys are wired: a link to them lands on Groups, never on fake groups. */}
+        <Stack.Protected guard={false}>
           <Stack.Screen name="g/[groupId]" />
           <Stack.Screen name="new-group" />
           <Stack.Screen name="search" />

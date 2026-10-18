@@ -1,7 +1,7 @@
 import { Either, Schema } from "effect";
 
-/** The three secrets the session keeps in the keychain, each under its own key. */
-export type StoreKey = "refreshToken" | "pendingRevoke" | "oauthAttempt";
+/** The secrets the session keeps in the keychain, each under its own key. */
+export type StoreKey = "refreshToken" | "pendingRevoke" | "oauthAttempt" | "emailAttempt";
 
 export type Store = {
   get: (key: StoreKey) => Promise<string | null>;
@@ -19,6 +19,14 @@ const Attempt = Schema.Struct({
   cookies: Schema.Array(Schema.Tuple(Schema.String, Schema.String)),
 });
 export type OAuthAttempt = typeof Attempt.Type;
+
+/** A code sent to this email, with the Worker's transaction cookie, so a restarted app can still verify it. */
+const EmailAttemptShape = Schema.Struct({
+  email: Schema.String,
+  expiresAt: Schema.Number,
+  cookies: Schema.Array(Schema.Tuple(Schema.String, Schema.String)),
+});
+export type EmailAttempt = typeof EmailAttemptShape.Type;
 
 /** How long a started sign-in may take to come back before it is dropped. */
 export const ATTEMPT_TTL_MS = 10 * 60 * 1000;
@@ -50,3 +58,14 @@ export async function readAttempt(store: Store, now: number): Promise<OAuthAttem
 
 export const writeAttempt = (store: Store, attempt: OAuthAttempt) =>
   store.set("oauthAttempt", JSON.stringify(attempt));
+
+/** The email whose code is still awaited, or null when there is none, it is unreadable, or it has expired. */
+export async function readEmailAttempt(store: Store, now: number): Promise<EmailAttempt | null> {
+  const decoded = Schema.decodeUnknownEither(EmailAttemptShape)(
+    parseJson(await store.get("emailAttempt")),
+  );
+  return Either.isRight(decoded) && decoded.right.expiresAt > now ? decoded.right : null;
+}
+
+export const writeEmailAttempt = (store: Store, attempt: EmailAttempt) =>
+  store.set("emailAttempt", JSON.stringify(attempt));

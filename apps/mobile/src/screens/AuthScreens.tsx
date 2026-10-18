@@ -388,6 +388,7 @@ export function ProfileScreen({
   hasPhoto,
   onTogglePhoto,
   onContinue,
+  onSignOut,
   notice,
 }: {
   email: string;
@@ -397,6 +398,7 @@ export function ProfileScreen({
   hasPhoto: boolean;
   onTogglePhoto: () => void;
   onContinue: () => void;
+  onSignOut: () => void;
   notice?: ToastNotice | null;
 }) {
   return (
@@ -428,6 +430,17 @@ export function ProfileScreen({
       <Note
         style={{ marginTop: 0 }}
       >{`Signed in as ${email}. Without a photo, people see your initials on your color.`}</Note>
+      <Press
+        accessibilityRole="button"
+        accessibilityLabel="Not you? Sign out"
+        onPress={onSignOut}
+        scaleTo={1}
+        style={{ minHeight: TOUCH_TARGET, justifyContent: "center", alignSelf: "flex-start" }}
+      >
+        <T size={12} weight={600} style={{ textDecorationLine: "underline" }}>
+          Not you? Sign out
+        </T>
+      </Press>
       <PillButton
         label="Continue"
         variant="solid"

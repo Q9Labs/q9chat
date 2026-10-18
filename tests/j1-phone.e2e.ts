@@ -179,6 +179,9 @@ test(
       // The two links are separate press targets, each at least 44 points tall.
       await expectButtonHeights(screen, ["send a new code", "Use a different email"], 44);
       await app.screenshot("02-code");
+      // The code was sent: killing the app and opening it again within ten minutes returns to this screen.
+      await app.restart();
+      await expect(screen.getByText(`Enter the 6-digit code we sent to ${email}.`)).toBeVisible();
 
       await magicCode(email);
       await screen.getByRole("button", "send a new code").tap();
@@ -224,6 +227,18 @@ test(
         ),
       ).toBeVisible();
       firstAuthenticated = true;
+      // Setup has a way out for someone who signed in as the wrong person, with a 44 point target.
+      await expectButtonHeights(screen, ["Not you? Sign out"], 44);
+      await screen.getByRole("button", "Not you? Sign out").tap();
+      await expect(screen.getByRole("button", "Email me a code")).toBeVisible();
+      await expect(screen.getByText("Signed out")).toBeVisible();
+      await enter(screen.getByLabel("Email"), email);
+      await screen.getByRole("button", "Email me a code").tap();
+      await expect(screen.getByText("Check your email")).toBeVisible();
+      await screen
+        .getByLabel("6-digit code")
+        .pressSequentially(await magicCode(email), { delay: 80 });
+      await expect(screen.getByText("Set up your profile")).toBeVisible();
       // The photo goes first: the keyboard's large accessibility tree makes the picker unreadable for the runner.
       await screen.getByRole("button", "Add a photo").tap();
       // The picker lists the library newest first, so the first photo is the one added at the start of this test.
@@ -269,6 +284,13 @@ test(
       ).toBeVisible();
       await expect(screen.getByTestId("avatar-photo")).toBeVisible();
       await app.screenshot("05-live-groups");
+      // Screens that still run on sample data are not reachable by a link: it lands on Groups.
+      await device.openLink("q9chat:///g/anything");
+      const openPrompt = screen.getByRole("button", "Open", { exact: true });
+      if (await openPrompt.isVisible()) await openPrompt.tap();
+      await expect(
+        screen.getByRole("button", "Journey live group, Sara: Welcome to the live group, 1 unread"),
+      ).toBeVisible();
 
       await screen.getByRole("button", "Account", { exact: true }).tap();
       await expect(screen.getByText("Signed in with")).toBeVisible();

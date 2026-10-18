@@ -8,6 +8,7 @@ import { ProfileScreen } from "../screens/AuthScreens";
 import { sessionClient, type Session } from "../session/client";
 import { MAX_NAME } from "./nameRules";
 import { photoNoticeOf, pickPhoto, type PickedPhoto, uploadPhoto } from "./photos";
+import { useSignOut } from "./SignOut";
 
 /** The `photoUploadId` field for the chosen photo, or nothing when there is none. */
 async function uploadedPhoto(photo: PickedPhoto | null) {
@@ -33,6 +34,7 @@ export function SetupJourney({
   const [photo, setPhoto] = useState<PickedPhoto | null>(null);
   const [toast, showToast] = useToast();
   const working = useRef(false);
+  const signOut = useSignOut();
 
   async function save() {
     const displayName = name.trim();
@@ -86,6 +88,7 @@ export function SetupJourney({
       hasPhoto={photo !== null}
       onTogglePhoto={() => void togglePhoto()}
       onContinue={() => void save()}
+      onSignOut={signOut.leave}
       notice={toast ? { text: toast } : null}
     />
   );

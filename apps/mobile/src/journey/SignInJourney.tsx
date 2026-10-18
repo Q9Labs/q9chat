@@ -48,6 +48,17 @@ export function SignInJourney() {
     if (notice) showToast(notice);
   }, [showToast]);
 
+  useEffect(() => {
+    // A code sent before the app was killed is still good for ten minutes: back to its screen.
+    let live = true;
+    void sessionClient.resumeEmail().then((saved) => {
+      if (live && saved) setCodeEmail(saved);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+
   async function sendCode(resend = false) {
     if (locked()) return;
     signOut.clear();
@@ -131,7 +142,9 @@ export function SignInJourney() {
       focusKey={focusKey}
       onResend={() => void sendCode(true)}
       onChangeEmail={() => {
-        if (!busy.current) setCodeEmail(null);
+        if (busy.current) return;
+        void sessionClient.discardEmail();
+        setCodeEmail(null);
       }}
       notice={notice}
     />

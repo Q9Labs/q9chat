@@ -19,8 +19,10 @@ import {
 import {
   ATTEMPT_TTL_MS,
   readAttempt,
+  readEmailAttempt,
   readPending,
   writeAttempt,
+  writeEmailAttempt,
   writePending,
   type OAuthAttempt,
   type Store,
@@ -233,12 +235,47 @@ export function createSessionClient(edges: SessionEdges) {
     return refresh();
   }
 
-  const startEmail = (email: string) => authApi.startEmail(email, jar, { timeoutMs });
+  /** A sign-in, by email or OAuth, ends every other attempt in the same step that adopts its session. */
+  async function signIn(next: PhoneSession) {
+    await store.delete("oauthAttempt");
+    await store.delete("emailAttempt");
+    await adopt(next);
+  }
+
+  /** Sends the code and saves the attempt with the Worker's email transaction cookie, so a restarted app can finish it. */
+  const startEmail = (email: string) =>
+    enqueue(async () => {
+      jar.delete("q9_email");
+      await request((options) => authApi.startEmail(email, jar, options));
+      await writeEmailAttempt(store, {
+        email,
+        expiresAt: edges.now() + ATTEMPT_TTL_MS,
+        cookies: [...jar].filter(([name]) => name === "q9_email"),
+      });
+    });
+
+  /** Puts the saved email cookie back in the jar and returns that email; null when nothing valid is saved, or it is for another email than the one named. */
+  async function restoreEmailCookie(email?: string) {
+    const saved = await readEmailAttempt(store, edges.now());
+    if (!saved || (email !== undefined && saved.email !== email)) return null;
+    for (const [name, value] of saved.cookies) jar.set(name, value);
+    return saved.email;
+  }
+
+  /** The email a code was sent to before the app was killed, when it is still within ten minutes; null otherwise. */
+  const resumeEmail = () => enqueue(() => restoreEmailCookie()).catch(() => null);
+
+  /** "Use a different email": forgets the code that was sent. */
+  const discardEmail = () => {
+    jar.delete("q9_email");
+    return enqueue(() => store.delete("emailAttempt")).catch(noop);
+  };
 
   const verifyEmail = (email: string, code: string) =>
     enqueue(async () => {
+      await restoreEmailCookie(email);
       const next = await request((options) => authApi.verifyEmail(email, code, jar, options));
-      await adopt(next);
+      await signIn(next);
     });
 
   /** Saves a started attempt, with the Worker's transaction cookie, so a restarted app can finish it. */
@@ -280,7 +317,7 @@ export function createSessionClient(edges: SessionEdges) {
       const next = await request((options) =>
         authApi.exchangeOAuthCode(params.code, attempt.verifier, jar, options),
       );
-      await adopt(next);
+      await signIn(next);
     } catch {
       throw new SignInIncompleteError();
     } finally {
@@ -330,6 +367,7 @@ export function createSessionClient(edges: SessionEdges) {
       await store.delete("refreshToken");
     }
     await store.delete("oauthAttempt");
+    await store.delete("emailAttempt");
   }
 
   /**
@@ -368,6 +406,8 @@ export function createSessionClient(edges: SessionEdges) {
     retry,
     fetchAccessToken,
     startEmail,
+    resumeEmail,
+    discardEmail,
     verifyEmail,
     startOAuth,
     finishOAuth,
