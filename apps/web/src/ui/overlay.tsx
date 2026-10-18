@@ -8,6 +8,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 
+import { Button } from "./controls.js";
 import { Icon, type IconName } from "./icons.js";
 import { useRoot } from "./root.js";
 
@@ -277,12 +278,23 @@ export function Popover({ label, anchor, onClose, children }: PopoverProps) {
 }
 
 /** A short status message, announced politely. The caller decides how long it stays. */
-export function Toast({ message }: { readonly message: string }) {
+export function Toast({
+  message,
+  action,
+}: {
+  readonly message: string;
+  readonly action?: { readonly label: string; readonly onClick: () => void };
+}) {
   return (
     <InRoot>
       <output className="toast enter">
         <Icon name="check" />
         <span>{message}</span>
+        {action ? (
+          <Button size="sm" onClick={action.onClick}>
+            {action.label}
+          </Button>
+        ) : null}
       </output>
     </InRoot>
   );

@@ -2,6 +2,9 @@ import { avatarColors, firstName, messageSummary, eventSentence } from "@q9chat/
 
 import type { Doc, Id } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
+export function profileAvatarColors(profile: Doc<"profiles"> | null, id: Id<"profiles">) {
+  return avatarColors(profile && profile.status !== "deleted" ? profile.authUserId : id);
+}
 export async function person(
   ctx: Pick<QueryCtx, "db">,
   id: Id<"profiles">,
@@ -18,7 +21,7 @@ export async function person(
     isYou: id === viewer,
     deleted,
     avatar: {
-      ...avatarColors(id),
+      ...profileAvatarColors(profile, id),
       initials: deleted
         ? ""
         : fullName

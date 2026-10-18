@@ -17,22 +17,22 @@ outcomes:
       - Add the four access classes (anyone, identity, active, member) that every public function goes through.
 
   - id: chat.sign_in_groups
-    title: Sign in and land in your groups
+    title: Sign in and land in groups
     area: groups
-    state: planned
-    summary: A Convex-managed WorkOS team and dev environment are connected to the dev deployment, and Convex trusts their tokens. The sign-in endpoints, the profile setup and the groups list are not built yet.
+    state: in_progress
+    summary: Web email sign-in, profile setup, live groups and Account are wired to the dev backend. Phone sign-in and browser checks of Google and Apple remain.
     theory: theory.md#version-1-journeys
     code:
-      - convex/auth.config.ts
-      - apps/web/src/lib/convex.ts
+      - apps/web/src/journey/journey.tsx
+      - apps/web/src/lib/session.tsx
+      - convex/profiles.ts
+      - convex/groups.ts
     priority: P0
     size: M
-    size_reason: WorkOS setup, profile creation on first sign-in, phone sign-in and the groups list on both apps.
+    size_reason: Phone sign-in and group landing still need their own implementation and verification.
     remaining:
-      - Enable email code, Google and Apple sign-in in the dev WorkOS environment and build the sign-in endpoints on the web Worker.
-      - Create a person's profile on first sign-in.
-      - Sign in on the phone.
-      - Show the person's groups sorted by latest activity with unread counts.
+      - Sign in on the phone and land in the person's groups.
+      - Verify Google and Apple click-through in the browser.
 
   - id: chat.create_groups
     title: Create a group or start a group of two

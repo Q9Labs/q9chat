@@ -21,7 +21,7 @@
     "dev:stop": "q9 dev stop",
     "web:dev": "pnpm --filter @q9chat/web run dev",
     "build": "turbo run build",
-    "typecheck": "pnpm run typecheck:convex && turbo run typecheck",
+    "typecheck": "pnpm run typecheck:convex && turbo run typecheck && pnpm run typecheck:e2e",
     "typecheck:convex": "tsc --noEmit -p convex/tsconfig.json",
     "lint": "oxlint --type-aware .",
     "format": "oxfmt --write .",
@@ -35,15 +35,19 @@
     "convex:dev": "convex dev",
     "convex:deploy": "convex deploy",
     "convex:codegen": "convex codegen",
-    "test:backend": "vitest run --config convex/vitest.config.ts"
+    "test:backend": "vitest run --config convex/vitest.config.ts",
+    "test:e2e": "e2e run",
+    "typecheck:e2e": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@q9chat/convex": "workspace:*",
     "@q9chat/domain": "workspace:*",
     "convex": "catalog:",
     "effect": "catalog:",
     "web-push": "3.6.7"
   },
   "devDependencies": {
+    "@e2e-dev/web": "0.15.1",
     "@q9labsai/cli": "catalog:",
     "@q9labsai/config-depcruise": "catalog:",
     "@q9labsai/config-oxlint": "catalog:",
@@ -55,6 +59,7 @@
     "convex-test": "0.0.62",
     "cspell": "catalog:",
     "dependency-cruiser": "catalog:",
+    "e2e": "0.21.1",
     "fallow": "catalog:",
     "lefthook": "catalog:",
     "oxfmt": "catalog:",
