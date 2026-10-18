@@ -8,6 +8,7 @@ import { Timeline } from "../chat/timeline-view.js";
 import type { Author, MemberEvent, MessageView } from "../chat/types.js";
 import { Button } from "../ui/controls.js";
 import { Dialog, DialogActions } from "../ui/overlay.js";
+import { useArrivalAnnouncement } from "./arrival-announcement.js";
 import { journeyError } from "./group-errors.js";
 import { usePhotos } from "./photos.js";
 
@@ -241,31 +242,11 @@ interface Opening {
   readonly read: number;
   readonly latest: number;
   readonly at: number;
-}
-
-function useOpeningBoundary(range: ReturnType<typeof useHistoryRange>, opened: Opening) {
-  const [boundary, setBoundary] = useState<number | null>();
-  if (range.loading || boundary !== undefined) return boundary;
-  const incoming = range.rows.find(
-    (row) =>
-      row.sequence > opened.read &&
-      row.sequence <= opened.latest &&
-      row.kind !== "event" &&
-      !row.author.isYou,
-  );
-  if (incoming) {
-    setBoundary(incoming.sequence);
-    return incoming.sequence;
-  }
-  if ((range.rows.at(-1)?.sequence ?? 0) >= opened.latest) {
-    setBoundary(null);
-    return null;
-  }
-  return boundary;
+  readonly firstUnread: number | null;
 }
 
 function initialWindow(opened: Opening): HistoryWindow {
-  const page = pageOf(Math.min(opened.read + 1, opened.latest));
+  const page = pageOf(opened.firstUnread ?? opened.latest);
   return { first: Math.max(0, page - 1), last: Math.min(pageOf(opened.latest), page + 1) };
 }
 function moveWindow(
@@ -290,10 +271,26 @@ function sequenceInWindow(rows: readonly Row[], boundary: number | null | undefi
     ? boundary
     : null;
 }
-function useLoadedRows(range: ReturnType<typeof useHistoryRange>) {
-  // Keep the current DOM until a replacement page is ready, so its visible anchor survives.
-  const [display, setDisplay] = useState<readonly Row[] | null>(null);
-  if (!range.loading && display !== range.rows) setDisplay(range.rows);
+function containsSequence(window: HistoryWindow, sequence: number) {
+  return pageOf(sequence) >= window.first && pageOf(sequence) <= window.last;
+}
+function sameWindow(left: HistoryWindow, right: HistoryWindow) {
+  return left.first === right.first && left.last === right.last;
+}
+function useLoadedRows(
+  range: ReturnType<typeof useHistoryRange>,
+  window: HistoryWindow,
+  anchor: number | null,
+  replacement: boolean,
+) {
+  // Retain the DOM until a ready destination contains the reader's current anchor.
+  const [display, setDisplay] = useState<{
+    readonly rows: readonly Row[];
+    readonly window: HistoryWindow;
+  } | null>(null);
+  const allowed = replacement || anchor === null || containsSequence(window, anchor);
+  if (!range.loading && allowed && display?.rows !== range.rows)
+    setDisplay({ rows: range.rows, window });
   return display;
 }
 function historyControls({
@@ -301,48 +298,91 @@ function historyControls({
   latestPage,
   loading,
   setWindow,
+  onNavigate,
 }: {
   readonly window: HistoryWindow;
   readonly latestPage: number;
   readonly loading: boolean;
   readonly setWindow: (window: HistoryWindow) => void;
+  readonly onNavigate: (replacement: boolean) => void;
 }) {
   const changePage = (direction: "older" | "newer") => {
-    if (!loading) setWindow(moveWindow(window, direction, latestPage));
+    if (!loading) {
+      onNavigate(false);
+      setWindow(moveWindow(window, direction, latestPage));
+    }
   };
   return {
     older: window.first > 0 ? () => changePage("older") : undefined,
     newer: window.last < latestPage ? () => changePage("newer") : undefined,
-    latest: () => setWindow({ first: Math.max(0, latestPage - 1), last: latestPage }),
+    latest: () => {
+      onNavigate(true);
+      setWindow({ first: Math.max(0, latestPage - 1), last: latestPage });
+    },
   };
+}
+function retainedWindow(
+  display: ReturnType<typeof useLoadedRows>,
+  requested: HistoryWindow,
+  anchor: number | null,
+  replace: boolean,
+) {
+  if (!display || replace || anchor === null || containsSequence(requested, anchor)) return null;
+  return sameWindow(requested, display.window) ? null : display.window;
+}
+function followsLatest(window: HistoryWindow, latestPage: number, atBottom: boolean) {
+  return atBottom && window.last === latestPage;
+}
+function displayedHistory(display: ReturnType<typeof useLoadedRows>, window: HistoryWindow) {
+  return {
+    rows: display?.rows ?? [],
+    start: (display?.window.first ?? window.first) * HISTORY_PAGE_SIZE + 1,
+  };
+}
+function canFollowLatest(window: HistoryWindow, previousLatest: number, atBottom: boolean) {
+  return atBottom && window.last >= previousLatest;
 }
 function useHistory(group: Group, opened: Opening) {
   const latestPage = pageOf(group.lastSequence);
   const [window, setWindow] = useState(() => initialWindow(opened));
   const [atBottom, setAtBottom] = useState(false);
+  const [anchor, setAnchor] = useState<number | null>(null);
+  const [replacement, setReplacement] = useState(false);
+  const [navigation, setNavigation] = useState(0);
   const [previousLatest, setPreviousLatest] = useState(latestPage);
   if (previousLatest !== latestPage) {
     setPreviousLatest(latestPage);
-    if (atBottom && window.last >= previousLatest)
+    if (canFollowLatest(window, previousLatest, atBottom))
       setWindow({
         first: Math.max(window.first, latestPage - MAX_LIVE_HISTORY_PAGES + 1),
         last: latestPage,
       });
   }
   const range = useHistoryRange(group, window);
-  const display = useLoadedRows(range);
-  const rows = display ?? [];
-  const boundary = useOpeningBoundary(range, opened);
-  if (!range.loading && boundary === undefined)
-    setWindow({ first: window.last + 1, last: window.last + 1 });
+  const replace = replacement || followsLatest(window, latestPage, atBottom);
+  const display = useLoadedRows(range, window, anchor, replace);
+  const { rows, start } = displayedHistory(display, window);
+  if (replacement && !range.loading) setReplacement(false);
+  const retained = retainedWindow(display, window, anchor, replace);
+  if (retained) setWindow(retained);
   return {
     rows,
     loading: range.loading,
-    ready: boundary !== undefined,
-    start: window.first * HISTORY_PAGE_SIZE + 1,
-    sequence: sequenceInWindow(rows, boundary),
-    ...historyControls({ window, latestPage, loading: range.loading, setWindow }),
+    start,
+    sequence: sequenceInWindow(rows, opened.firstUnread),
+    ...historyControls({
+      window,
+      latestPage,
+      loading: range.loading,
+      setWindow,
+      onNavigate: (intentionalReplacement) => {
+        setReplacement(intentionalReplacement);
+        setNavigation((value) => value + 1);
+      },
+    }),
     setAtBottom,
+    setAnchor,
+    navigation,
   };
 }
 
@@ -356,14 +396,17 @@ function historyPhotoPaths(rows: readonly Row[]) {
 export function History({
   group,
   onMessage,
+  covered,
 }: {
   readonly group: Group;
+  readonly covered: boolean;
   readonly onMessage: (id: Person["id"]) => void;
 }) {
   const [opened] = useState(() => ({
     read: group.lastReadSequence,
     latest: group.lastSequence,
     at: Date.now(),
+    firstUnread: group.firstUnreadSequence,
   }));
   const {
     rows,
@@ -373,7 +416,8 @@ export function History({
     newer,
     latest,
     setAtBottom,
-    ready,
+    setAnchor,
+    navigation,
     sequence: newFromSequence,
   } = useHistory(group, opened);
   const [selectedAuthor, setAuthor] = useState<Person | null>(null);
@@ -381,11 +425,12 @@ export function History({
   const { photos } = usePhotos(historyPhotoPaths(rows), setError);
   const typing = useTyping(group);
   const seen = useRead(group, opened.read, setError);
+  const announcement = useArrivalAnnouncement(rows, group.lastSequence, opened.latest, navigation);
   const messages = historyMessages(rows, group, photos, start, opened.at);
   return (
     <>
       {error ? <p role="alert">{error}</p> : null}
-      {ready && (rows.length || !loading) ? (
+      {rows.length || !loading ? (
         <Timeline
           messages={messages}
           newFromSequence={newFromSequence}
@@ -397,7 +442,10 @@ export function History({
           playing={null}
           readOnly
           reading={{
-            onVisible: (sequence) => void seen(sequence),
+            onVisible:
+              covered || selectedAuthor !== null ? undefined : (sequence) => void seen(sequence),
+            onAnchor: setAnchor,
+            announcement,
             onOlder: older,
             onNewer: newer,
             onLatest: latest,

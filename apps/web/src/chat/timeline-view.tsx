@@ -65,7 +65,11 @@ function eventNodes(event: MemberEvent): ReactNode {
 
 /** A quiet centered line for group events: "Shoaib removed Omar". */
 function SystemLine({ message }: { readonly message: EventView }) {
-  return <div className="sys">{eventNodes(message.event)}</div>;
+  return (
+    <div className="sys" id={`m-${message.id}`} data-sequence={message.sequence}>
+      {eventNodes(message.event)}
+    </div>
+  );
 }
 
 /** Who is typing, with the three-dot pulse. Three or more collapse to a count. */
@@ -96,6 +100,8 @@ interface TimelineReading {
   readonly onNewer: (() => void) | undefined;
   readonly onLatest: (() => void) | undefined;
   readonly onAtBottom: ((bottom: boolean) => void) | undefined;
+  readonly onAnchor: ((sequence: number) => void) | undefined;
+  readonly announcement: { readonly id: string; readonly text: string };
   readonly loading: boolean;
 }
 const STATIC_READING: TimelineReading = {
@@ -104,6 +110,8 @@ const STATIC_READING: TimelineReading = {
   onNewer: undefined,
   onLatest: undefined,
   onAtBottom: undefined,
+  onAnchor: undefined,
+  announcement: { id: "", text: "" },
   loading: false,
 };
 export interface TimelineProps {
@@ -236,6 +244,7 @@ export function Timeline({
     reading.onVisible,
     reading.loading,
     reading.onAtBottom,
+    reading.onAnchor,
   );
 
   const compact = useCompactTimeline(log);
@@ -250,6 +259,7 @@ export function Timeline({
         className="tl"
         role="log"
         aria-label="Messages"
+        aria-live="off"
         tabIndex={-1}
         aria-busy={reading.loading}
         onScroll={(event) =>
@@ -276,6 +286,11 @@ export function Timeline({
             readOnly={readOnly}
           />
         ))}
+      </div>
+      <div className="arrival-announcement" aria-live="polite" aria-atomic="true">
+        <span key={reading.announcement.id} data-arrival={reading.announcement.id}>
+          {reading.announcement.text}
+        </span>
       </div>
       <TypingLine names={typing} />
       <button

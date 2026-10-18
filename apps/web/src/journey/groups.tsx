@@ -440,12 +440,18 @@ function useInfoState(detail: Detail | undefined) {
   return { infoOpen: open && detail?.status === "member", setInfoOpen: setOpen };
 }
 
+function activeDisplay(detail: Detail | undefined, photos: ReadonlyMap<string, string>) {
+  return detail?.status === "member" ? displayGroup(detail, photos) : null;
+}
+
 export function useGroupJourney({
+  covered,
   token,
   selectedGroup,
   renderEmpty,
   onNotice,
 }: {
+  readonly covered: boolean;
   readonly token: string | undefined;
   readonly selectedGroup: Id<"groups"> | null;
   readonly renderEmpty: (onNewGroup: () => void) => ReactNode;
@@ -473,13 +479,14 @@ export function useGroupJourney({
       onNotice(journeyError(error, 1));
     }
   }
-  const group = detail?.status === "member" ? displayGroup(detail, photos) : null;
+  const group = activeDisplay(detail, photos);
   return {
     selected,
     open,
     newGroup: () => setPicker({ kind: "new" }),
     main: (
       <GroupWorkspace
+        covered={covered || picker !== null}
         empty={renderEmpty(() => setPicker({ kind: "new" }))}
         token={token}
         selected={selected}
@@ -516,6 +523,7 @@ export function useGroupJourney({
 }
 
 function GroupWorkspace({
+  covered,
   empty,
   token,
   selected,
@@ -527,6 +535,7 @@ function GroupWorkspace({
   photos,
   onUnavailable,
 }: {
+  readonly covered: boolean;
   readonly empty: ReactNode;
   readonly token: string | undefined;
   readonly selected: Id<"groups"> | null;
@@ -543,6 +552,7 @@ function GroupWorkspace({
   if (detail === undefined) return <output className="center">Loading…</output>;
   return (
     <LoadedGroup
+      covered={covered}
       detail={detail}
       photos={photos}
       onInfo={onInfo}
@@ -552,12 +562,14 @@ function GroupWorkspace({
   );
 }
 function LoadedGroup({
+  covered,
   detail,
   photos,
   onInfo,
   onMessage,
   onUnavailable,
 }: {
+  readonly covered: boolean;
   readonly detail: Detail;
   readonly photos: ReadonlyMap<string, string>;
   readonly onInfo: () => void;
@@ -576,7 +588,7 @@ function LoadedGroup({
   return (
     <>
       <ChatHeader group={group} onOpenInfo={onInfo} onSearchGroup={onUnavailable} />
-      <History key={detail.groupId} group={detail} onMessage={onMessage} />
+      <History key={detail.groupId} group={detail} covered={covered} onMessage={onMessage} />
     </>
   );
 }

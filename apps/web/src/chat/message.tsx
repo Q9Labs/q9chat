@@ -185,7 +185,11 @@ function DeletedMessage({
   readonly highlighted: boolean;
 }) {
   return (
-    <div className={messageClass(undefined, highlighted, false)} id={`m-${message.id}`}>
+    <div
+      className={messageClass(undefined, highlighted, false)}
+      id={`m-${message.id}`}
+      data-sequence={message.sequence}
+    >
       <div className="bub gone">
         <span className="del">
           <Icon name="ban" />
@@ -468,7 +472,11 @@ export function Message({
   }
   const sendState = message.sendState;
   return (
-    <div className={messageClass(sendState, highlighted, menuOpen)} id={`m-${message.id}`}>
+    <div
+      className={messageClass(sendState, highlighted, menuOpen)}
+      id={`m-${message.id}`}
+      data-sequence={message.sequence}
+    >
       <Bubble message={message} onOpenQuote={handlers.onOpenQuote} readOnly={readOnly} />
       {message.attachmentLabels?.map(({ id, label }) => (
         <div className="file" key={id}>

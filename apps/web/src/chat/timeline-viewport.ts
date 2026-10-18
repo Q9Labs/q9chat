@@ -5,6 +5,7 @@ import type { MessageView } from "./types.js";
 interface Anchor {
   readonly id: string;
   readonly offset: number;
+  readonly sequence: number;
 }
 interface Position {
   readonly first: string | undefined;
@@ -13,10 +14,14 @@ interface Position {
 }
 function visibleAnchor(el: HTMLDivElement): Anchor | null {
   const bounds = el.getBoundingClientRect();
-  for (const node of el.querySelectorAll<HTMLElement>(".msg")) {
+  for (const node of el.querySelectorAll<HTMLElement>("[data-sequence]")) {
     const rect = node.getBoundingClientRect();
     if (rect.bottom > bounds.top && rect.top < bounds.bottom)
-      return { id: node.id, offset: rect.top - bounds.top };
+      return {
+        id: node.id,
+        offset: rect.top - bounds.top,
+        sequence: Number(node.dataset["sequence"]),
+      };
   }
   return null;
 }
@@ -28,7 +33,6 @@ function restoreAnchor(el: HTMLDivElement, anchor: Anchor | null) {
       node.getBoundingClientRect().top - el.getBoundingClientRect().top - anchor.offset;
 }
 function scrollToLatest(el: HTMLDivElement) {
-  el.focus({ preventScroll: true });
   el.scrollTo({
     top: el.scrollHeight,
     behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
@@ -69,6 +73,7 @@ export function useTimelineViewport(
   onVisible: ((sequence: number) => void) | undefined,
   loading: boolean,
   onAtBottom: ((bottom: boolean) => void) | undefined,
+  onAnchor: ((sequence: number) => void) | undefined,
 ) {
   const log = useRef<HTMLDivElement>(null);
   const position = useRef<Position | null>(null);
@@ -83,26 +88,33 @@ export function useTimelineViewport(
   const jump = (onLatest: (() => void) | undefined) => {
     jumping.current = true;
     onLatest?.();
-    if (log.current) scrollToLatest(log.current);
+    if (log.current) {
+      log.current.focus({ preventScroll: true });
+      scrollToLatest(log.current);
+    }
   };
   useLayoutEffect((): (() => void) | undefined => {
     const el = log.current;
     if (!el) return () => {};
     const previous = position.current;
     const first = messages[0]?.id;
+    // Retained rows can receive live updates while the destination window loads.
+    if (jumping.current) {
+      if (!loading) scrollToLatest(el);
+    } else restorePosition(el, previous, first, paging.current);
     if (!loading) {
-      if (jumping.current) scrollToLatest(el);
-      else restorePosition(el, previous, first, paging.current);
       jumping.current = false;
       paging.current = false;
     }
     const remember = () => {
       const bottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      const anchor = visibleAnchor(el);
       position.current = {
         first,
         bottom: bottom <= 1,
-        anchor: visibleAnchor(el),
+        anchor,
       };
+      if (!jumping.current && anchor) onAnchor?.(anchor.sequence);
       setFar(bottom > 240);
       onAtBottom?.(bottom <= 1);
     };
