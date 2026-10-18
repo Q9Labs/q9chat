@@ -330,7 +330,8 @@
 .linkbox code {
   flex: 1;
   font:
-    13px Figtree,
+    13px "Figtree Variable",
+    Figtree,
     ui-sans-serif,
     system-ui,
     sans-serif;
@@ -431,7 +432,8 @@
 }
 .sbox kbd {
   font:
-    12px Figtree,
+    12px "Figtree Variable",
+    Figtree,
     ui-sans-serif,
     system-ui,
     sans-serif;
@@ -2281,7 +2283,8 @@
 }
 .sfoot2 kbd {
   font:
-    600 11px Figtree,
+    600 11px "Figtree Variable",
+    Figtree,
     ui-sans-serif,
     system-ui,
     sans-serif;
