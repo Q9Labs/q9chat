@@ -2,18 +2,8 @@ import { firstName, messageSummary } from "@q9chat/domain";
 import { v } from "convex/values";
 
 import { internalQuery } from "./_generated/server";
-import { memberships, membership } from "./lib/groups";
+import { membership } from "./lib/groups";
 import { groupDisplay } from "./lib/presentation";
-export const recipients = internalQuery({
-  args: { messageId: v.id("messages") },
-  handler: async (ctx, args) => {
-    const message = await ctx.db.get(args.messageId);
-    if (message?.kind !== "post") return [];
-    return (await memberships(ctx, message.groupId))
-      .filter((row) => row.profileId !== message.authorId)
-      .map((row) => row.profileId);
-  },
-});
 export const eligible = internalQuery({
   args: {
     messageId: v.id("messages"),

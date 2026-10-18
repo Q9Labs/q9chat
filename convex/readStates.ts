@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 
+import { internal } from "./_generated/api";
 import { mutation } from "./_generated/server";
 import { member, fail } from "./lib/access";
 import { readState } from "./lib/groups";
@@ -22,13 +23,11 @@ export const markRead = mutation({
     const state = await readState(ctx, args.groupId, profile._id);
     if (!state || state.lastReadSequence >= args.sequence) return null;
     await ctx.db.patch(state._id, { lastReadSequence: args.sequence });
-    const unread = await ctx.db
-      .query("unreadPosts")
-      .withIndex("by_profile_group_sequence", (q) =>
-        q.eq("profileId", profile._id).eq("groupId", args.groupId).lte("sequence", args.sequence),
-      )
-      .collect();
-    for (const row of unread) await ctx.db.delete(row._id);
+    await ctx.scheduler.runAfter(0, internal.cleanup.unread, {
+      profileId: profile._id,
+      groupId: args.groupId,
+      cutoff: args.sequence,
+    });
     return null;
   },
 });

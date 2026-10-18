@@ -66,6 +66,7 @@ export const setUp = action({
   handler: async (ctx, args): Promise<Id<"profiles">> => {
     const user = await identity(ctx);
     if (!args.displayName.trim()) return fail("name_required");
+    if (args.displayName.trim().length > 60) return fail("name_too_long");
     const result = await Effect.runPromiseExit(getUser(user.subject));
     if (result._tag === "Failure") return fail("account_unavailable");
     if (result.value.id !== user.subject || !result.value.email_verified)
@@ -102,11 +103,20 @@ export const update = mutation({
     const profile = await active(ctx);
     if (args.displayName !== undefined) {
       if (!args.displayName.trim()) return fail("name_required");
-      await ctx.db.patch(profile._id, { displayName: args.displayName.trim() });
+      if (args.displayName.trim().length > 60) return fail("name_too_long");
+      const displayName = args.displayName.trim();
+      await ctx.db.patch(profile._id, { displayName });
+      const memberships = await ctx.db
+        .query("memberships")
+        .withIndex("by_profile", (q) => q.eq("profileId", profile._id))
+        .collect();
+      await Promise.all(
+        memberships.map((row) => ctx.db.patch(row._id, { searchName: displayName.toLowerCase() })),
+      );
     }
     if (args.photoUploadId !== undefined) {
       const upload = args.photoUploadId
-        ? await consume(ctx, profile._id, args.photoUploadId)
+        ? await consume(ctx, profile._id, args.photoUploadId, "image")
         : null;
       if (upload && !imageTypes.has(upload.contentType)) return fail("bad_attachment");
       if (profile.photoStorageId) await ctx.storage.delete(profile.photoStorageId);
@@ -124,7 +134,6 @@ export const deleteAccount = mutation({
       status: "deleting",
       authUserId: profile.authUserId,
       requestedAt: Date.now(),
-      lastStepAt: Date.now(),
       ...(profile.photoStorageId ? { photoStorageId: profile.photoStorageId } : {}),
     });
     await ctx.scheduler.runAfter(0, internal.deletion.step, { profileId: profile._id });

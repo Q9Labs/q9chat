@@ -3,7 +3,8 @@ import { ConvexError } from "convex/values";
 
 import { internal } from "./_generated/api";
 import { httpAction } from "./_generated/server";
-import { MAX_BYTES, validContentType } from "./lib/uploads";
+import { sniff } from "./lib/sniff";
+import { MAX_BYTES } from "./lib/uploads";
 const origins = new Set(["http://localhost:3000", "https://chat.q9labs.ai"]);
 function cors(request: Request) {
   const headers = new Headers({ Vary: "Origin", "Cache-Control": "private" });
@@ -27,28 +28,33 @@ const upload = httpAction(async (ctx, request) => {
     return new Response(null, { status: 401, headers });
   try {
     const ownerId = await ctx.runQuery(internal.files.authorizeUpload, {});
-    const contentType =
-      request.headers.get("Content-Type")?.split(";")[0]?.trim().toLowerCase() ??
-      "application/octet-stream";
-    if (!validContentType(contentType))
-      return new Response(JSON.stringify({ code: "bad_attachment" }), { status: 415, headers });
     const declared = Number(request.headers.get("Content-Length"));
     if (declared > MAX_BYTES) return new Response(null, { status: 413, headers });
     if (!request.body) return new Response(null, { status: 400, headers });
     const reader: ReadableStreamDefaultReader<Uint8Array> = request.body.getReader();
     const chunks: Uint8Array<ArrayBuffer>[] = [];
     let size = 0;
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    let chunk = await reader.read();
+    while (!chunk.done) {
+      const value = chunk.value;
       size += value.byteLength;
       if (size > MAX_BYTES) {
         await reader.cancel();
         return new Response(null, { status: 413, headers });
       }
       chunks.push(new Uint8Array(value));
+      chunk = await reader.read();
     }
     if (size === 0) return new Response(null, { status: 400, headers });
+    const prefix = new Uint8Array(Math.min(size, 4096));
+    let offset = 0;
+    for (const part of chunks) {
+      const count = Math.min(part.length, prefix.length - offset);
+      prefix.set(part.subarray(0, count), offset);
+      offset += count;
+      if (offset === prefix.length) break;
+    }
+    const { kind, contentType } = sniff(prefix);
     const storageId = await ctx.storage.store(new Blob(chunks, { type: contentType }));
     try {
       const uploadId = await ctx.runMutation(internal.files.recordUpload, {
@@ -56,6 +62,7 @@ const upload = httpAction(async (ctx, request) => {
         storageId,
         contentType,
         size,
+        kind,
       });
       return new Response(JSON.stringify({ uploadId }), { status: 200, headers });
     } catch (error) {

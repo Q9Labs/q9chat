@@ -4,19 +4,11 @@ import { Effect } from "effect";
 import { internal } from "./_generated/api";
 import { internalAction, internalMutation, internalQuery } from "./_generated/server";
 import { event } from "./lib/groups";
+import { lowerCount } from "./lib/reactions";
 import { deleteUser } from "./lib/workos";
 export const current = internalQuery({
   args: { profileId: v.id("profiles") },
   handler: (ctx, args) => ctx.db.get(args.profileId),
-});
-export const touch = internalMutation({
-  args: { profileId: v.id("profiles") },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const profile = await ctx.db.get(args.profileId);
-    if (profile?.status === "deleting") await ctx.db.patch(profile._id, { lastStepAt: Date.now() });
-    return null;
-  },
 });
 export const step = internalAction({
   args: { profileId: v.id("profiles") },
@@ -24,7 +16,6 @@ export const step = internalAction({
   handler: async (ctx, args) => {
     const profile = await ctx.runQuery(internal.deletion.current, args);
     if (profile?.status !== "deleting") return null;
-    await ctx.runMutation(internal.deletion.touch, args);
     if (profile.signInAccountDeletedAt === undefined) {
       await Effect.runPromise(deleteUser(profile.authUserId));
       await ctx.runMutation(internal.deletion.workosDeleted, args);
@@ -41,7 +32,6 @@ export const workosDeleted = internalMutation({
     if (profile.signInAccountDeletedAt === undefined)
       await ctx.db.patch(profile._id, {
         signInAccountDeletedAt: Date.now(),
-        lastStepAt: Date.now(),
       });
     await ctx.scheduler.runAfter(0, internal.deletion.batch, args);
     return null;
@@ -53,7 +43,6 @@ export const batch = internalMutation({
   handler: async (ctx, args) => {
     const profile = await ctx.db.get(args.profileId);
     if (profile?.status !== "deleting" || profile.signInAccountDeletedAt === undefined) return null;
-    await ctx.db.patch(profile._id, { lastStepAt: Date.now() });
     const memberships = await ctx.db
       .query("memberships")
       .withIndex("by_profile", (q) => q.eq("profileId", profile._id))
@@ -76,7 +65,7 @@ export const batch = internalMutation({
       .take(100);
     const removals = await ctx.db
       .query("removals")
-      .withIndex("by_profile", (q) => q.eq("profileId", profile._id))
+      .withIndex("by_profile_dismissed", (q) => q.eq("profileId", profile._id))
       .take(100);
     const typing = await ctx.db
       .query("typing")
@@ -111,7 +100,8 @@ export const batch = internalMutation({
     if (rows.length) {
       for (const row of rows) {
         if ("storageId" in row) await ctx.storage.delete(row.storageId);
-        await ctx.db.delete(row._id);
+        if ("emoji" in row) await lowerCount(ctx, row);
+        else await ctx.db.delete(row._id);
       }
       await ctx.scheduler.runAfter(0, internal.deletion.batch, args);
       return null;
@@ -130,21 +120,23 @@ export const batch = internalMutation({
   },
 });
 export const supervise = internalMutation({
-  args: {},
+  args: { cursor: v.optional(v.union(v.string(), v.null())) },
   returns: v.null(),
-  handler: async (ctx) => {
+  handler: async (ctx, args) => {
     const profiles = await ctx.db
       .query("profiles")
-      .filter((q) => q.eq(q.field("status"), "deleting"))
-      .collect();
-    for (const profile of profiles)
-      if (
-        profile.status === "deleting" &&
-        (profile.lastStepAt ?? profile.requestedAt) <= Date.now() - 600000
-      ) {
-        await ctx.db.patch(profile._id, { lastStepAt: Date.now() });
-        await ctx.scheduler.runAfter(0, internal.deletion.step, { profileId: profile._id });
-      }
+      .paginate({ numItems: 100, cursor: args.cursor ?? null });
+    await Promise.all(
+      profiles.page
+        .filter((profile) => profile.status === "deleting")
+        .map((profile) =>
+          ctx.scheduler.runAfter(0, internal.deletion.step, { profileId: profile._id }),
+        ),
+    );
+    if (!profiles.isDone)
+      await ctx.scheduler.runAfter(0, internal.deletion.supervise, {
+        cursor: profiles.continueCursor,
+      });
     return null;
   },
 });

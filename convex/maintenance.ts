@@ -3,15 +3,18 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalMutation } from "./_generated/server";
 export const sweepTyping = internalMutation({
-  args: {},
+  args: { cursor: v.optional(v.union(v.string(), v.null())) },
   returns: v.null(),
-  handler: async (ctx) => {
+  handler: async (ctx, args) => {
     const rows = await ctx.db
       .query("typing")
       .withIndex("by_expiry", (q) => q.lte("expiresAt", Date.now()))
-      .take(100);
-    for (const row of rows) await ctx.db.delete(row._id);
-    if (rows.length === 100) await ctx.scheduler.runAfter(0, internal.maintenance.sweepTyping, {});
+      .paginate({ numItems: 100, cursor: args.cursor ?? null });
+    await Promise.all(rows.page.map((row) => ctx.db.delete(row._id)));
+    if (!rows.isDone)
+      await ctx.scheduler.runAfter(0, internal.maintenance.sweepTyping, {
+        cursor: rows.continueCursor,
+      });
     return null;
   },
 });

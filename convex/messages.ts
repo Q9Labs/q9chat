@@ -1,8 +1,8 @@
-import { messageSummary, parseMentions, reactionEmoji } from "@q9chat/domain";
-import { v } from "convex/values";
+import { messageSummary, parseMentions } from "@q9chat/domain";
+import { v, type Infer } from "convex/values";
 
 import { internal } from "./_generated/api";
-import { mutation, query } from "./_generated/server";
+import { action, mutation, query } from "./_generated/server";
 import { active, member, fail } from "./lib/access";
 import * as g from "./lib/groups";
 import * as p from "./lib/presentation";
@@ -30,6 +30,7 @@ export const send = mutation({
       if (previous.groupId !== args.groupId) return fail("client_key_reused");
       return { messageId: previous._id, sequence: previous.sequence };
     }
+    if (!args.clientKey || args.clientKey.length > 64) throw new Error("Invalid client key");
     if (args.body.length > 4000) return fail("message_too_long");
     const attachments = await consumeAttachments(ctx, profile._id, args.body, args.attachments);
     const reply = args.replyToId ? await ctx.db.get(args.replyToId) : null;
@@ -63,6 +64,7 @@ export const send = mutation({
       ...(args.replyToId ? { replyToId: args.replyToId } : {}),
       mentions,
       attachments,
+      reactionCounts: [],
     });
     for (const row of people) {
       if (row.profileId === profile._id) continue;
@@ -144,25 +146,16 @@ export const range = query({
                   author: await p.person(ctx, quote.authorId, profile._id),
                   summary: messageSummary(quote),
                 };
-        const rows = await ctx.db
+        const mine = await ctx.db
           .query("reactions")
-          .withIndex("by_message_profile", (q) => q.eq("messageId", message._id))
-          .collect();
-        const reactions = await Promise.all(
-          reactionEmoji
-            .filter((emoji) => rows.some((row) => row.emoji === emoji))
-            .map(async (emoji) => {
-              const matching = rows.filter((row) => row.emoji === emoji);
-              return {
-                emoji,
-                count: matching.length,
-                mine: matching.some((row) => row.profileId === profile._id),
-                people: await Promise.all(
-                  matching.slice(0, 10).map((row) => p.person(ctx, row.profileId, profile._id)),
-                ),
-              };
-            }),
-        );
+          .withIndex("by_message_profile", (q) =>
+            q.eq("messageId", message._id).eq("profileId", profile._id),
+          )
+          .unique();
+        const reactions = message.reactionCounts.map((item) => ({
+          ...item,
+          mine: mine?.emoji === item.emoji,
+        }));
         const attachments = message.attachments.map((file, index) => {
           const { storageId: _storageId, ...metadata } = file;
           return { ...metadata, url: `/files/${message._id}/${index}` };
@@ -218,11 +211,7 @@ export const remove = mutation({
       return fail("not_author");
     if (message.kind === "deleted") return null;
     for (const file of message.attachments) await ctx.storage.delete(file.storageId);
-    const reactions = await ctx.db
-      .query("reactions")
-      .withIndex("by_message_profile", (q) => q.eq("messageId", message._id))
-      .collect();
-    for (const row of reactions) await ctx.db.delete(row._id);
+    await ctx.scheduler.runAfter(0, internal.cleanup.reactions, { messageId: message._id });
     await ctx.db.replace(message._id, {
       kind: "deleted",
       groupId: message.groupId,
@@ -246,6 +235,17 @@ export const react = mutation({
         q.eq("messageId", args.messageId).eq("profileId", profile._id),
       )
       .unique();
+    const counts = message.reactionCounts.map((item) => ({ ...item }));
+    if (row?.emoji === args.emoji) return null;
+    if (row) {
+      const count = counts.find((item) => item.emoji === row.emoji);
+      if (count) count.count -= 1;
+    }
+    if (args.emoji) {
+      const count = counts.find((item) => item.emoji === args.emoji);
+      if (count) count.count += 1;
+      else counts.push({ emoji: args.emoji, count: 1 });
+    }
     if (args.emoji === null) {
       if (row) await ctx.db.delete(row._id);
     } else if (row) await ctx.db.patch(row._id, { emoji: args.emoji });
@@ -255,51 +255,65 @@ export const react = mutation({
         profileId: profile._id,
         emoji: args.emoji,
       });
+    await ctx.db.patch(message._id, { reactionCounts: counts.filter((item) => item.count > 0) });
+
     return null;
   },
 });
-export const search = query({
-  args: { query: v.string(), groupId: v.optional(v.id("groups")) },
+export const reactors = query({
+  args: { messageId: v.id("messages") },
   returns: v.array(
     v.object({
-      groupId: v.id("groups"),
-      groupTitle: v.string(),
-      sequence: v.number(),
-      author: validators.person,
-      createdAt: v.number(),
-      snippet: v.string(),
+      emoji: reactionEmojiValidator,
+      count: v.number(),
+      people: v.array(validators.person),
     }),
   ),
   handler: async (ctx, args) => {
+    const { profile, message } = await member(ctx, args);
+    if (message?.kind !== "post") return [];
+    return Promise.all(
+      message.reactionCounts.map(async (item) => {
+        const rows = await ctx.db
+          .query("reactions")
+          .withIndex("by_message_emoji", (q) =>
+            q.eq("messageId", message._id).eq("emoji", item.emoji),
+          )
+          .take(10);
+        return {
+          ...item,
+          people: await Promise.all(rows.map((row) => p.person(ctx, row.profileId, profile._id))),
+        };
+      }),
+    );
+  },
+});
+export const search = action({
+  args: { query: v.string(), groupId: v.optional(v.id("groups")) },
+  returns: v.array(validators.searchHit),
+  handler: async (ctx, args): Promise<Infer<typeof validators.searchHit>[]> => {
     const profile = await active(ctx);
+    if (args.query.length > 100) throw new Error("Query exceeds 100 characters");
     if (!args.query.trim()) return [];
-    const memberships = await ctx.db
-      .query("memberships")
-      .withIndex("by_profile", (q) => q.eq("profileId", profile._id))
-      .collect();
-    const hits = [];
-    for (const row of memberships) {
-      if (args.groupId && args.groupId !== row.groupId) continue;
-      const group = await ctx.db.get(row.groupId);
-      if (!group) continue;
-      const display = await p.groupDisplay(ctx, group, profile._id);
-      const results = await ctx.db
-        .query("messages")
-        .withSearchIndex("search_text", (q) =>
-          q.search("searchText", args.query).eq("groupId", group._id),
-        )
-        .take(20);
-      for (const message of results)
-        if (message.kind === "post")
-          hits.push({
-            groupId: group._id,
-            groupTitle: display.title,
-            sequence: message.sequence,
-            author: await p.person(ctx, message.authorId, profile._id),
-            createdAt: message._creationTime,
-            snippet: messageSummary(message),
-          });
-    }
-    return hits.toSorted((a, b) => b.createdAt - a.createdAt).slice(0, 50);
+    const groupIds = await ctx.runQuery(internal.searchData.groups, {
+      profileId: profile._id,
+      ...(args.groupId ? { groupId: args.groupId } : {}),
+    });
+    const batches = [];
+    for (let offset = 0; offset < groupIds.length; offset += 10)
+      batches.push(groupIds.slice(offset, offset + 10));
+    const results = await Promise.all(
+      batches.map((batchIds) =>
+        ctx.runQuery(internal.searchData.batch, {
+          profileId: profile._id,
+          groupIds: batchIds,
+          query: args.query,
+        }),
+      ),
+    );
+    return results
+      .flat()
+      .toSorted((a, b) => b.createdAt - a.createdAt)
+      .slice(0, 50);
   },
 });

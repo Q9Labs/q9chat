@@ -11,8 +11,8 @@ export const recordUpload = internalMutation({
   args: storedUpload.fields,
   returns: v.id("uploads"),
   handler: async (ctx, args) => {
-    const profile = await ctx.db.get(args.ownerId);
-    if (profile?.status !== "active") return fail("account_unavailable");
+    const profile = await active(ctx);
+    if (profile._id !== args.ownerId) return fail("account_unavailable");
     return ctx.db.insert("uploads", args);
   },
 });

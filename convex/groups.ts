@@ -26,13 +26,16 @@ export const list = query({
         .withIndex("by_group_sequence", (q) => q.eq("groupId", group._id))
         .order("desc")
         .first();
+      const state = await g.readState(ctx, group._id, profile._id);
       const unread = await ctx.db
         .query("unreadPosts")
         .withIndex("by_profile_group_sequence", (q) =>
-          q.eq("profileId", profile._id).eq("groupId", group._id),
+          q
+            .eq("profileId", profile._id)
+            .eq("groupId", group._id)
+            .gt("sequence", state?.lastReadSequence ?? 0),
         )
         .take(100);
-      const state = await g.readState(ctx, group._id, profile._id);
       rows.push({
         status: "member" as const,
         groupId: group._id,
@@ -48,7 +51,11 @@ export const list = query({
     }
     const removals = await ctx.db
       .query("removals")
-      .withIndex("by_profile", (q) => q.eq("profileId", profile._id))
+      .withIndex("by_profile_dismissed", (q) =>
+        // Convex indexes absent optional fields as undefined, not null.
+        // eslint-disable-next-line unicorn/no-useless-undefined
+        q.eq("profileId", profile._id).eq("dismissedAt", undefined),
+      )
       .collect();
     const removedRows = [];
     for (const row of removals) {
@@ -139,19 +146,21 @@ export const create = mutation({
   handler: async (ctx, args) => {
     const profile = await active(ctx);
     const ids = [...new Set(args.memberIds)].filter((id) => id !== profile._id);
-    if (ids.length > 99) return fail("bad_attachment");
+    if (ids.length > 99) return fail("group_full");
     if (
-      !/^[A-Za-z0-9]{12,}$/u.test(args.inviteToken) ||
+      !/^[A-Za-z0-9]{16,32}$/u.test(args.inviteToken) ||
       (await ctx.db
         .query("groups")
         .withIndex("by_invite_token", (q) => q.eq("inviteToken", args.inviteToken))
         .unique())
     )
-      return fail("invite_invalid");
+      throw new Error("Invalid or reused invite token");
     const people = await Promise.all(ids.map((id) => g.targetActive(ctx, id)));
-    const name =
-      (args.name?.trim() ? args.name.trim() : people.map((person) => firstName(person.displayName)).join(", "));
+    const name = args.name?.trim()
+      ? args.name.trim()
+      : people.map((person) => firstName(person.displayName)).join(", ");
     if (!name) return fail("name_required");
+    if (name.length > 80) return fail("name_too_long");
     const groupId = await ctx.db.insert("groups", {
       kind: "group",
       name,
@@ -208,7 +217,7 @@ export const addMembers = mutation({
     const { profile } = await member(ctx, args);
     const group = await ctx.db.get(args.groupId);
     if (group?.kind !== "group") return fail("pair_locked");
-    if (args.profileIds.length > 50) return fail("bad_attachment");
+    if (args.profileIds.length > 50) throw new Error("Add at most 50 people");
     const added = await g.add(ctx, group._id, args.profileIds, group.lastSequence + 1);
     if (added.length)
       await g.event(ctx, group._id, { type: "added", by: profile._id, profileIds: added });
@@ -230,6 +239,18 @@ export const removeMember = mutation({
       removedBy: profile._id,
       removedAt: Date.now(),
     });
+    const notices = await ctx.db
+      .query("removals")
+      .withIndex("by_profile_dismissed", (q) =>
+        // Convex indexes absent optional fields as undefined, not null.
+        // eslint-disable-next-line unicorn/no-useless-undefined
+        q.eq("profileId", args.profileId).eq("dismissedAt", undefined),
+      )
+      .collect();
+    for (const oldest of notices
+      .toSorted((a, b) => a.removedAt - b.removedAt)
+      .slice(0, Math.max(0, notices.length - 20)))
+      await ctx.db.patch(oldest._id, { dismissedAt: Date.now() });
     await g.event(ctx, group._id, { type: "removed", by: profile._id, profileId: args.profileId });
     return null;
   },
@@ -283,6 +304,7 @@ export const inviteInfo = query({
   ),
   handler: async (ctx, args) => {
     const profile = await active(ctx);
+    g.validateInviteToken(args.token);
     const group = await ctx.db
       .query("groups")
       .withIndex("by_invite_token", (q) => q.eq("inviteToken", args.token))
@@ -304,6 +326,7 @@ export const join = mutation({
   returns: v.id("groups"),
   handler: async (ctx, args) => {
     const profile = await active(ctx);
+    g.validateInviteToken(args.token);
     const group = await ctx.db
       .query("groups")
       .withIndex("by_invite_token", (q) => q.eq("inviteToken", args.token))

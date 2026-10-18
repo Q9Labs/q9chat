@@ -73,7 +73,6 @@ export const message = v.union(
         emoji: reactionEmojiValidator,
         count: v.number(),
         mine: v.boolean(),
-        people: v.array(person),
       }),
     ),
     editedAt: v.union(v.number(), v.null()),
@@ -94,3 +93,12 @@ export const groupRow = v.union(
   }),
   v.object({ status: v.literal("removed"), groupId: v.id("groups"), kind: groupKind, ...removed }),
 );
+
+export const searchHit = v.object({
+  groupId: v.id("groups"),
+  groupTitle: v.string(),
+  sequence: v.number(),
+  author: person,
+  createdAt: v.number(),
+  snippet: v.string(),
+});

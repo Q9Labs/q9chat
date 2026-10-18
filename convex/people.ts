@@ -18,30 +18,37 @@ export const find = query({
   ),
   handler: async (ctx, args) => {
     const profile = await active(ctx);
-    const term = args.query.trim().toLocaleLowerCase();
+    if (args.query.length > 100) throw new Error("Query exceeds 100 characters");
+    const term = args.query.trim().toLowerCase();
     if (!term) return [];
     const exact = await ctx.db
       .query("profiles")
       .withIndex("by_email", (q) => q.eq("email", term))
-      .collect();
+      .take(4);
+    const ids = new Set(
+      exact
+        .filter((value) => value.status === "active" && value._id !== profile._id)
+        .map((value) => value._id),
+    );
     const own = await ctx.db
       .query("memberships")
       .withIndex("by_profile", (q) => q.eq("profileId", profile._id))
       .collect();
-    const ids = new Set(exact.filter((row) => row.status === "active").map((row) => row._id));
-    for (const row of own)
-      for (const member of await memberships(ctx, row.groupId)) ids.add(member.profileId);
+    for (const row of own) {
+      if (ids.size >= 4) break;
+      for (const candidate of await memberships(ctx, row.groupId)) {
+        if (
+          candidate.profileId !== profile._id &&
+          candidate.searchName.split(/\s+/u).some((word) => word.startsWith(term))
+        )
+          ids.add(candidate.profileId);
+        if (ids.size >= 4) break;
+      }
+    }
     const result = [];
     for (const id of ids) {
-      if (id === profile._id) continue;
-      const target = await ctx.db.get(id);
-      if (!target || target.status !== "active") continue;
-      if (
-        target.email !== term &&
-        !target.displayName.toLocaleLowerCase().startsWith(term) &&
-        !target.email.startsWith(term)
-      )
-        continue;
+      const target = exact.find((value) => value._id === id) ?? (await ctx.db.get(id));
+      if (target?.status !== "active") continue;
       const resolved = await person(ctx, id, profile._id);
       result.push({
         id,
@@ -50,7 +57,6 @@ export const find = query({
         email: target.email,
         avatar: resolved.avatar,
       });
-      if (result.length === 4) break;
     }
     return result;
   },

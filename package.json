@@ -34,7 +34,8 @@
     "deploy:web": "pnpm --filter @q9chat/web run deploy",
     "convex:dev": "convex dev",
     "convex:deploy": "convex deploy",
-    "convex:codegen": "convex codegen"
+    "convex:codegen": "convex codegen",
+    "test:backend": "vitest run --config convex/vitest.config.ts"
   },
   "dependencies": {
     "@q9chat/domain": "workspace:*",

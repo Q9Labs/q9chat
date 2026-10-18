@@ -6,6 +6,9 @@ export type ErrorCode =
   | "removed_from_group"
   | "invite_invalid"
   | "name_required"
+  | "name_too_long"
+  | "group_full"
+  | "too_many_groups"
   | "pair_locked"
   | "account_unavailable"
   | "client_key_reused"
@@ -54,10 +57,7 @@ export function initials(name: string) {
     .map((word) => word[0]?.toUpperCase() ?? "")
     .join("");
 }
-export function parseMentions(
-  body: string,
-  members: readonly { id: string; name: string }[],
-) {
+export function parseMentions(body: string, members: readonly { id: string; name: string }[]) {
   const names = new Set(
     Array.from(body.matchAll(/(?:^|[^\p{L}\p{N}_])@([\p{L}\p{N}_]+)/gu), (match) =>
       (match[1] ?? "").toLocaleLowerCase(),
@@ -78,7 +78,7 @@ const object = (person: Person) => (person.isYou ? "you" : person.name);
 export function eventSentence(event: MemberEvent): string {
   switch (event.type) {
     case "created":
-      return `${subject(event.by)} created the group`;
+      return `${subject(event.by)} created this group`;
     case "added":
       return `${subject(event.by)} added ${event.people.map(object).join(", ")}`;
     case "joined":
@@ -99,7 +99,11 @@ export function messageSummary(
     | {
         kind: "post";
         body: string;
-        attachments: readonly ({ kind: "image" } | { kind: "voice" } | { kind: "file"; name: string })[];
+        attachments: readonly (
+          | { kind: "image" }
+          | { kind: "voice" }
+          | { kind: "file"; name: string }
+        )[];
       },
 ): string {
   if (message.kind === "deleted") return "Message deleted";

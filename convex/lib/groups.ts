@@ -1,3 +1,4 @@
+import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { fail } from "./access";
@@ -59,17 +60,19 @@ export async function add(
   const current = await memberships(ctx, groupId);
   const added = [];
   for (const profileId of new Set(profileIds)) {
-    await targetActive(ctx, profileId);
+    const profile = await targetActive(ctx, profileId);
     if (current.some((row) => row.profileId === profileId)) continue;
     const groups = await ctx.db
       .query("memberships")
       .withIndex("by_profile", (q) => q.eq("profileId", profileId))
-      .take(200);
-    if (groups.length >= 200 || current.length + added.length >= 100) return fail("bad_attachment");
+      .take(100);
+    if (groups.length >= 100) return fail("too_many_groups");
+    if (current.length + added.length >= 100) return fail("group_full");
     await ctx.db.insert("memberships", {
       groupId,
       profileId,
       notify: "mentions",
+      searchName: profile.displayName.toLowerCase(),
       joinedAt: Date.now(),
     });
     await ctx.db.insert("readStates", {
@@ -93,13 +96,12 @@ export async function clearMembership(
   if (row) await ctx.db.delete(row._id);
   const state = await readState(ctx, groupId, profileId);
   if (state) await ctx.db.delete(state._id);
-  const unread = await ctx.db
-    .query("unreadPosts")
-    .withIndex("by_profile_group_sequence", (q) =>
-      q.eq("profileId", profileId).eq("groupId", groupId),
-    )
-    .collect();
-  for (const post of unread) await ctx.db.delete(post._id);
+  const group = await ctx.db.get(groupId);
+  await ctx.scheduler.runAfter(0, internal.cleanup.unread, {
+    profileId,
+    groupId,
+    cutoff: group?.lastSequence ?? 0,
+  });
   const typing = await ctx.db
     .query("typing")
     .withIndex("by_group_profile", (q) => q.eq("groupId", groupId).eq("profileId", profileId))
@@ -107,3 +109,7 @@ export async function clearMembership(
   if (typing) await ctx.db.delete(typing._id);
 }
 export const pairKey = (a: Id<"profiles">, b: Id<"profiles">) => [a, b].toSorted().join(":");
+
+export function validateInviteToken(token: string) {
+  if (!/^[A-Za-z0-9]{16,32}$/u.test(token)) throw new Error("Invalid invite token");
+}

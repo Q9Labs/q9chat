@@ -24,12 +24,17 @@ export async function identity(ctx: ActionCtx): Promise<UserIdentity> {
   if (profile && profile.status !== "active") return fail("account_unavailable");
   return value;
 }
-export async function active(ctx: DbCtx): Promise<Doc<"profiles"> & { status: "active" }> {
+export async function active(
+  ctx: DbCtx | ActionCtx,
+): Promise<Doc<"profiles"> & { status: "active" }> {
   const value = await availableIdentity(ctx);
-  const profile = await ctx.db
-    .query("profiles")
-    .withIndex("by_auth_user", (q) => q.eq("authUserId", value.subject))
-    .unique();
+  const profile =
+    "db" in ctx
+      ? await ctx.db
+          .query("profiles")
+          .withIndex("by_auth_user", (q) => q.eq("authUserId", value.subject))
+          .unique()
+      : await ctx.runQuery(internal.profiles.byAuth, { authUserId: value.subject });
   if (!profile || profile.status !== "active") return fail("account_unavailable");
   return profile;
 }

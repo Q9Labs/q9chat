@@ -9,16 +9,17 @@ import {
   timeLabel,
 } from "@q9chat/domain";
 import { convexTest } from "convex-test";
+import { makeFunctionReference } from "convex/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import schema from "./schema";
 import crons from "./crons";
-import { makeFunctionReference } from "convex/server";
+import schema from "./schema";
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts", "!./vitest.config.ts"]);
 const outbound = vi.fn<typeof fetch>();
-const fetchUrl = (input: Parameters<typeof fetch>[0]) => input instanceof Request ? input.url : input.toString();
+const fetchUrl = (input: Parameters<typeof fetch>[0]) =>
+  input instanceof Request ? input.url : input.toString();
 beforeEach(() => {
   vi.useFakeTimers();
   vi.stubEnv("WORKOS_API_KEY", "test-workos-key");
@@ -67,7 +68,7 @@ async function group(t: Test) {
   const groupId = await alice.client.mutation(api.groups.create, {
     name: "Team",
     memberIds: [bob.id],
-    inviteToken: "TeamInvite1234",
+    inviteToken: "TeamInvite12345678",
   });
   return { alice, bob, carol, groupId };
 }
@@ -81,7 +82,12 @@ async function upload(client: Test, body = "file bytes", type = "text/plain") {
       "Content-Type": type,
       Origin: "http://localhost:3000",
     },
-    body,
+    body:
+      type === "image/png"
+        ? new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, ...new TextEncoder().encode(body)])
+        : type === "audio/mp4"
+          ? new Uint8Array([0, 0, 0, 12, ...new TextEncoder().encode("ftypM4A " + body)])
+          : body,
   });
   expect(response.status).toBe(200);
   const data: unknown = await response.json();
@@ -96,8 +102,14 @@ async function upload(client: Test, body = "file bytes", type = "text/plain") {
   if (!id) throw new Error("Invalid upload id");
   return id;
 }
-async function drain(t: Test) {
+async function drain(t: Test, expectedFailures = 0) {
+  const failures = async () =>
+    (await t.run((ctx) => ctx.db.system.query("_scheduled_functions").collect())).filter(
+      (job) => job.state.kind === "failed",
+    ).length;
+  const before = await failures();
   await t.finishAllScheduledFunctions(vi.runAllTimers);
+  expect(await failures()).toBe(before + expectedFailures);
 }
 async function row(client: Test, groupId: Id<"groups">) {
   const rows = await client.query(api.groups.list, {});
@@ -198,21 +210,24 @@ describe("groups and people", () => {
     expect(messages.map((message) => message.sequence)).toEqual([1, 2]);
     const id = await alice.client.mutation(api.groups.create, {
       memberIds: [bob.id],
-      inviteToken: "AnotherToken123",
+      inviteToken: "AnotherToken12345",
     });
     expect(await alice.client.query(api.groups.get, { groupId: id })).toMatchObject({
       title: "Bob",
     });
     await expect(
-      alice.client.mutation(api.groups.create, { memberIds: [], inviteToken: "BlankToken1234" }),
+      alice.client.mutation(api.groups.create, {
+        memberIds: [],
+        inviteToken: "BlankToken12345678",
+      }),
     ).rejects.toThrow("name_required");
     await expect(
       alice.client.mutation(api.groups.create, {
         name: "Dup",
         memberIds: [],
-        inviteToken: "TeamInvite1234",
+        inviteToken: "TeamInvite12345678",
       }),
-    ).rejects.toThrow("invite_invalid");
+    ).rejects.toThrow("Invalid or reused invite token");
   });
   it("pair creation is idempotent, locks membership changes and retains deleted partner identity", async () => {
     const t = fixture();
@@ -241,31 +256,33 @@ describe("groups and people", () => {
     const t = fixture();
     const { alice, bob, groupId } = await group(t);
     await alice.client.mutation(api.groups.removeMember, { groupId, profileId: bob.id });
-    expect(await bob.client.query(api.groups.inviteInfo, { token: "TeamInvite1234" })).toEqual({
+    expect(await bob.client.query(api.groups.inviteInfo, { token: "TeamInvite12345678" })).toEqual({
       status: "removed",
     });
     await bob.client.mutation(api.groups.dismissRemoval, { groupId });
     expect(await bob.client.query(api.groups.list, {})).toEqual([]);
-    await expect(bob.client.mutation(api.groups.join, { token: "TeamInvite1234" })).rejects.toThrow(
-      "removed_from_group",
-    );
+    await expect(
+      bob.client.mutation(api.groups.join, { token: "TeamInvite12345678" }),
+    ).rejects.toThrow("removed_from_group");
     await alice.client.mutation(api.groups.addMembers, { groupId, profileIds: [bob.id, bob.id] });
     await alice.client.mutation(api.groups.addMembers, { groupId, profileIds: [bob.id] });
     expect(await alice.client.query(api.groups.get, { groupId })).toMatchObject({
       lastSequence: 4,
       memberCount: 2,
     });
-    expect(await bob.client.mutation(api.groups.join, { token: "TeamInvite1234" })).toBe(groupId);
+    expect(await bob.client.mutation(api.groups.join, { token: "TeamInvite12345678" })).toBe(
+      groupId,
+    );
   });
   it("leave is a no-op for outsiders and repeated calls, while valid invite joining adds one event", async () => {
     const t = fixture();
     const { alice, bob, carol, groupId } = await group(t);
     await carol.client.mutation(api.groups.leave, { groupId });
     expect(
-      await carol.client.query(api.groups.inviteInfo, { token: "TeamInvite1234" }),
+      await carol.client.query(api.groups.inviteInfo, { token: "TeamInvite12345678" }),
     ).toMatchObject({ status: "open", title: "Team", memberCount: 2 });
-    await carol.client.mutation(api.groups.join, { token: "TeamInvite1234" });
-    await carol.client.mutation(api.groups.join, { token: "TeamInvite1234" });
+    await carol.client.mutation(api.groups.join, { token: "TeamInvite12345678" });
+    await carol.client.mutation(api.groups.join, { token: "TeamInvite12345678" });
     await bob.client.mutation(api.groups.leave, { groupId });
     await bob.client.mutation(api.groups.leave, { groupId });
     expect(await alice.client.query(api.groups.get, { groupId })).toMatchObject({
@@ -389,9 +406,7 @@ describe("posts, unread and mutations", () => {
     await bob.client.mutation(api.messages.react, { messageId: message.messageId, emoji: "❤️" });
     expect(
       await bob.client.query(api.messages.range, { groupId, fromSequence: 3, toSequence: 3 }),
-    ).toMatchObject([
-      { reactions: [{ emoji: "❤️", count: 1, mine: true, people: [{ id: bob.id, isYou: true }] }] },
-    ]);
+    ).toMatchObject([{ reactions: [{ emoji: "❤️", count: 1, mine: true }] }]);
     await bob.client.mutation(api.messages.react, { messageId: message.messageId, emoji: null });
     expect(
       await bob.client.query(api.messages.range, { groupId, fromSequence: 3, toSequence: 3 }),
@@ -407,8 +422,8 @@ describe("posts, unread and mutations", () => {
     const t = fixture();
     const { alice, bob, carol, groupId } = await group(t);
     const message = await send(alice.client, groupId, "TestFlight launch");
-    expect(await bob.client.query(api.messages.search, { query: "Test" })).toHaveLength(1);
-    expect(await carol.client.query(api.messages.search, { query: "Test", groupId })).toEqual([]);
+    expect(await bob.client.action(api.messages.search, { query: "Test" })).toHaveLength(1);
+    expect(await carol.client.action(api.messages.search, { query: "Test", groupId })).toEqual([]);
     await alice.client.mutation(api.typing.start, { groupId });
     await bob.client.mutation(api.typing.start, { groupId });
     expect(await alice.client.query(api.typing.list, { groupId })).toMatchObject([
@@ -420,7 +435,7 @@ describe("posts, unread and mutations", () => {
     vi.setSystemTime(Date.now() + 6000);
     expect(await alice.client.query(api.typing.list, { groupId })).toEqual([]);
     await alice.client.mutation(api.messages.remove, { messageId: message.messageId });
-    expect(await bob.client.query(api.messages.search, { query: "Test" })).toEqual([]);
+    expect(await bob.client.action(api.messages.search, { query: "Test" })).toEqual([]);
     await drain(t);
   });
   it("report is private, unique and keeps its excerpt after deletion", async () => {
@@ -485,7 +500,7 @@ describe("authenticated bytes", () => {
     ).toBe(404);
     await drain(t);
   });
-  it("rejects unauthenticated, oversized and unsupported upload types; photo consumption is single-use", async () => {
+  it("rejects unauthenticated and oversized uploads; ignores declared MIME; photo consumption is single-use", async () => {
     const t = fixture();
     const alice = await account(t, "Alice");
     expect((await t.fetch("/upload", { method: "POST", body: "bytes" })).status).toBe(401);
@@ -497,7 +512,7 @@ describe("authenticated bytes", () => {
           body: "svg",
         })
       ).status,
-    ).toBe(415);
+    ).toBe(200);
     expect(
       (
         await alice.client.fetch("/upload", {
@@ -515,7 +530,7 @@ describe("authenticated bytes", () => {
           headers: { Authorization: "Bearer test" },
         })
       ).text(),
-    ).toBe("photo");
+    ).toContain("photo");
     await expect(alice.client.mutation(api.profiles.update, { photoUploadId: id })).rejects.toThrow(
       "bad_attachment",
     );
@@ -557,17 +572,23 @@ describe("delivery", () => {
     await send(alice.client, groupId, "@Bob hello");
     await bob.client.mutation(api.groups.setNotify, { groupId, notify: "muted" });
     await drain(t);
-    expect(outbound.mock.calls.filter(([url]) => fetchUrl(url).includes("exp.host"))).toHaveLength(0);
+    expect(outbound.mock.calls.filter(([url]) => fetchUrl(url).includes("exp.host"))).toHaveLength(
+      0,
+    );
     await bob.client.mutation(api.groups.setNotify, { groupId, notify: "all" });
     await send(alice.client, groupId, "all", "all");
     await alice.client.mutation(api.groups.removeMember, { groupId, profileId: bob.id });
     await drain(t);
-    expect(outbound.mock.calls.filter(([url]) => fetchUrl(url).includes("exp.host"))).toHaveLength(0);
+    expect(outbound.mock.calls.filter(([url]) => fetchUrl(url).includes("exp.host"))).toHaveLength(
+      0,
+    );
     await alice.client.mutation(api.groups.addMembers, { groupId, profileIds: [bob.id] });
     await send(alice.client, groupId, "@Bob", "deleted");
     await bob.client.mutation(api.profiles.deleteAccount, {});
     await drain(t);
-    expect(outbound.mock.calls.filter(([url]) => fetchUrl(url).includes("exp.host"))).toHaveLength(0);
+    expect(outbound.mock.calls.filter(([url]) => fetchUrl(url).includes("exp.host"))).toHaveLength(
+      0,
+    );
   });
   it("delivers mention and reply with summary and deep link; skips unrelated default posts", async () => {
     const t = fixture();
@@ -575,7 +596,9 @@ describe("delivery", () => {
     await bob.client.mutation(api.devices.registerExpo, { expoPushToken: "ExpoPushToken[bob]" });
     await send(alice.client, groupId, "ordinary");
     await drain(t);
-    expect(outbound.mock.calls.filter(([url]) => fetchUrl(url).includes("exp.host"))).toHaveLength(0);
+    expect(outbound.mock.calls.filter(([url]) => fetchUrl(url).includes("exp.host"))).toHaveLength(
+      0,
+    );
     const message = await send(alice.client, groupId, "@Bob hello", "mention");
     await drain(t);
     const push = outbound.mock.calls.find(([url]) => fetchUrl(url).includes("exp.host"));
@@ -606,6 +629,9 @@ describe("delivery", () => {
 });
 it("pure domain helpers preserve viewer copy and exact formatting", () => {
   expect(initials(" Alice Smith ")).toBe("AS");
+  expect(eventSentence({ type: "created", by: { id: "a", name: "Alice", isYou: true } })).toBe(
+    "You created this group",
+  );
   expect(avatarColors("stable")).toEqual(avatarColors("stable"));
   expect(
     parseMentions("hi @BOB and @bob; mail@Alice", [
@@ -633,63 +659,336 @@ it("pure domain helpers preserve viewer copy and exact formatting", () => {
 
 describe("cron recovery and web dispatch", () => {
   it("resumes a failed account deletion through its registered supervisor and removes personal rows in batches", async () => {
-    const t = fixture(); const { alice, bob, groupId } = await group(t);
+    const t = fixture();
+    const { alice, bob, groupId } = await group(t);
     const original = await send(bob.client, groupId, "kept after deletion", "kept");
     await bob.client.mutation(api.typing.start, { groupId });
     await bob.client.mutation(api.devices.registerExpo, { expoPushToken: "ExpoPushToken[bob]" });
     const reportable = await send(alice.client, groupId);
-    await bob.client.mutation(api.reports.create, { messageId: reportable.messageId, reason: "other" });
+    await bob.client.mutation(api.reports.create, {
+      messageId: reportable.messageId,
+      reason: "other",
+    });
     await bob.client.mutation(api.messages.react, { messageId: reportable.messageId, emoji: "👍" });
     await upload(bob.client);
     await drain(t);
-    const prior = outbound.getMockImplementation(); if (!prior) throw new Error("Missing mock");
-    outbound.mockImplementation(async (input, init) => init?.method === "DELETE" ? new Response(null, { status: 400 }) : prior(input, init));
-    await bob.client.mutation(api.profiles.deleteAccount, {}); await drain(t);
-    expect(await t.run(ctx => ctx.db.get(bob.id))).toMatchObject({ status: "deleting" });
-    expect(await alice.client.query(api.messages.range, { groupId, fromSequence: original.sequence, toSequence: original.sequence })).toMatchObject([{ author: { name: "Deleted account", deleted: true } }]);
+    const prior = outbound.getMockImplementation();
+    if (!prior) throw new Error("Missing mock");
+    outbound.mockImplementation(async (input, init) =>
+      init?.method === "DELETE" ? new Response(null, { status: 400 }) : prior(input, init),
+    );
+    await bob.client.mutation(api.profiles.deleteAccount, {});
+    await drain(t, 1);
+    expect(await t.run((ctx) => ctx.db.get(bob.id))).toMatchObject({ status: "deleting" });
+    expect(
+      await alice.client.query(api.messages.range, {
+        groupId,
+        fromSequence: original.sequence,
+        toSequence: original.sequence,
+      }),
+    ).toMatchObject([{ author: { name: "Deleted account", deleted: true } }]);
     outbound.mockImplementation(prior);
     vi.setSystemTime(Date.now() + 600001);
     await fireCron(t, "resume account deletion");
-    const tombstone = await t.run(ctx => ctx.db.get(bob.id)); expect(tombstone).toMatchObject({ status: "deleted" }); expect(tombstone).not.toHaveProperty("authUserId");
-    for (const table of ["memberships", "readStates", "unreadPosts", "removals", "typing", "devices", "reactions"] as const) {
-      const rows = await t.run(ctx => ctx.db.query(table).collect()); expect(rows.filter(value => value.profileId === bob.id)).toEqual([]);
+    const tombstone = await t.run((ctx) => ctx.db.get(bob.id));
+    expect(tombstone).toMatchObject({ status: "deleted" });
+    expect(tombstone).not.toHaveProperty("authUserId");
+    for (const table of [
+      "memberships",
+      "readStates",
+      "unreadPosts",
+      "removals",
+      "typing",
+      "devices",
+      "reactions",
+    ] as const) {
+      const rows = await t.run((ctx) => ctx.db.query(table).collect());
+      expect(rows.filter((value) => value.profileId === bob.id)).toEqual([]);
     }
-    expect(await t.run(ctx => ctx.db.query("uploads").collect())).toEqual([]); expect(await t.run(ctx => ctx.db.query("reports").collect())).toEqual([]);
+    expect(await t.run((ctx) => ctx.db.query("uploads").collect())).toEqual([]);
+    expect(await t.run((ctx) => ctx.db.query("reports").collect())).toEqual([]);
   });
   it("sweeps expired typing and unused upload bytes through the declared crons", async () => {
-    const t = fixture(); const { alice, groupId } = await group(t);
-    await alice.client.mutation(api.typing.start, { groupId }); const uploadId = await upload(alice.client);
-    const stored = await t.run(ctx => ctx.db.get(uploadId)); if (!stored) throw new Error("Missing upload");
+    const t = fixture();
+    const { alice, groupId } = await group(t);
+    await alice.client.mutation(api.typing.start, { groupId });
+    const uploadId = await upload(alice.client);
+    const stored = await t.run((ctx) => ctx.db.get(uploadId));
+    if (!stored) throw new Error("Missing upload");
     vi.setSystemTime(Date.now() + 86400001);
-    await fireCron(t, "expire typing"); await fireCron(t, "expire unused uploads");
-    expect(await t.run(ctx => ctx.db.query("typing").collect())).toEqual([]); expect(await t.run(ctx => ctx.db.get(uploadId))).toBeNull(); expect(await t.run(ctx => ctx.storage.get(stored.storageId))).toBeNull();
+    await fireCron(t, "expire typing");
+    await fireCron(t, "expire unused uploads");
+    expect(await t.run((ctx) => ctx.db.query("typing").collect())).toEqual([]);
+    expect(await t.run((ctx) => ctx.db.get(uploadId))).toBeNull();
+    expect(await t.run((ctx) => ctx.storage.get(stored.storageId))).toBeNull();
   });
   it("encrypts web push, skips a currently viewed group, and delivers again after its lease expires", async () => {
-    const t = fixture(); const { alice, bob, groupId } = await group(t);
+    const t = fixture();
+    const { alice, bob, groupId } = await group(t);
     const { generateVAPIDKeys } = await import("web-push");
     const { createECDH, randomBytes } = await import("node:crypto");
-    const vapid = generateVAPIDKeys(); vi.stubEnv("VAPID_PUBLIC_KEY", vapid.publicKey); vi.stubEnv("VAPID_PRIVATE_KEY", vapid.privateKey); vi.stubEnv("VAPID_SUBJECT", "mailto:chat@q9labs.ai");
-    const receiver = createECDH("prime256v1"); const p256dh = receiver.generateKeys().toString("base64url"); const auth = randomBytes(16).toString("base64url");
+    const vapid = generateVAPIDKeys();
+    vi.stubEnv("VAPID_PUBLIC_KEY", vapid.publicKey);
+    vi.stubEnv("VAPID_PRIVATE_KEY", vapid.privateKey);
+    vi.stubEnv("VAPID_SUBJECT", "mailto:chat@q9labs.ai");
+    const receiver = createECDH("prime256v1");
+    const p256dh = receiver.generateKeys().toString("base64url");
+    const auth = randomBytes(16).toString("base64url");
     const endpoint = "https://fcm.googleapis.com/fcm/send/test";
-    await bob.client.mutation(api.devices.registerWeb, { endpoint, p256dh, auth }); await bob.client.mutation(api.devices.viewing, { endpoint, groupId });
-    await send(alice.client, groupId, "@Bob on screen"); await drain(t);
+    await bob.client.mutation(api.devices.registerWeb, { endpoint, p256dh, auth });
+    await bob.client.mutation(api.devices.viewing, { endpoint, groupId });
+    await send(alice.client, groupId, "@Bob on screen");
+    await drain(t);
     expect(outbound.mock.calls.filter(([url]) => fetchUrl(url) === endpoint)).toHaveLength(0);
-    vi.setSystemTime(Date.now() + 60001); await send(alice.client, groupId, "@Bob notify", "after-expiry"); await drain(t);
-    const push = outbound.mock.calls.find(([url]) => fetchUrl(url) === endpoint); if (!push) throw new Error("Missing Web Push");
-    expect(push[1]?.headers).toMatchObject({ "Content-Encoding": "aes128gcm" }); expect(push[1]?.body).toBeInstanceOf(Uint8Array);
-    await bob.client.mutation(api.devices.viewing, { endpoint, groupId }); await bob.client.mutation(api.devices.viewing, { endpoint, groupId: null });
-    await send(alice.client, groupId, "@Bob unfocused", "unfocused"); await drain(t); expect(outbound.mock.calls.filter(([url]) => fetchUrl(url) === endpoint)).toHaveLength(2);
+    vi.setSystemTime(Date.now() + 60001);
+    await send(alice.client, groupId, "@Bob notify", "after-expiry");
+    await drain(t);
+    const push = outbound.mock.calls.find(([url]) => fetchUrl(url) === endpoint);
+    if (!push) throw new Error("Missing Web Push");
+    expect(push[1]?.headers).toMatchObject({ "Content-Encoding": "aes128gcm" });
+    expect(push[1]?.body).toBeInstanceOf(Uint8Array);
+    await bob.client.mutation(api.devices.viewing, { endpoint, groupId });
+    await bob.client.mutation(api.devices.viewing, { endpoint, groupId: null });
+    await send(alice.client, groupId, "@Bob unfocused", "unfocused");
+    await drain(t);
+    expect(outbound.mock.calls.filter(([url]) => fetchUrl(url) === endpoint)).toHaveLength(2);
   });
   it("queued edits do not turn a previously unmentioned post into a notification", async () => {
-    const t = fixture(); const { alice, bob, groupId } = await group(t); await bob.client.mutation(api.devices.registerExpo, { expoPushToken: "ExpoPushToken[bob]" });
-    const post = await send(alice.client, groupId, "ordinary"); await alice.client.mutation(api.messages.edit, { messageId: post.messageId, body: "@Bob edited mention" }); await drain(t);
-    expect(outbound.mock.calls.filter(([url]) => fetchUrl(url).includes("exp.host"))).toHaveLength(0); expect(await row(bob.client, groupId)).toMatchObject({ needsYou: false });
+    const t = fixture();
+    const { alice, bob, groupId } = await group(t);
+    await bob.client.mutation(api.devices.registerExpo, { expoPushToken: "ExpoPushToken[bob]" });
+    const post = await send(alice.client, groupId, "ordinary");
+    await alice.client.mutation(api.messages.edit, {
+      messageId: post.messageId,
+      body: "@Bob edited mention",
+    });
+    await drain(t);
+    expect(outbound.mock.calls.filter(([url]) => fetchUrl(url).includes("exp.host"))).toHaveLength(
+      0,
+    );
+    expect(await row(bob.client, groupId)).toMatchObject({ needsYou: false });
   });
 });
 
 // convex-test does not run recurring jobs. Simulate the platform firing the actual registered cron.
 async function fireCron(t: Test, identifier: string) {
-  const cron = crons.crons[identifier]; if (!cron) throw new Error(`Missing cron ${identifier}`);
-  await t.run(async ctx => { await ctx.scheduler.runAfter(0, makeFunctionReference<"mutation", {}, null>(cron.name), {}); });
+  const cron = crons.crons[identifier];
+  if (!cron) throw new Error(`Missing cron ${identifier}`);
+  await t.run(async (ctx) => {
+    await ctx.scheduler.runAfter(0, makeFunctionReference<"mutation", {}, null>(cron.name), {});
+  });
   await drain(t);
 }
+
+describe("round-three regressions", () => {
+  it("bounds undismissed removal notices at 20 without dropping older invite bans", async () => {
+    const t = fixture();
+    const alice = await account(t, "Alice"),
+      bob = await account(t, "Bob");
+    let oldest: Id<"groups"> | null = null;
+    for (let index = 0; index < 21; index++) {
+      const groupId = await alice.client.mutation(api.groups.create, {
+        name: `Team ${index}`,
+        memberIds: [bob.id],
+        inviteToken: `NoticeToken${String(index).padStart(8, "0")}`,
+      });
+      oldest ??= groupId;
+      await alice.client.mutation(api.groups.removeMember, { groupId, profileId: bob.id });
+    }
+    const notices = await bob.client.query(api.groups.list, {});
+    expect(notices).toHaveLength(20);
+    expect(notices.every((value) => value.status === "removed")).toBe(true);
+    expect(notices.some((value) => value.groupId === oldest)).toBe(false);
+    await expect(
+      bob.client.mutation(api.groups.join, { token: "NoticeToken00000000" }),
+    ).rejects.toThrow("removed_from_group");
+    await drain(t);
+  });
+  it("keeps reaction counts exact through repeated join, react, leave, rejoin and account deletion", async () => {
+    const t = fixture();
+    const { alice, bob, carol, groupId } = await group(t);
+    const post = await send(alice.client, groupId);
+    for (let iteration = 0; iteration < 3; iteration++) {
+      await bob.client.mutation(api.groups.join, { token: "TeamInvite12345678" });
+      await bob.client.mutation(api.messages.react, { messageId: post.messageId, emoji: "👍" });
+      await bob.client.mutation(api.messages.react, { messageId: post.messageId, emoji: "👍" });
+      await bob.client.mutation(api.groups.leave, { groupId });
+      expect(
+        await alice.client.query(api.messages.reactors, { messageId: post.messageId }),
+      ).toMatchObject([{ emoji: "👍", count: 1, people: [{ id: bob.id }] }]);
+    }
+    await bob.client.mutation(api.groups.join, { token: "TeamInvite12345678" });
+    await bob.client.mutation(api.messages.react, { messageId: post.messageId, emoji: "❤️" });
+    await carol.client.mutation(api.groups.join, { token: "TeamInvite12345678" });
+    await carol.client.mutation(api.messages.react, { messageId: post.messageId, emoji: "❤️" });
+    expect(
+      await alice.client.query(api.messages.range, {
+        groupId,
+        fromSequence: post.sequence,
+        toSequence: post.sequence,
+      }),
+    ).toMatchObject([{ reactions: [{ emoji: "❤️", count: 2, mine: false }] }]);
+    await bob.client.mutation(api.profiles.deleteAccount, {});
+    await drain(t);
+    expect(
+      await alice.client.query(api.messages.reactors, { messageId: post.messageId }),
+    ).toMatchObject([{ emoji: "❤️", count: 1, people: [{ id: carol.id }] }]);
+    await alice.client.mutation(api.messages.remove, { messageId: post.messageId });
+    expect(await alice.client.query(api.messages.reactors, { messageId: post.messageId })).toEqual(
+      [],
+    );
+    await drain(t);
+    expect(await t.run((ctx) => ctx.db.query("reactions").collect())).toEqual([]);
+  });
+  it("a late cleanup from a removal cannot erase unread rows from the new membership", async () => {
+    const t = fixture();
+    const { alice, bob, groupId } = await group(t);
+    await send(alice.client, groupId, "old", "old");
+    await alice.client.mutation(api.groups.removeMember, { groupId, profileId: bob.id });
+    await alice.client.mutation(api.groups.addMembers, { groupId, profileIds: [bob.id] });
+    expect(await row(bob.client, groupId)).toMatchObject({ unreadCount: 0 });
+    const fresh = await send(alice.client, groupId, "fresh", "fresh");
+    await drain(t);
+    expect(await row(bob.client, groupId)).toMatchObject({ unreadCount: 1 });
+    expect(
+      await t.run((ctx) =>
+        ctx.db
+          .query("unreadPosts")
+          .withIndex("by_profile_group_sequence", (q) =>
+            q.eq("profileId", bob.id).eq("groupId", groupId),
+          )
+          .collect(),
+      ),
+    ).toMatchObject([{ sequence: fresh.sequence }]);
+  });
+  it("updates shared word-prefix directory lookup when a person changes their display name", async () => {
+    const t = fixture();
+    const { alice, bob } = await group(t);
+    await bob.client.mutation(api.profiles.update, { displayName: "Bob Newname" });
+    expect(await alice.client.query(api.people.find, { query: "newn" })).toMatchObject([
+      { id: bob.id, fullName: "Bob Newname" },
+    ]);
+    await expect(
+      bob.client.mutation(api.profiles.update, { displayName: "x".repeat(61) }),
+    ).rejects.toThrow("name_too_long");
+  });
+  it("sniffed kinds cannot be changed by a declared MIME, post kind or photo update", async () => {
+    const t = fixture();
+    const { alice, groupId } = await group(t);
+    const spoof = await upload(alice.client, "not a PNG", "image/png-spoof");
+    await expect(
+      alice.client.mutation(api.profiles.update, { photoUploadId: spoof }),
+    ).rejects.toThrow("bad_attachment");
+    await expect(
+      alice.client.mutation(api.messages.send, {
+        groupId,
+        clientKey: "spoof",
+        body: "",
+        attachments: [{ kind: "image", uploadId: spoof, width: 100, height: 100 }],
+      }),
+    ).rejects.toThrow("bad_attachment");
+    await alice.client.mutation(api.messages.send, {
+      groupId,
+      clientKey: "realfile",
+      body: "",
+      attachments: [{ kind: "file", uploadId: spoof, name: "file.bin" }],
+    });
+    await drain(t);
+  });
+});
+
+describe("bounded API limits", () => {
+  it("enforces 100 groups per person and 100 people per group with distinct errors", async () => {
+    const t = fixture();
+    const alice = await account(t, "Alice");
+    for (let index = 0; index < 100; index++)
+      await alice.client.mutation(api.groups.create, {
+        name: "Team",
+        memberIds: [],
+        inviteToken: `GroupCap${String(index).padStart(12, "0")}`,
+      });
+    await expect(
+      alice.client.mutation(api.groups.create, {
+        name: "Overflow",
+        memberIds: [],
+        inviteToken: "GroupCapOverflow123",
+      }),
+    ).rejects.toThrow("too_many_groups");
+    expect(await alice.client.query(api.groups.list, {})).toHaveLength(100);
+    const other = fixture();
+    const owner = await account(other, "Owner");
+    const people = [];
+    for (let index = 0; index < 100; index++)
+      people.push((await account(other, `Person${index}`)).id);
+    await expect(
+      owner.client.mutation(api.groups.create, {
+        name: "Too large",
+        memberIds: people,
+        inviteToken: "MemberCapOverflow123",
+      }),
+    ).rejects.toThrow("group_full");
+  });
+  it("returns counts without reactor names in range and only ten names on demand", async () => {
+    const t = fixture();
+    const { alice, groupId } = await group(t);
+    const post = await send(alice.client, groupId);
+    for (let index = 0; index < 12; index++) {
+      const person = await account(t, `Reactor${index}`);
+      await person.client.mutation(api.groups.join, { token: "TeamInvite12345678" });
+      await person.client.mutation(api.messages.react, { messageId: post.messageId, emoji: "👍" });
+    }
+    const page = await alice.client.query(api.messages.range, {
+      groupId,
+      fromSequence: post.sequence,
+      toSequence: post.sequence,
+    });
+    expect(page).toMatchObject([{ reactions: [{ emoji: "👍", count: 12, mine: false }] }]);
+    const postResult = page[0];
+    if (postResult?.kind !== "post") throw new Error("Expected post");
+    expect(postResult.reactions[0]).not.toHaveProperty("people");
+    const reactors = await alice.client.query(api.messages.reactors, { messageId: post.messageId });
+    expect(reactors[0]?.count).toBe(12);
+    expect(reactors[0]?.people).toHaveLength(10);
+    await drain(t);
+  });
+  it("search batches more than ten groups and takes ten matches from each group", async () => {
+    const t = fixture();
+    const alice = await account(t, "Alice");
+    for (let index = 0; index < 11; index++) {
+      const groupId = await alice.client.mutation(api.groups.create, {
+        name: `Search ${index}`,
+        memberIds: [],
+        inviteToken: `SearchToken${String(index).padStart(8, "0")}`,
+      });
+      for (let post = 0; post < (index === 0 ? 12 : 1); post++)
+        await send(alice.client, groupId, "needle", `${index}-${post}`);
+    }
+    const hits = await alice.client.action(api.messages.search, { query: "need" });
+    expect(hits).toHaveLength(20);
+    expect(hits.filter((hit) => hit.groupTitle === "Search 0")).toHaveLength(10);
+    await expect(
+      alice.client.action(api.messages.search, { query: "x".repeat(101) }),
+    ).rejects.toThrow("Query exceeds 100");
+    await drain(t);
+  });
+  it("clears moved browser viewing leases and prevents another account from clearing or unregistering them", async () => {
+    const t = fixture();
+    const { alice, bob, groupId } = await group(t);
+    const endpoint = "https://fcm.googleapis.com/fcm/send/ownership";
+    await alice.client.mutation(api.devices.registerWeb, {
+      endpoint,
+      p256dh: "test",
+      auth: "test",
+    });
+    await alice.client.mutation(api.devices.viewing, { endpoint, groupId });
+    await bob.client.mutation(api.devices.viewing, { endpoint, groupId: null });
+    await bob.client.mutation(api.devices.unregister, { endpoint });
+    expect(await t.run((ctx) => ctx.db.query("devices").collect())).toMatchObject([
+      { profileId: alice.id, viewing: { groupId } },
+    ]);
+    await bob.client.mutation(api.devices.registerWeb, { endpoint, p256dh: "test", auth: "test" });
+    const rows = await t.run((ctx) => ctx.db.query("devices").collect());
+    expect(rows[0]).toMatchObject({ profileId: bob.id });
+    expect(rows[0]).not.toHaveProperty("viewing");
+  });
+});

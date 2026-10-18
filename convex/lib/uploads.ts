@@ -5,7 +5,7 @@ import type { MutationCtx } from "../_generated/server";
 import type { attachmentValidator } from "../schema";
 import { fail } from "./access";
 import type { uploadAttachment } from "./validators";
-export const MAX_BYTES = 20 * 1024 * 1024;
+export const MAX_BYTES = 20_000_000;
 export const imageTypes = new Set([
   "image/jpeg",
   "image/png",
@@ -20,16 +20,20 @@ export const voiceTypes = new Set([
   "audio/webm",
   "audio/ogg",
 ]);
-export function validContentType(type: string) {
-  return (
-    /^[a-z0-9][a-z0-9!#$&^_.+-]*\/[a-z0-9][a-z0-9!#$&^_.+-]*$/iu.test(type) &&
-    (!type.startsWith("image/") || imageTypes.has(type)) &&
-    (!type.startsWith("audio/") || voiceTypes.has(type))
-  );
-}
-export async function consume(ctx: MutationCtx, ownerId: Id<"profiles">, uploadId: Id<"uploads">) {
+export async function consume(
+  ctx: MutationCtx,
+  ownerId: Id<"profiles">,
+  uploadId: Id<"uploads">,
+  kind: "image" | "file" | "voice",
+) {
   const upload = await ctx.db.get(uploadId);
-  if (!upload || upload.ownerId !== ownerId || upload.size > MAX_BYTES || upload.size <= 0)
+  if (
+    !upload ||
+    upload.ownerId !== ownerId ||
+    upload.kind !== kind ||
+    upload.size > MAX_BYTES ||
+    upload.size <= 0
+  )
     return fail("bad_attachment");
   await ctx.db.delete(upload._id);
   return upload;
@@ -43,7 +47,7 @@ export async function attachments(
   if (input.length > 10 || (!body.trim() && input.length === 0)) return fail("bad_attachment");
   const result: Infer<typeof attachmentValidator>[] = [];
   for (const item of input) {
-    const upload = await consume(ctx, ownerId, item.uploadId);
+    const upload = await consume(ctx, ownerId, item.uploadId, item.kind);
     const base = {
       storageId: upload.storageId,
       contentType: upload.contentType,
@@ -53,10 +57,12 @@ export async function attachments(
       case "image":
         if (
           !imageTypes.has(upload.contentType) ||
-          !Number.isFinite(item.width) ||
-          !Number.isFinite(item.height) ||
+          !Number.isInteger(item.width) ||
+          !Number.isInteger(item.height) ||
           item.width <= 0 ||
-          item.height <= 0
+          item.height <= 0 ||
+          item.width > 8000 ||
+          item.height > 8000
         )
           return fail("bad_attachment");
         result.push({ ...base, kind: "image", width: item.width, height: item.height });
@@ -93,4 +99,5 @@ export const storedUpload = v.object({
   storageId: v.id("_storage"),
   contentType: v.string(),
   size: v.number(),
+  kind: v.union(v.literal("image"), v.literal("file"), v.literal("voice")),
 });

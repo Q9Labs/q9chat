@@ -22,7 +22,6 @@ export const profileValidator = v.union(
     status: v.literal("deleting"),
     authUserId: v.string(),
     requestedAt: v.number(),
-    lastStepAt: v.optional(v.number()),
     photoStorageId: v.optional(v.id("_storage")),
     signInAccountDeletedAt: v.optional(v.number()),
   }),

@@ -3,7 +3,7 @@ import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { mutation } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
-import { active, fail } from "./lib/access";
+import { active } from "./lib/access";
 async function cap(ctx: MutationCtx, profileId: Id<"profiles">) {
   const rows = await ctx.db
     .query("devices")
@@ -16,8 +16,9 @@ export const registerExpo = mutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const profile = await active(ctx);
+    if (args.expoPushToken.length > 200) throw new Error("Push token exceeds 200 characters");
     if (!/^(ExponentPushToken|ExpoPushToken)\[[\w-]+\]$/u.test(args.expoPushToken))
-      return fail("bad_attachment");
+      throw new Error("Invalid push subscription");
     const row = await ctx.db
       .query("devices")
       .withIndex("by_expo_push_token", (q) => q.eq("expoPushToken", args.expoPushToken))
@@ -38,11 +39,13 @@ export const registerWeb = mutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const profile = await active(ctx);
+    if (args.endpoint.length > 2000 || args.p256dh.length > 200 || args.auth.length > 200)
+      throw new Error("Push subscription exceeds its limits");
     let url: URL;
     try {
       url = new URL(args.endpoint);
     } catch {
-      return fail("bad_attachment");
+      throw new Error("Invalid push subscription");
     }
     // Only browser push services are dispatch targets; a subscription cannot become an SSRF URL.
     if (
@@ -55,11 +58,12 @@ export const registerWeb = mutation({
         "updates.push.services.mozilla.com",
         "web.push.apple.com",
         "wns.windows.com",
+        "notify.windows.com",
       ].some((host) => url.hostname === host || url.hostname.endsWith(`.${host}`)) ||
       !/^[A-Za-z0-9_-]+={0,2}$/u.test(args.p256dh) ||
       !/^[A-Za-z0-9_-]+={0,2}$/u.test(args.auth)
     )
-      return fail("bad_attachment");
+      throw new Error("Invalid push subscription");
     const row = await ctx.db
       .query("devices")
       .withIndex("by_endpoint", (q) => q.eq("endpoint", args.endpoint))
@@ -76,6 +80,8 @@ export const unregister = mutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const profile = await active(ctx);
+    if ((args.endpoint?.length ?? 0) > 2000 || (args.expoPushToken?.length ?? 0) > 200)
+      throw new Error("Push subscription exceeds its limits");
     const rows = await ctx.db
       .query("devices")
       .withIndex("by_profile", (q) => q.eq("profileId", profile._id))
@@ -94,6 +100,7 @@ export const viewing = mutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const profile = await active(ctx);
+    if (args.endpoint.length > 2000) throw new Error("Push endpoint exceeds 2000 characters");
     const row = await ctx.db
       .query("devices")
       .withIndex("by_endpoint", (q) => q.eq("endpoint", args.endpoint))
