@@ -9,6 +9,7 @@ export async function expectLinkHeights(
 ) {
   for (const name of names) {
     const height = (await screen.getByRole(role, name).boundingBox())?.height ?? 0;
-    expect(height).toBeGreaterThanOrEqual(minimum);
+    // Layout floats drift by a hair (44 comes back as 43.99999999999994), so the bound has a rounding allowance.
+    expect(height).toBeGreaterThanOrEqual(minimum - 0.01);
   }
 }
