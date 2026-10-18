@@ -6,10 +6,15 @@ import { useRef, useState } from "react";
 import { useToast } from "../kit/useToast";
 import { ProfileScreen } from "../screens/AuthScreens";
 import { sessionClient, type Session } from "../session/client";
-import { photoRejectedNotice } from "./photoRules";
-import { isPhotoRejection, pickPhoto, type PickedPhoto, uploadPhoto } from "./photos";
+import { MAX_NAME } from "./nameRules";
+import { photoNoticeOf, pickPhoto, type PickedPhoto, uploadPhoto } from "./photos";
 
-const MAX_NAME = 60;
+/** The `photoUploadId` field for the chosen photo, or nothing when there is none. */
+async function uploadedPhoto(photo: PickedPhoto | null) {
+  if (!photo) return {};
+  const token = await sessionClient.fetchAccessToken({ forceRefreshToken: false });
+  return { photoUploadId: await uploadPhoto(photo, token) };
+}
 
 /** First sign-in: a name (required, up to 60 characters) and an optional photo, then Groups. */
 export function SetupJourney({
@@ -41,23 +46,12 @@ export function SetupJourney({
     try {
       await setUp({ displayName });
       // setUp is idempotent: a failed photo upload can retry without creating another profile.
-      await update({
-        displayName,
-        ...(photo
-          ? {
-              photoUploadId: await uploadPhoto(
-                photo,
-                await sessionClient.fetchAccessToken({ forceRefreshToken: false }),
-              ),
-            }
-          : {}),
-      });
+      await update({ displayName, ...(await uploadedPhoto(photo)) });
       onFinished(displayName);
     } catch (error) {
-      if (isPhotoRejection(error)) {
-        setPhoto(null);
-        showToast(photoRejectedNotice);
-      } else showToast("Couldn't save your profile. Try again.");
+      const notice = photoNoticeOf(error);
+      if (notice) setPhoto(null);
+      showToast(notice ?? "Couldn't save your profile. Try again.");
     } finally {
       working.current = false;
     }

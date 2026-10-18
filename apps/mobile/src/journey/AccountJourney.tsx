@@ -1,7 +1,7 @@
 import { api } from "@q9chat/convex";
 import { firstName } from "@q9chat/domain";
 import { useMutation } from "convex/react";
-import { useRouter } from "expo-router";
+import { usePreventRemove, useRouter } from "expo-router";
 import { useRef, useState } from "react";
 
 import { useToast } from "../kit/useToast";
@@ -11,8 +11,8 @@ import { config } from "../session/config";
 import type { SignInMethod } from "../session/contracts";
 import type { Me } from "../types";
 import { profileAvatar } from "./groupRows";
-import { photoRejectedNotice } from "./photoRules";
-import { isPhotoRejection, pickPhoto, uploadPhoto } from "./photos";
+import { MAX_NAME } from "./nameRules";
+import { photoNoticeOf, pickPhoto, uploadPhoto } from "./photos";
 import { useSignOut } from "./SignOut";
 import type { ReadyProfile } from "./useStage";
 
@@ -51,31 +51,39 @@ export function AccountJourney({
       const token = await sessionClient.fetchAccessToken({ forceRefreshToken: false });
       await update({ photoUploadId: await uploadPhoto(picked.photo, token) });
     } catch (error) {
-      showToast(
-        isPhotoRejection(error) ? photoRejectedNotice : "Couldn't update your photo. Try again.",
-      );
+      showToast(photoNoticeOf(error) ?? "Couldn't update your photo. Try again.");
     } finally {
       busy.current = false;
     }
   }
 
-  async function leaveAccount() {
-    if (busy.current) return;
+  /** Saves the name when it changed; false when it is invalid or the save failed, so the screen stays open. */
+  async function saveName() {
+    if (busy.current) return false;
     const displayName = name.trim();
-    if (displayName === profile.displayName) {
-      router.back();
-      return;
+    if (displayName === profile.displayName) return true;
+    if (!displayName || displayName.length > MAX_NAME) {
+      showToast("Enter a name of 1 to 60 characters.");
+      return false;
     }
     busy.current = true;
     try {
       await update({ displayName });
-      router.back();
+      return true;
     } catch {
-      showToast("Enter a name of 1 to 60 characters.");
+      showToast("Couldn't save your name. Try again.");
+      return false;
     } finally {
       busy.current = false;
     }
   }
+
+  // Every way out (the header arrow, the iOS swipe, the Android Back) is held here until the name is saved.
+  usePreventRemove(draft !== null && draft.trim() !== profile.displayName, ({ repeat }) => {
+    void saveName().then((saved) => {
+      if (saved) repeat();
+    });
+  });
 
   return (
     <AccountScreen
@@ -96,7 +104,7 @@ export function AccountJourney({
       onTogglePhoto={() => void changePhoto()}
       confirmDelete={false}
       toast={toast}
-      onBack={() => void leaveAccount()}
+      onBack={() => router.back()}
       onSignOut={signOut.leave}
       onAskDelete={() => showToast(COMING_NEXT)}
       onConfirmDelete={noop}

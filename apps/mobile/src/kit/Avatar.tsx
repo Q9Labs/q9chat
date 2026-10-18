@@ -1,5 +1,5 @@
 import { useContext, useState } from "react";
-import { Image, View } from "react-native";
+import { Image, StyleSheet, View } from "react-native";
 
 import { useTheme } from "../theme";
 import { T } from "../theme/Text";
@@ -20,11 +20,19 @@ const fontFor: Record<number, number> = {
   72: 24,
 };
 
-/** Round for people and groups alike: a photo, else initials on the person's fixed color. */
+/**
+ * Round for people and groups alike: the initials on the person's fixed color are always drawn, and a photo
+ * covers them once it has loaded, so a photo that is loading or fails never leaves a blank circle.
+ * `testID` is "avatar-photo" while the photo shows and "avatar-initials" otherwise.
+ */
 export function Avatar({ avatar, size = 32 }: { avatar: AvatarData; size?: number }) {
   if (avatar.kind === "person" && avatar.photoUrl)
-    return <PhotoAvatar key={avatar.photoUrl} avatar={avatar} url={avatar.photoUrl} size={size} />;
-  return <InitialsAvatar avatar={avatar} size={size} />;
+    return <PersonAvatar key={avatar.photoUrl} avatar={avatar} url={avatar.photoUrl} size={size} />;
+  return (
+    <View testID="avatar-initials" style={shapeOf(size)}>
+      <Initials avatar={avatar} size={size} />
+    </View>
+  );
 }
 
 const shapeOf = (size: number) => ({
@@ -34,27 +42,32 @@ const shapeOf = (size: number) => ({
   overflow: "hidden" as const,
 });
 
-/** The protected photo; one that fails to load falls back to the initials. */
-function PhotoAvatar({ avatar, url, size }: { avatar: AvatarData; url: string; size: number }) {
-  const [failed, setFailed] = useState(false);
+/** A person with a protected photo: the initials underneath until the photo has loaded and drawn on top. */
+function PersonAvatar({ avatar, url, size }: { avatar: AvatarData; url: string; size: number }) {
+  const [photo, setPhoto] = useState<"loading" | "loaded" | "failed">("loading");
   const auth = useContext(ImageAuthContext);
-  if (failed) return <InitialsAvatar avatar={avatar} size={size} />;
   return (
-    <Image
-      source={{
-        uri: url,
-        ...(auth && url.startsWith(auth.origin) ? { headers: auth.headers } : {}),
-      }}
-      style={shapeOf(size)}
-      accessibilityElementsHidden
-      onError={() => setFailed(true)}
-    />
+    <View testID={photo === "loaded" ? "avatar-photo" : "avatar-initials"} style={shapeOf(size)}>
+      {photo === "loaded" ? null : <Initials avatar={avatar} size={size} />}
+      {photo === "failed" ? null : (
+        <Image
+          source={{
+            uri: url,
+            ...(auth && url.startsWith(auth.origin) ? { headers: auth.headers } : {}),
+          }}
+          style={StyleSheet.absoluteFill}
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+          onLoad={() => setPhoto("loaded")}
+          onError={() => setPhoto("failed")}
+        />
+      )}
+    </View>
   );
 }
 
-function InitialsAvatar({ avatar, size }: { avatar: AvatarData; size: number }) {
+function Initials({ avatar, size }: { avatar: AvatarData; size: number }) {
   const { c } = useTheme();
-  const base = shapeOf(size);
   const group = avatar.kind === "group";
   const font = fontFor[size] ?? Math.round(size * 0.375);
   return (
@@ -62,7 +75,7 @@ function InitialsAvatar({ avatar, size }: { avatar: AvatarData; size: number }) 
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
       style={[
-        base,
+        StyleSheet.absoluteFill,
         {
           alignItems: "center",
           justifyContent: "center",

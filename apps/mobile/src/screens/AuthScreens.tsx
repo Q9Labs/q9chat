@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import {
   KeyboardAvoidingView,
+  Platform,
   ScrollView,
   TextInput,
   View,
@@ -17,9 +18,9 @@ import { Toast, type ToastNotice } from "../kit/Overlays";
 import { Press } from "../kit/Press";
 import { useTheme } from "../theme";
 import { T } from "../theme/Text";
-import { fonts, radius } from "../theme/tokens";
+import { radius } from "../theme/tokens";
 import type { Avatar as AvatarData } from "../types";
-import { backspaceInCode, CELL_IDS, CODE_LENGTH, type CodeDigits, typeIntoCode } from "./codeInput";
+import { CELL_IDS, CODE_LENGTH, readCode } from "./codeInput";
 
 /**
  * Centered column on the surface; the card is 100% wide with 24px sides, children 10px apart.
@@ -59,22 +60,27 @@ function ProviderButton({
   label,
   glyph,
   onPress,
+  disabled,
 }: {
   label: string;
   glyph: React.ReactNode;
   onPress: () => void;
+  disabled: boolean;
 }) {
   const { c } = useTheme();
   return (
     <Press
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
       onPress={onPress}
       style={{
         minHeight: 44,
         paddingHorizontal: 16,
         borderRadius: 999,
         backgroundColor: c.s1,
+        opacity: disabled ? 0.4 : 1,
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "center",
@@ -95,6 +101,7 @@ export function SignInScreen({
   onGoogle,
   onApple,
   onEmailCode,
+  disabled = false,
   notice,
 }: {
   email: string;
@@ -102,6 +109,8 @@ export function SignInScreen({
   onGoogle: () => void;
   onApple: () => void;
   onEmailCode: () => void;
+  /** Sign-in stays off while a sign-out is still being confirmed by the server. */
+  disabled?: boolean;
   notice?: ToastNotice | null;
 }) {
   const { c } = useTheme();
@@ -115,8 +124,18 @@ export function SignInScreen({
           Sign in, or create an account if you're new.
         </T>
       </Hero>
-      <ProviderButton label="Continue with Google" glyph={<GoogleGlyph />} onPress={onGoogle} />
-      <ProviderButton label="Continue with Apple" glyph={<AppleGlyph />} onPress={onApple} />
+      <ProviderButton
+        label="Continue with Google"
+        glyph={<GoogleGlyph />}
+        onPress={onGoogle}
+        disabled={disabled}
+      />
+      <ProviderButton
+        label="Continue with Apple"
+        glyph={<AppleGlyph />}
+        onPress={onApple}
+        disabled={disabled}
+      />
       <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginVertical: 8 }}>
         <View style={{ flex: 1, height: 1, backgroundColor: c.ln }} />
         <T size={12} color="mu">
@@ -136,9 +155,17 @@ export function SignInScreen({
         autoCorrect={false}
         autoComplete="email"
         returnKeyType="go"
+        editable={!disabled}
         onSubmitEditing={onEmailCode}
       />
-      <PillButton label="Email me a code" variant="solid" size="big" wide onPress={onEmailCode} />
+      <PillButton
+        label="Email me a code"
+        variant="solid"
+        size="big"
+        wide
+        disabled={disabled}
+        onPress={onEmailCode}
+      />
       <T size={12} color="mu" lineHeight={19.2} style={{ textAlign: "center", marginTop: 12 }}>
         No passwords. We email you a 6-digit code.
       </T>
@@ -146,27 +173,37 @@ export function SignInScreen({
   );
 }
 
+/** A link of its own line, 44 points tall, so two of them stack without sharing a touch area. */
 function LinkText({ children, onPress }: { children: string; onPress: () => void }) {
   const { c } = useTheme();
   return (
-    <T
-      size={12}
-      weight={600}
-      lineHeight={19.2}
-      onPress={onPress}
+    <Press
       accessibilityRole="link"
-      style={{ textDecorationLine: "underline", textDecorationColor: c.ln2 }}
+      accessibilityLabel={children}
+      onPress={onPress}
+      scaleTo={1}
+      style={{ minWidth: 44, minHeight: 44, paddingHorizontal: 8, justifyContent: "center" }}
     >
-      {children}
-    </T>
+      <T
+        size={12}
+        weight={600}
+        lineHeight={19.2}
+        style={{ textDecorationLine: "underline", textDecorationColor: c.ln2 }}
+      >
+        {children}
+      </T>
+    </Press>
   );
 }
 
-/** Six labeled digit cells: typing advances, a paste fills forward, backspace clears its own cell. */
+/**
+ * One six-digit field drawn as six cells. The field itself is invisible and covers the cells, so typing,
+ * pasting a code and the system's one-time-code suggestion all land in the same place.
+ */
 export function CodeScreen({
   email,
-  digits,
-  onDigitsChange,
+  code,
+  onCodeChange,
   error,
   focusKey = 0,
   onResend,
@@ -174,28 +211,22 @@ export function CodeScreen({
   notice,
 }: {
   email: string;
-  digits: CodeDigits;
-  onDigitsChange: (digits: CodeDigits) => void;
+  code: string;
+  onCodeChange: (code: string) => void;
   /** The alert under the cells; empty when there is nothing to say. */
   error: string;
-  /** Focus goes to the first cell when the screen opens and whenever this number changes. */
+  /** Focus goes to the field when the screen opens and whenever this number changes. */
   focusKey?: number;
   onResend: () => void;
   onChangeEmail: () => void;
   notice?: ToastNotice | null;
 }) {
   const { c } = useTheme();
-  const refs = useRef<(TextInputInstance | null)[]>([]);
+  const input = useRef<TextInputInstance>(null);
   useEffect(() => {
-    refs.current[0]?.focus();
+    input.current?.focus();
     // oxlint-disable-next-line react/exhaustive-effect-dependencies -- focusKey only asks for the focus again
   }, [focusKey]);
-  const nextIndex = digits.findIndex((digit) => !digit);
-  const apply = (edit: { digits: CodeDigits; focus: number } | null) => {
-    if (!edit) return;
-    onDigitsChange(edit.digits);
-    refs.current[edit.focus]?.focus();
-  };
 
   return (
     <AuthFrame notice={notice}>
@@ -227,24 +258,45 @@ export function CodeScreen({
           {"."}
         </T>
       </Hero>
-      <View
-        accessibilityLabel="6-digit code"
-        style={{ flexDirection: "row", justifyContent: "center", gap: 8, marginVertical: 4 }}
-      >
-        {CELL_IDS.map((id, index) => (
-          <CodeCell
-            key={id}
-            index={index}
-            digit={digits[index] ?? ""}
-            bad={error !== ""}
-            next={index === nextIndex}
-            setRef={(node) => {
-              refs.current[index] = node;
-            }}
-            onType={(text) => apply(typeIntoCode(digits, index, text))}
-            onBackspace={() => apply(backspaceInCode(digits, index))}
-          />
-        ))}
+      <View style={{ alignSelf: "center", marginVertical: 4 }}>
+        <View
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+          style={{ flexDirection: "row", gap: 8 }}
+        >
+          {CELL_IDS.map((id, index) => (
+            <CodeCell
+              key={id}
+              digit={code[index] ?? ""}
+              bad={error !== ""}
+              next={index === Math.min(code.length, CODE_LENGTH - 1)}
+            />
+          ))}
+        </View>
+        <TextInput
+          ref={input}
+          accessibilityLabel="6-digit code"
+          accessibilityHint="Each digit fills the next cell"
+          value={code}
+          onChangeText={(text) => onCodeChange(readCode(code, text))}
+          inputMode="numeric"
+          keyboardType="number-pad"
+          textContentType="oneTimeCode"
+          autoComplete={Platform.OS === "android" ? "sms-otp" : "one-time-code"}
+          maxFontSizeMultiplier={1.3}
+          caretHidden
+          selectionColor="transparent"
+          style={{
+            position: "absolute",
+            top: 0,
+            right: 0,
+            bottom: 0,
+            left: 0,
+            padding: 0,
+            color: "transparent",
+            backgroundColor: "transparent",
+          }}
+        />
       </View>
       <T
         size={13}
@@ -256,66 +308,34 @@ export function CodeScreen({
       </T>
       <View style={{ alignItems: "center", marginTop: 12 }}>
         <T size={12} color="mu" lineHeight={19.2} style={{ textAlign: "center" }}>
-          {"Didn't get it? Check spam, or "}
-          <LinkText onPress={onResend}>send a new code</LinkText>
-          {"."}
+          Didn't get it? Check spam.
         </T>
+        <LinkText onPress={onResend}>Send a new code</LinkText>
         <LinkText onPress={onChangeEmail}>Use a different email</LinkText>
       </View>
     </AuthFrame>
   );
 }
 
-function CodeCell({
-  index,
-  digit,
-  bad,
-  next,
-  setRef,
-  onType,
-  onBackspace,
-}: {
-  index: number;
-  digit: string;
-  bad: boolean;
-  /** The cell the next digit lands in; the screen keeps focus there, so it carries the focus ring. */
-  next: boolean;
-  setRef: (node: TextInputInstance | null) => void;
-  onType: (text: string) => void;
-  onBackspace: () => void;
-}) {
+function CodeCell({ digit, bad, next }: { digit: string; bad: boolean; next: boolean }) {
   const { c } = useTheme();
   return (
-    <TextInput
-      ref={setRef}
-      accessibilityLabel={`Digit ${index + 1}`}
-      value={digit}
-      inputMode="numeric"
-      keyboardType="number-pad"
-      maxLength={CODE_LENGTH}
-      maxFontSizeMultiplier={1.3}
-      textContentType={index === 0 ? "oneTimeCode" : "none"}
-      autoComplete={index === 0 ? "one-time-code" : "off"}
-      selectionColor={c.ac}
-      onChangeText={onType}
-      onKeyPress={(event) => {
-        if (event.nativeEvent.key === "Backspace") onBackspace();
-      }}
+    <View
       style={{
         width: 48,
         height: 56,
-        padding: 0,
         borderRadius: radius.input,
         borderWidth: 1,
         borderColor: bad ? c.er : next ? c.tx : "transparent",
         backgroundColor: c.s1,
-        textAlign: "center",
-        fontFamily: fonts[600],
-        fontSize: 22,
-        color: c.tx,
-        fontVariant: ["tabular-nums"],
+        alignItems: "center",
+        justifyContent: "center",
       }}
-    />
+    >
+      <T size={22} weight={600} style={{ fontVariant: ["tabular-nums"] }}>
+        {digit}
+      </T>
+    </View>
   );
 }
 

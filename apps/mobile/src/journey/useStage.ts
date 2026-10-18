@@ -12,8 +12,16 @@ export type Stage =
   | { kind: "loading" }
   | { kind: "signedOut" }
   | { kind: "unavailable" }
+  | { kind: "offline" }
   | { kind: "needsSetup"; session: Session }
   | { kind: "ready"; session: Session; profile: ReadyProfile };
+
+/** The stage for every session status that has no account to look at yet. */
+const WITHOUT_ACCOUNT = {
+  loading: { kind: "loading" },
+  unauthenticated: { kind: "signedOut" },
+  offline: { kind: "offline" },
+} as const;
 
 export function useStage(): Stage {
   const state = useSessionState();
@@ -23,8 +31,7 @@ export function useStage(): Stage {
     api.profiles.me,
     state.status === "authenticated" && isAuthenticated ? {} : "skip",
   );
-  if (state.status === "loading") return { kind: "loading" };
-  if (state.status === "unauthenticated") return { kind: "signedOut" };
+  if (state.status !== "authenticated") return WITHOUT_ACCOUNT[state.status];
   if (isLoading) return { kind: "loading" };
   if (!isAuthenticated) return { kind: "unavailable" };
   return profileStage(state.session, me);

@@ -2,7 +2,6 @@ import { ScrollView, TextInput, View } from "react-native";
 
 import { Avatar } from "../kit/Avatar";
 import { Screen } from "../kit/Chrome";
-import { truncate } from "../kit/format";
 import { Icon } from "../kit/Icon";
 import { Press } from "../kit/Press";
 import { useTheme } from "../theme";
@@ -21,11 +20,8 @@ export type SearchScreenProps = {
   onCancel: () => void;
 };
 
-const SCOPE_LIMIT = 22;
-
 function ScopeChip({ title, onClear }: { title: string; onClear: () => void }) {
   const { c } = useTheme();
-  const shown = truncate(title, SCOPE_LIMIT);
   return (
     <View
       style={{
@@ -46,7 +42,7 @@ function ScopeChip({ title, onClear }: { title: string; onClear: () => void }) {
         color="tx2"
         numberOfLines={1}
         style={{ flexShrink: 1 }}
-      >{`In ${shown}`}</T>
+      >{`In ${title}`}</T>
       <Press
         accessibilityRole="button"
         accessibilityLabel="Search all groups"

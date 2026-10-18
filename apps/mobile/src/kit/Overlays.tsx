@@ -305,7 +305,13 @@ export function Toast({ text, action }: ToastNotice) {
           {text}
         </T>
         {action ? (
-          <Press accessibilityRole="button" onPress={action.onPress} scaleTo={1} hitSlop={8}>
+          <Press
+            accessibilityRole="button"
+            onPress={action.onPress}
+            scaleTo={1}
+            hitSlop={8}
+            style={{ minWidth: 44, minHeight: 44, justifyContent: "center" }}
+          >
             <T size={14} weight={600} color="ac">
               {action.label}
             </T>

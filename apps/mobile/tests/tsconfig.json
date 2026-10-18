@@ -1,5 +1,10 @@
 {
   "extends": "../tsconfig.json",
-  "compilerOptions": { "allowImportingTsExtensions": true, "types": ["node"] },
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    // config.ts reads process.env.NAME on purpose: Expo inlines only that form.
+    "noPropertyAccessFromIndexSignature": false,
+    "types": ["node"]
+  },
   "include": ["."]
 }

@@ -1,5 +1,6 @@
 import { ConvexProviderWithAuth, ConvexReactClient } from "convex/react";
 import { useEffect, useMemo, type ReactNode } from "react";
+import { AppState } from "react-native";
 
 import { sessionClient, useSessionState } from "./client";
 import { config } from "./config";
@@ -22,6 +23,11 @@ function useConvexSession() {
 export function SessionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void sessionClient.bootstrap();
+    // Coming back to the app is the moment a lost connection may have returned.
+    const subscription = AppState.addEventListener("change", (next) => {
+      if (next === "active") void sessionClient.retry();
+    });
+    return () => subscription.remove();
   }, []);
   return (
     <ConvexProviderWithAuth

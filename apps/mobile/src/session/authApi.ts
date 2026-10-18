@@ -1,8 +1,8 @@
 import { Either, Schema } from "effect";
 
-import { config } from "./config";
-import { EmailVerificationError, PhoneSession, VerificationFailure } from "./contracts";
-import { applySetCookie, cookieHeader, type Jar } from "./cookies";
+import { config } from "./config.ts";
+import { EmailVerificationError, PhoneSession, VerificationFailure } from "./contracts.ts";
+import { applySetCookie, cookieHeader, type Jar } from "./cookies.ts";
 
 /**
  * One POST to the Worker. The phone has no cookie jar of its own, so the sign-in transaction

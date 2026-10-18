@@ -8,6 +8,7 @@ import { api } from "@q9chat/convex";
 import { ConvexHttpClient } from "convex/browser";
 import { expect, type Locator } from "e2e";
 
+import { expectLinkHeights } from "./support/targets.js";
 import {
   deletePhoneProfile,
   magicCode,
@@ -138,25 +139,31 @@ test(
       await enter(screen.getByLabel("Email"), email);
       await screen.getByRole("button", "Email me a code").tap();
       await expect(screen.getByText("Check your email")).toBeVisible();
-      await expect(screen.getByLabel("Digit 1")).toBeFocused();
+      await expect(screen.getByLabel("6-digit code")).toBeFocused();
       await expect(screen.getByText(`Enter the 6-digit code we sent to ${email}.`)).toBeVisible();
+      // The two links are separate press targets, each at least 44 points tall.
+      await expectLinkHeights(screen, ["Send a new code", "Use a different email"], 44);
       await app.screenshot("02-code");
 
       await magicCode(email);
-      await screen.getByRole("link", "send a new code").tap();
+      await screen.getByRole("link", "Send a new code").tap();
       await expect(screen.getByText("We sent a new code")).toBeVisible();
-      await expect(screen.getByLabel("Digit 1")).toBeFocused();
+      await expect(screen.getByLabel("6-digit code")).toBeFocused();
       const code = await magicCode(email);
-      // The code cells hand focus on after each digit, so the code is typed key by key from the first cell.
+      // The field clears itself on a wrong code, so the digits are typed key by key.
       await screen
-        .getByLabel("Digit 1")
+        .getByLabel("6-digit code")
         .pressSequentially(code === "000000" ? "111111" : "000000", { delay: 80 });
       await expect(
         screen.getByText("That code didn't work. Check it and try again."),
       ).toBeVisible();
-      await expect(screen.getByLabel("Digit 1")).toHaveValue("");
-      await expect(screen.getByLabel("Digit 1")).toBeFocused();
-      await screen.getByLabel("Digit 1").pressSequentially(code, { delay: 80 });
+      await expect(screen.getByLabel("6-digit code")).toHaveValue("");
+      await expect(screen.getByLabel("6-digit code")).toBeFocused();
+      // The right code is pasted over a digit already in the field: the paste must replace it, not pile on.
+      await screen.getByLabel("6-digit code").pressSequentially("9", { delay: 80 });
+      await device.setClipboard(code);
+      await screen.getByLabel("6-digit code").longPress();
+      await screen.getByText("Paste", { exact: true }).tap();
 
       await expect(screen.getByText("Set up your profile")).toBeVisible();
       await expect(
@@ -181,6 +188,8 @@ test(
 
       await expect(screen.getByText("No groups yet")).toBeVisible();
       await expect(screen.getByText("Welcome, Nadia")).toBeVisible();
+      // The header avatar is the Account button: it must draw the photo or the initials, never a blank circle.
+      await expect(screen.getByTestId(/^avatar-(photo|initials)$/)).toBeVisible();
       await app.screenshot("04-empty-groups");
 
       const peerSignIn = await signInPhone(secondEmail);
@@ -206,12 +215,26 @@ test(
       await expect(
         screen.getByRole("button", "Journey live group, Sara: Welcome to the live group, 1 unread"),
       ).toBeVisible();
+      await expect(screen.getByTestId("avatar-photo")).toBeVisible();
       await app.screenshot("05-live-groups");
 
       await screen.getByRole("button", "Account", { exact: true }).tap();
       await expect(screen.getByText("Signed in with")).toBeVisible();
       await expect(screen.getByText(`Email code · ${email}`)).toBeVisible();
       await app.screenshot("06-account");
+      // A name edit survives every way out: the iOS swipe back, then the header arrow.
+      const name = screen.getByRole("textbox", "Name", { exact: true });
+      await name.fill("Nadia Swipe");
+      await device.dismissKeyboard();
+      await screen.swipe({ from: { x: 2, y: 400 }, to: { x: 300, y: 400 } });
+      await expect(screen.getByText("Journey live group", { exact: false })).toBeVisible();
+      await screen.getByRole("button", "Account", { exact: true }).tap();
+      await expect(name).toHaveValue("Nadia Swipe");
+      await name.fill("Nadia Arrow");
+      await screen.getByRole("button", "Back").tap();
+      await expect(screen.getByText("Journey live group", { exact: false })).toBeVisible();
+      await screen.getByRole("button", "Account", { exact: true }).tap();
+      await expect(name).toHaveValue("Nadia Arrow");
       await screen.getByRole("button", "Sign out", { exact: true }).tap();
       await expect(screen.getByRole("button", "Email me a code")).toBeVisible();
       await expect(screen.getByText("Signed out")).toBeVisible();

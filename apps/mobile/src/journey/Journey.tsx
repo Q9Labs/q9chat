@@ -5,6 +5,7 @@ import { useState } from "react";
 import { PillButton } from "../kit/Buttons";
 import { CenterState } from "../kit/Chrome";
 import { Screen } from "../kit/Chrome";
+import { sessionClient } from "../session/client";
 import { GroupsJourney } from "./GroupsJourney";
 import { Loading } from "./Loading";
 import { postNotice } from "./notice";
@@ -27,6 +28,19 @@ function AccountUnavailable() {
   );
 }
 
+function CantConnect() {
+  return (
+    <Screen>
+      <CenterState
+        icon="ban"
+        title="Can't connect. Try again."
+        text="Your sign-in is saved. Check your connection and try again."
+        action={<PillButton label="Try again" onPress={() => void sessionClient.retry()} />}
+      />
+    </Screen>
+  );
+}
+
 /** Journey 1: sign in, set up the profile the first time, and land in your groups. */
 export function Journey() {
   const stage = useStage();
@@ -35,6 +49,7 @@ export function Journey() {
   const [saving, setSaving] = useState(false);
   if (stage.kind === "loading") return <Loading />;
   if (stage.kind === "signedOut") return <SignInJourney authError={authError === "1"} />;
+  if (stage.kind === "offline") return <CantConnect />;
   if (stage.kind === "unavailable") return <AccountUnavailable />;
   if (stage.kind === "needsSetup" || saving)
     return (

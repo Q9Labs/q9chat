@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ToastNotice } from "../kit/Overlays";
 import { useToast } from "../kit/useToast";
 import { CodeScreen, SignInScreen } from "../screens/AuthScreens";
-import { type CodeDigits, emptyDigits, isComplete } from "../screens/codeInput";
+import { isComplete } from "../screens/codeInput";
 import { sessionClient } from "../session/client";
 import { EmailVerificationError, SignInIncompleteError } from "../session/contracts";
 import type { Provider } from "../session/pkce";
@@ -31,18 +31,20 @@ export function SignInJourney({ authError }: { authError: boolean }) {
   const signOut = useSignOut();
   const [email, setEmail] = useState("");
   const [codeEmail, setCodeEmail] = useState<string | null>(null);
-  const [digits, setDigits] = useState<CodeDigits>(emptyDigits);
+  const [code, setCode] = useState("");
   const [codeError, setCodeError] = useState("");
   const [focusKey, setFocusKey] = useState(0);
   const [toast, showToast] = useToast();
   const busy = useRef(false);
+  // A sign-out still waiting for the server blocks every way to sign in.
+  const locked = () => busy.current || signOut.status === "pending";
 
   useEffect(() => {
     if (authError) showToast(INCOMPLETE);
   }, [authError, showToast]);
 
   async function sendCode(resend = false) {
-    if (busy.current) return;
+    if (locked()) return;
     signOut.clear();
     const target = resend ? codeEmail : email.trim();
     if (!target || !EMAIL_SHAPE.test(target)) {
@@ -53,7 +55,7 @@ export function SignInJourney({ authError }: { authError: boolean }) {
     try {
       await sessionClient.startEmail(target);
       setCodeEmail(target);
-      setDigits(emptyDigits());
+      setCode("");
       setCodeError("");
       setFocusKey((key) => key + 1);
       if (resend) showToast("We sent a new code");
@@ -64,17 +66,17 @@ export function SignInJourney({ authError }: { authError: boolean }) {
     }
   }
 
-  async function enterDigits(next: CodeDigits) {
+  async function enterCode(next: string) {
     if (busy.current) return;
-    setDigits(next);
+    setCode(next);
     setCodeError("");
     if (!isComplete(next) || codeEmail === null) return;
     busy.current = true;
     try {
-      await sessionClient.verifyEmail(codeEmail, next.join(""));
+      await sessionClient.verifyEmail(codeEmail, next);
     } catch (error) {
       if (error instanceof EmailVerificationError) {
-        setDigits(emptyDigits());
+        setCode("");
         setCodeError(error.message);
         setFocusKey((key) => key + 1);
       } else showToast(INCOMPLETE);
@@ -84,7 +86,7 @@ export function SignInJourney({ authError }: { authError: boolean }) {
   }
 
   async function signInWith(provider: Provider) {
-    if (busy.current) return;
+    if (locked()) return;
     signOut.clear();
     busy.current = true;
     try {
@@ -111,14 +113,15 @@ export function SignInJourney({ authError }: { authError: boolean }) {
         onGoogle={() => void signInWith("google")}
         onApple={() => void signInWith("apple")}
         onEmailCode={() => void sendCode()}
+        disabled={signOut.status === "pending"}
         notice={notice}
       />
     );
   return (
     <CodeScreen
       email={codeEmail}
-      digits={digits}
-      onDigitsChange={(next) => void enterDigits(next)}
+      code={code}
+      onCodeChange={(next) => void enterCode(next)}
       error={codeError}
       focusKey={focusKey}
       onResend={() => void sendCode(true)}

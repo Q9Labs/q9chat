@@ -9,6 +9,7 @@ import { api } from "@q9chat/convex";
 import { ConvexHttpClient } from "convex/browser";
 import { expect } from "e2e";
 
+import { expectLinkHeights } from "./support/targets.js";
 import {
   deletePhoneProfile,
   magicCode,
@@ -137,24 +138,32 @@ test(
       await screen.getByLabel("Email").fill(email);
       await screen.getByRole("button", "Email me a code").tap();
       await expect(screen.getByRole("heading", "Check your email")).toBeVisible();
-      await expect(screen.getByLabel("Digit 1")).toBeFocused();
+      await expect(screen.getByLabel("6-digit code")).toBeFocused();
       await expect(screen.getByText(`Enter the 6-digit code we sent to ${email}.`)).toBeVisible();
+      // The two links are separate press targets, each at least 44 pixels tall.
+      await expectLinkHeights(screen, ["Send a new code", "Use a different email"], 44);
       shot("02-code");
 
       await magicCode(email);
-      await screen.getByText("send a new code").tap();
+      await screen.getByText("Send a new code").tap();
       await expect(screen.getByText("We sent a new code")).toBeVisible();
-      await expect(screen.getByLabel("Digit 1")).toBeFocused();
+      await expect(screen.getByLabel("6-digit code")).toBeFocused();
       const code = await magicCode(email);
-      // The app clears the cells as soon as the sixth digit is wrong, so `fill`'s read-back would fail: type the
+      // The app clears the field as soon as the sixth digit is wrong, so `fill`'s read-back would fail: type the
       // digits one key at a time instead.
-      await screen.getByLabel("Digit 1").pressSequentially(code === "000000" ? "111111" : "000000");
+      await screen
+        .getByLabel("6-digit code")
+        .pressSequentially(code === "000000" ? "111111" : "000000");
       await expect(
         screen.getByText("That code didn't work. Check it and try again."),
       ).toBeVisible();
-      await expect(screen.getByLabel("Digit 1")).toHaveValue("");
-      await expect(screen.getByLabel("Digit 1")).toBeFocused();
-      await screen.getByLabel("Digit 1").pressSequentially(code);
+      await expect(screen.getByLabel("6-digit code")).toHaveValue("");
+      await expect(screen.getByLabel("6-digit code")).toBeFocused();
+      // The right code is pasted over a digit already in the field: the paste must replace it, not pile on.
+      await screen.getByLabel("6-digit code").pressSequentially("9");
+      await device.setClipboard(code);
+      await screen.getByLabel("6-digit code").longPress();
+      await screen.getByText("Paste", { exact: true }).tap();
 
       await expect(screen.getByRole("heading", "Set up your profile")).toBeVisible();
       await expect(
@@ -180,6 +189,8 @@ test(
 
       await expect(screen.getByText("No groups yet")).toBeVisible();
       await expect(screen.getByText("Welcome, Nadia")).toBeVisible();
+      // The header avatar is the Account button: it must draw the photo or the initials, never a blank circle.
+      await expect(screen.getByTestId(/^avatar-(photo|initials)$/)).toBeVisible();
       shot("04-empty-groups");
 
       const peerSignIn = await signInPhone(secondEmail);
@@ -205,12 +216,21 @@ test(
       await expect(
         screen.getByRole("button", "Journey live group, Sara: Welcome to the live group, 1 unread"),
       ).toBeVisible();
+      await expect(screen.getByTestId("avatar-photo")).toBeVisible();
       shot("05-live-groups");
 
       await screen.getByRole("button", "Account", { exact: true }).tap();
       await expect(screen.getByText("Signed in with")).toBeVisible();
       await expect(screen.getByText(`Email code · ${email}`)).toBeVisible();
       shot("06-account");
+      // A name edit survives the system Back button.
+      const name = screen.getByRole("textbox", "Name", { exact: true });
+      await name.fill("Nadia Back");
+      await device.dismissKeyboard();
+      await device.back();
+      await expect(screen.getByText("Journey live group", { exact: false })).toBeVisible();
+      await screen.getByRole("button", "Account", { exact: true }).tap();
+      await expect(name).toHaveValue("Nadia Back");
       await screen.getByRole("button", "Sign out", { exact: true }).tap();
       await expect(screen.getByRole("button", "Email me a code")).toBeVisible();
       await expect(screen.getByText("Signed out")).toBeVisible();
