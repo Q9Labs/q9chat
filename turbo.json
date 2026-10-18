@@ -9,16 +9,8 @@
       "inputs": ["$TURBO_DEFAULT$", "!**/*.md", "!**/*.test.*", "!**/*.spec.*"],
       "outputs": ["dist/**", ".output/**", "build/**"]
     },
-    "codegen": {
-      "cache": false
-    },
     "typecheck": {
       "dependsOn": ["^build"],
-      "inputs": ["$TURBO_DEFAULT$", "!**/*.md"],
-      "outputs": []
-    },
-    "@q9chat/convex#typecheck": {
-      "dependsOn": ["codegen"],
       "inputs": ["$TURBO_DEFAULT$", "!**/*.md"],
       "outputs": []
     },
