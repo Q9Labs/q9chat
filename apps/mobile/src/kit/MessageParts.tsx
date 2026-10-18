@@ -1,15 +1,22 @@
 import { useState } from "react";
-import { Image, View, type LayoutChangeEvent } from "react-native";
+import {
+  Image,
+  Linking,
+  View,
+  type AccessibilityActionEvent,
+  type AccessibilityActionInfo,
+  type LayoutChangeEvent,
+} from "react-native";
 
 import { useTheme } from "../theme";
 import { T } from "../theme/Text";
 import type { Quote, Reaction, Segment } from "../types";
 import { PopIn } from "./Controls";
-import { formatDuration, keyedByOffset } from "./format";
+import { formatDuration, isWebUrl, keyedByOffset } from "./format";
 import { Icon } from "./Icon";
 import { Press } from "./Press";
 
-/** Body text: @mentions in the accent color, links underlined. */
+/** Body text: @mentions in the accent color, links underlined; an http or https link opens on tap. */
 export function BodyText({ segments, edited }: { segments: readonly Segment[]; edited?: boolean }) {
   const { c } = useTheme();
   return (
@@ -24,7 +31,14 @@ export function BodyText({ segments, edited }: { segments: readonly Segment[]; e
         }
         if (segment.type === "link") {
           return (
-            <T key={key} style={{ textDecorationLine: "underline", textDecorationColor: c.mu }}>
+            <T
+              key={key}
+              accessibilityRole="link"
+              onPress={() => {
+                if (isWebUrl(segment.text)) void Linking.openURL(segment.text);
+              }}
+              style={{ textDecorationLine: "underline", textDecorationColor: c.mu }}
+            >
               {segment.text}
             </T>
           );
@@ -54,7 +68,7 @@ export function QuoteBar({ quote, onPress }: { quote: Quote; onPress?: () => voi
         alignSelf: "flex-start",
         marginTop: 2,
         marginBottom: 6,
-        paddingLeft: 9,
+        paddingStart: 9,
         borderStartWidth: 2,
         borderStartColor: c.ac,
       }}
@@ -96,9 +110,9 @@ export function ReactionPills({
             delayLongPress={480}
             scaleTo={0.94}
             style={{
-              height: 26,
-              paddingLeft: 7,
-              paddingRight: 9,
+              minHeight: 26,
+              paddingStart: 7,
+              paddingEnd: 9,
               borderRadius: 999,
               flexDirection: "row",
               alignItems: "center",
@@ -106,10 +120,10 @@ export function ReactionPills({
               backgroundColor: reaction.mine ? c.acw : c.s1,
             }}
           >
-            <T size={14} lineHeight={14}>
+            <T size={14} lineHeight={14} capped>
               {reaction.emoji}
             </T>
-            <T size={12} weight={600} tabular color={reaction.mine ? "ac" : "mu"}>
+            <T size={12} weight={600} tabular capped color={reaction.mine ? "ac" : "mu"}>
               {String(reaction.count)}
             </T>
           </Press>
@@ -128,8 +142,8 @@ export function FileCard({ name, size }: { name: string; size: string }) {
         maxWidth: "100%",
         minHeight: 56,
         paddingVertical: 8,
-        paddingLeft: 10,
-        paddingRight: 14,
+        paddingStart: 10,
+        paddingEnd: 14,
         borderRadius: 14,
         backgroundColor: c.s1,
         flexDirection: "row",
@@ -201,12 +215,16 @@ export function VoiceNote({
   playing,
   progress = 0,
   onTogglePlay,
+  accessibilityActions,
+  onAccessibilityAction,
 }: {
   durationSeconds: number;
   waveform: readonly number[];
   playing?: boolean;
   progress?: number;
   onTogglePlay?: () => void;
+  accessibilityActions?: AccessibilityActionInfo[];
+  onAccessibilityAction?: (event: AccessibilityActionEvent) => void;
 }) {
   const { c } = useTheme();
   return (
@@ -217,8 +235,8 @@ export function VoiceNote({
         borderRadius: 18,
         backgroundColor: c.s1,
         paddingVertical: 6,
-        paddingLeft: 6,
-        paddingRight: 14,
+        paddingStart: 6,
+        paddingEnd: 14,
         flexDirection: "row",
         alignItems: "center",
         gap: 10,
@@ -227,6 +245,8 @@ export function VoiceNote({
       <Press
         accessibilityRole="button"
         accessibilityLabel={playing ? "Pause voice note" : "Play voice note"}
+        accessibilityActions={accessibilityActions}
+        onAccessibilityAction={onAccessibilityAction}
         onPress={onTogglePlay}
         style={{
           width: 32,

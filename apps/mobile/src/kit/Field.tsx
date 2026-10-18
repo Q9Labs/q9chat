@@ -23,7 +23,7 @@ export function TextField({
   return (
     <View
       style={{
-        height: 44,
+        minHeight: 44,
         paddingHorizontal: 14,
         borderRadius: radius.input,
         flexDirection: "row",
@@ -71,7 +71,7 @@ export function FlatValue({ icon, text }: { icon: ReactNode; text: string }) {
   return (
     <View
       style={{
-        height: 44,
+        minHeight: 44,
         paddingHorizontal: 14,
         borderRadius: radius.input,
         flexDirection: "row",
@@ -127,12 +127,12 @@ export function LinkBox({
   return (
     <View
       style={{
-        height: 44,
+        minHeight: 44,
         flexDirection: "row",
         alignItems: "center",
         gap: 8,
-        paddingLeft: 14,
-        paddingRight: 4,
+        paddingStart: 14,
+        paddingEnd: 4,
         borderRadius: 12,
         backgroundColor: c.s1,
       }}

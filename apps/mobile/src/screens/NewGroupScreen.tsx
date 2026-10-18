@@ -39,9 +39,9 @@ function PersonChip({ person, onRemove }: { person: Person; onRemove: () => void
   return (
     <View
       style={{
-        height: 30,
-        paddingLeft: 3,
-        paddingRight: 2,
+        minHeight: 30,
+        paddingStart: 3,
+        paddingEnd: 2,
         borderRadius: 999,
         backgroundColor: c.s0,
         flexDirection: "row",
@@ -112,7 +112,7 @@ function PeopleInput({
         style={{
           flex: 1,
           minWidth: 120,
-          height: 30,
+          minHeight: 30,
           paddingVertical: 0,
           paddingHorizontal: 8,
           fontFamily: fonts[400],

@@ -52,7 +52,7 @@ export function PillButton({
       onPress={onPress}
       style={[
         {
-          height,
+          minHeight: height,
           paddingHorizontal: px,
           borderRadius: radius.pill,
           backgroundColor: background ? resolveColor(c, background) : bg,
@@ -67,14 +67,16 @@ export function PillButton({
       ]}
     >
       {icon ? <Icon name={icon} size={18} color={fg} /> : null}
-      <T size={fontSize} weight={600} color={fg} numberOfLines={1}>
+      <T size={fontSize} weight={600} color={fg} style={{ flexShrink: 1, textAlign: "center" }}>
         {label}
       </T>
     </Press>
   );
 }
 
-/** Round icon button; 44px on the phone. */
+const MIN_TARGET = 44;
+
+/** Round icon button; 44px on the phone. A smaller one keeps its look and still gets a 44px touch area. */
 export function IconButton({
   icon,
   label,
@@ -94,11 +96,13 @@ export function IconButton({
   background?: string;
   disabled?: boolean | undefined;
 }) {
+  const slop = Math.max(0, (MIN_TARGET - size) / 2);
   return (
     <Press
       accessibilityRole="button"
       accessibilityLabel={label}
       disabled={disabled}
+      hitSlop={slop}
       onPress={onPress}
       scaleTo={0.92}
       style={{

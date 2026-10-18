@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Animated,
+  BackHandler,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -37,6 +38,15 @@ export function Sheet({
   const [y] = useState(() => new Animated.Value(screenHeight));
   const [measured, setMeasured] = useState(false);
   const scrim = useEased(1, motion.scrim, 0);
+
+  // Android Back closes the sheet and stops there; the next Back reaches the screen under it.
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      onDismiss();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [onDismiss]);
 
   useEffect(() => {
     if (!measured) return;
@@ -106,8 +116,8 @@ function SheetPanel({
       }}
       style={{
         position: "absolute",
-        left: 0,
-        right: 0,
+        start: 0,
+        end: 0,
         bottom: 0,
         maxHeight: height * 0.88,
         backgroundColor: c.pop,
@@ -251,8 +261,8 @@ export function Toast({ text }: { text: string }) {
       pointerEvents="none"
       style={{
         position: "absolute",
-        left: 0,
-        right: 0,
+        start: 0,
+        end: 0,
         bottom: 110,
         alignItems: "center",
         zIndex: 70,
@@ -262,8 +272,8 @@ export function Toast({ text }: { text: string }) {
         accessibilityRole="alert"
         style={{
           minHeight: 44,
-          paddingLeft: 12,
-          paddingRight: 16,
+          paddingStart: 12,
+          paddingEnd: 16,
           borderRadius: radius.menu,
           backgroundColor: c.pop,
           flexDirection: "row",

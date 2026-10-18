@@ -1,5 +1,11 @@
 import { useRef } from "react";
-import { TextInput, View, type TextInputInstance } from "react-native";
+import {
+  KeyboardAvoidingView,
+  ScrollView,
+  TextInput,
+  View,
+  type TextInputInstance,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { PhotoPicker } from "../kit/Avatar";
@@ -12,23 +18,26 @@ import { useTheme } from "../theme";
 import { T } from "../theme/Text";
 import { fonts, radius } from "../theme/tokens";
 import type { Avatar as AvatarData } from "../types";
+import { CODE_LENGTH, typeIntoCode } from "./codeInput";
 
-/** Centered column on the surface; the card is 100% wide with 24px sides, children 10px apart. */
+/**
+ * Centered column on the surface; the card is 100% wide with 24px sides, children 10px apart.
+ * With the keyboard up the column shrinks to what is left and scrolls, so the fields and the button stay reachable.
+ */
 function AuthFrame({ children }: { children: React.ReactNode }) {
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
   return (
-    <View
-      style={{
-        flex: 1,
-        backgroundColor: c.s0,
-        paddingTop: insets.top,
-        paddingBottom: insets.bottom,
-        justifyContent: "center",
-      }}
-    >
-      <View style={{ paddingHorizontal: 24, gap: 10 }}>{children}</View>
-    </View>
+    <KeyboardAvoidingView behavior="padding" style={{ flex: 1, backgroundColor: c.s0 }}>
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ flexGrow: 1, justifyContent: "center" }}
+      >
+        <View style={{ height: insets.top }} />
+        <View style={{ paddingHorizontal: 24, gap: 10 }}>{children}</View>
+        <View style={{ height: insets.bottom }} />
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -52,7 +61,8 @@ function ProviderButton({
       accessibilityLabel={label}
       onPress={onPress}
       style={{
-        height: 44,
+        minHeight: 44,
+        paddingHorizontal: 16,
         borderRadius: 999,
         backgroundColor: c.s1,
         flexDirection: "row",
@@ -62,7 +72,9 @@ function ProviderButton({
       }}
     >
       {glyph}
-      <T weight={600}>{label}</T>
+      <T weight={600} style={{ flexShrink: 1, textAlign: "center" }}>
+        {label}
+      </T>
     </Press>
   );
 }
@@ -122,8 +134,6 @@ export function SignInScreen({
   );
 }
 
-const CODE_LENGTH = 6;
-
 function LinkText({ children, onPress }: { children: string; onPress: () => void }) {
   const { c } = useTheme();
   return (
@@ -162,12 +172,10 @@ export function CodeScreen({
   const nextIndex = digits.findIndex((digit) => !digit);
 
   const write = (index: number, text: string) => {
-    const typed = text.replace(/\D/g, "");
-    if (!typed) return;
-    const next = code.slice(0, index) + typed;
-    const clipped = next.slice(0, CODE_LENGTH);
-    onCodeChange(clipped);
-    refs.current[Math.min(index + typed.length, CODE_LENGTH - 1)]?.focus();
+    const result = typeIntoCode(code, index, text);
+    if (!result) return;
+    onCodeChange(result.code);
+    refs.current[result.focus]?.focus();
   };
   const back = (index: number) => {
     if (digits[index]) {
@@ -275,6 +283,7 @@ function CodeCell({
       inputMode="numeric"
       keyboardType="number-pad"
       maxLength={CODE_LENGTH}
+      maxFontSizeMultiplier={1.3}
       textContentType={index === 0 ? "oneTimeCode" : "none"}
       autoComplete={index === 0 ? "one-time-code" : "off"}
       selectionColor={c.ac}

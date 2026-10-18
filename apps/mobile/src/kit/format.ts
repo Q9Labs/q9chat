@@ -13,3 +13,6 @@ export function keyedByOffset<Item>(
     return { key, item };
   });
 }
+
+/** Only http and https links open from a message; anything else stays plain text. */
+export const isWebUrl = (text: string) => /^https?:\/\/\S+$/i.test(text);

@@ -28,10 +28,10 @@ function ScopeChip({ title, onClear }: { title: string; onClear: () => void }) {
   return (
     <View
       style={{
-        height: 28,
+        minHeight: 28,
         flexShrink: 1,
-        paddingLeft: 10,
-        paddingRight: 2,
+        paddingStart: 10,
+        paddingEnd: 2,
         borderRadius: 999,
         backgroundColor: c.s0,
         flexDirection: "row",
@@ -117,10 +117,10 @@ export function SearchScreen(props: SearchScreenProps) {
         <View
           style={{
             flex: 1,
-            height: 44,
+            minHeight: 44,
             marginVertical: 4,
-            paddingLeft: 14,
-            paddingRight: 6,
+            paddingStart: 14,
+            paddingEnd: 6,
             borderRadius: radius.input,
             backgroundColor: c.s1,
             flexDirection: "row",

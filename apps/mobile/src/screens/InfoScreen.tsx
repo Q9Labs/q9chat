@@ -201,8 +201,8 @@ function MemberRow({ member, onOptions }: { member: Member; onOptions: () => voi
         gap: 12,
         minHeight: 52,
         paddingVertical: 6,
-        paddingLeft: 12,
-        paddingRight: 8,
+        paddingStart: 12,
+        paddingEnd: 8,
         borderRadius: 12,
       }}
     >

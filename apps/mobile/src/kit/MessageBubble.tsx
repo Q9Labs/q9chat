@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { View } from "react-native";
+import { View, type AccessibilityActionEvent, type AccessibilityActionInfo } from "react-native";
 
 import { useTheme } from "../theme";
 import { T } from "../theme/Text";
@@ -33,6 +33,25 @@ export type MessageActions = {
 
 const isPending = (state: SendState) => state === "sending" || state === "queued";
 
+/**
+ * The message as one screen-reader element with the long-press actions. When the message carries its
+ * own controls (play, reactions, the quote, Retry) the wrapper can't be that element, or the controls
+ * would be hidden inside it, so the text gets it instead.
+ */
+type MessageElement = {
+  accessible: true;
+  accessibilityLabel: string;
+  accessibilityActions: AccessibilityActionInfo[];
+  onAccessibilityAction: (event: AccessibilityActionEvent) => void;
+};
+
+/** The wrapper that makes content the message's element, or the content itself when the outer wrapper already is. */
+const withElement = (element: MessageElement | null, node: ReactNode) =>
+  element && node ? <View {...element}>{node}</View> : node;
+
+const hasControls = ({ content, quote, reactions, state }: Message) =>
+  content.kind === "voice" || quote !== null || reactions.length > 0 || state === "failed";
+
 function textOf(content: MessageContent): ReactNode {
   if (content.kind === "text")
     return <BodyText segments={content.segments} edited={content.edited} />;
@@ -62,9 +81,11 @@ function DeletedLine({ mine }: { mine: boolean }) {
 /** The raised surface with the quote and the text: 18px radius, 8 by 12 padding. */
 function Surface({
   message,
+  element,
   onQuotePress,
 }: {
   message: Message;
+  element: MessageElement | null;
   onQuotePress: (messageId: string) => void;
 }) {
   const { c } = useTheme();
@@ -84,17 +105,29 @@ function Surface({
       }}
     >
       {quote ? <QuoteBar quote={quote} onPress={() => onQuotePress(quote.messageId)} /> : null}
-      {body}
+      {withElement(element, body)}
     </View>
   );
 }
 
-function Media({ content, actions }: { content: MessageContent; actions: MessageActions }) {
+function MediaBody({ content }: { content: MessageContent }) {
   if (content.kind === "image")
     return (
       <ImageAttachment alt={content.alt} uri={content.uri} aspectRatio={content.aspectRatio} />
     );
   if (content.kind === "file") return <FileCard name={content.name} size={content.size} />;
+  return null;
+}
+
+function Media({
+  content,
+  element,
+  actions,
+}: {
+  content: MessageContent;
+  element: MessageElement | null;
+  actions: MessageActions;
+}) {
   if (content.kind === "voice") {
     return (
       <VoiceNote
@@ -103,18 +136,32 @@ function Media({ content, actions }: { content: MessageContent; actions: Message
         playing={actions.playing}
         progress={actions.playProgress}
         onTogglePlay={actions.onTogglePlay}
+        {...(element
+          ? {
+              accessibilityActions: element.accessibilityActions,
+              onAccessibilityAction: element.onAccessibilityAction,
+            }
+          : {})}
       />
     );
   }
-  return null;
+  return withElement(element, <MediaBody content={content} />);
 }
 
-function Body({ message, actions }: { message: Message; actions: MessageActions }) {
+function Body({
+  message,
+  element,
+  actions,
+}: {
+  message: Message;
+  element: MessageElement | null;
+  actions: MessageActions;
+}) {
   const { poppedEmoji } = actions;
   return (
     <>
-      <Surface message={message} onQuotePress={actions.onQuotePress} />
-      <Media content={message.content} actions={actions} />
+      <Surface message={message} element={element} onQuotePress={actions.onQuotePress} />
+      <Media content={message.content} element={element} actions={actions} />
       <ReactionPills
         reactions={message.reactions}
         onPress={actions.onReactionPress}
@@ -168,6 +215,30 @@ const layoutOf = (mine: boolean) =>
     alignItems: mine ? "flex-end" : "flex-start",
   }) as const;
 
+const canOpen = ({ state, content }: Message) => state === "sent" && content.kind !== "deleted";
+
+function TimeLabel({ message, show }: { message: Message; show: boolean }) {
+  if (!show || message.state !== "sent") return null;
+  return (
+    <T size={12} color="mu" tabular style={{ marginHorizontal: 6 }}>
+      {message.timeLabel}
+    </T>
+  );
+}
+
+const elementOf = (
+  message: Message,
+  openable: boolean,
+  onOpenSheet: () => void,
+): MessageElement => ({
+  accessible: true,
+  accessibilityLabel: message.summary,
+  accessibilityActions: openable ? [{ name: "longpress", label: "Message actions" }] : [],
+  onAccessibilityAction: (event) => {
+    if (event.nativeEvent.actionName === "longpress") onOpenSheet();
+  },
+});
+
 /**
  * One message: the raised bubble, media, reactions and send state.
  * Tap shows the time, a 480 ms press opens the message sheet; unsent and deleted messages can't.
@@ -178,10 +249,12 @@ export function MessageBubble({
   ...actions
 }: { message: Message; showTime: boolean } & MessageActions) {
   const { content, mine, state } = message;
-  const openable = state === "sent" && content.kind !== "deleted";
+  const openable = canOpen(message);
+  const element = elementOf(message, openable, actions.onOpenSheet);
+  const split = hasControls(message);
   return (
     <Press
-      accessibilityLabel={message.summary}
+      {...(split ? { accessible: false } : element)}
       onPress={actions.onToggleTime}
       onLongPress={openable ? actions.onOpenSheet : undefined}
       delayLongPress={LONG_PRESS_MS}
@@ -191,14 +264,10 @@ export function MessageBubble({
       {content.kind === "deleted" ? (
         <DeletedLine mine={mine} />
       ) : (
-        <Body message={message} actions={actions} />
+        <Body message={message} element={split ? element : null} actions={actions} />
       )}
       <SendState state={state} onRetry={actions.onRetry} />
-      {showTime && state === "sent" ? (
-        <T size={12} color="mu" tabular style={{ marginHorizontal: 6 }}>
-          {message.timeLabel}
-        </T>
-      ) : null}
+      <TimeLabel message={message} show={showTime} />
     </Press>
   );
 }

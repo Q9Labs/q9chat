@@ -99,7 +99,7 @@ function TypingLine({ text }: { text: string }) {
         alignItems: "center",
         gap: 8,
         marginTop: 12,
-        marginLeft: 36,
+        marginStart: 36,
         minHeight: 18,
       }}
     >
@@ -270,13 +270,17 @@ export function Timeline({ items, typingText, latestKey, ...actions }: TimelineP
   const placedKey = useRef<string | null>(null);
   const following = useRef(true);
   const dragged = useRef(false);
+  const openedKey = useRef<string | null>(null);
   const hasDivider = items.some((item) => item.type === "unread");
 
   const place = (again = false) => {
     const m = metrics.current;
     if ((placedKey.current === latestKey && !again) || !isMeasured(m, hasDivider)) return;
     placedKey.current = latestKey;
-    const y = restingOffset(m, hasDivider);
+    // Only the first placement honours the unread divider; a later latest message scrolls to the end.
+    openedKey.current ??= latestKey;
+    const y =
+      openedKey.current === latestKey ? restingOffset(m, hasDivider) : restingOffset(m, false);
     ref.current?.scrollTo({ y, animated: false });
     following.current = m.content - y - m.viewport < AT_LATEST;
     setAway(m.content - y - m.viewport > FAR_FROM_LATEST);
@@ -324,7 +328,7 @@ export function Timeline({ items, typingText, latestKey, ...actions }: TimelineP
               key={item.id}
               onLayout={(event) => {
                 metrics.current.divider = event.nativeEvent.layout.y;
-                place(!dragged.current);
+                place(!dragged.current && openedKey.current === latestKey);
               }}
             />
           ) : (
@@ -359,9 +363,9 @@ function JumpToLatest({ onPress }: { onPress: () => void }) {
       accessibilityLabel="Jump to latest"
       onPress={onPress}
       style={{
-        height: 36,
-        paddingLeft: 12,
-        paddingRight: 14,
+        minHeight: 36,
+        paddingStart: 12,
+        paddingEnd: 14,
         borderRadius: 999,
         backgroundColor: c.pop,
         flexDirection: "row",

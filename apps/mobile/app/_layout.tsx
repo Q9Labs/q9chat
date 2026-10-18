@@ -32,17 +32,19 @@ function Navigator() {
 }
 
 export default function RootLayout() {
-  const [loaded] = useFonts({
+  const [loaded, fontError] = useFonts({
     Figtree_400Regular,
     Figtree_400Regular_Italic,
     Figtree_500Medium,
     Figtree_600SemiBold,
     Figtree_700Bold,
   });
+  // A font that fails to load leaves the system font in place; the app still opens.
+  const ready = loaded || fontError !== null;
   useEffect(() => {
-    if (loaded) void SplashScreen.hideAsync();
-  }, [loaded]);
-  if (!loaded) return null;
+    if (ready) void SplashScreen.hideAsync();
+  }, [ready]);
+  if (!ready) return null;
   return (
     <SafeAreaProvider>
       <ThemeProvider>

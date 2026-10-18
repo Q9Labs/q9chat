@@ -1,11 +1,14 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Animated, View } from "react-native";
+import { Animated, I18nManager, View } from "react-native";
 
 import { useTheme } from "../theme";
 import { T } from "../theme/Text";
 import { motion } from "../theme/tokens";
 import { moveEasing, useReducedMotion } from "./motion";
 import { Press } from "./Press";
+
+/** The knob slides toward the end edge, which is the left one in a right-to-left layout. */
+const KNOB_TRAVEL = I18nManager.isRTL ? -14 : 14;
 
 /** 36 by 22 switch; the thumb moves 14px on transform only. */
 export function Switch({
@@ -21,12 +24,12 @@ export function Switch({
 }) {
   const { c } = useTheme();
   const reduced = useReducedMotion();
-  const [x] = useState(() => new Animated.Value(on ? 14 : 0));
+  const [x] = useState(() => new Animated.Value(on ? KNOB_TRAVEL : 0));
   useEffect(() => {
-    if (reduced) x.setValue(on ? 14 : 0);
+    if (reduced) x.setValue(on ? KNOB_TRAVEL : 0);
     else
       Animated.timing(x, {
-        toValue: on ? 14 : 0,
+        toValue: on ? KNOB_TRAVEL : 0,
         duration: 150,
         easing: moveEasing,
         useNativeDriver: true,
@@ -55,7 +58,7 @@ export function Switch({
           style={{
             position: "absolute",
             top: 3,
-            left: 3,
+            start: 3,
             width: 16,
             height: 16,
             borderRadius: 8,

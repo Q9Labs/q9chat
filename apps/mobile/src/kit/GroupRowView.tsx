@@ -22,7 +22,7 @@ function Badge({ children, muted, wide }: { children: string; muted: boolean; wi
         justifyContent: "center",
       }}
     >
-      <T size={11} weight={700} lineHeight={11} tabular color={muted ? "mu" : "onAc"}>
+      <T size={11} weight={700} lineHeight={11} tabular capped color={muted ? "mu" : "onAc"}>
         {children}
       </T>
     </View>
@@ -37,22 +37,36 @@ const previewText = ({
   summary: string;
 }) => (by === null ? summary : `${by.isYou ? "You" : by.name}: ${summary}`);
 
-type RowFacts = { muted: boolean; unread: number; mentions: boolean; preview: string };
+type RowFacts = {
+  muted: boolean;
+  unread: number;
+  mentions: boolean;
+  removed: boolean;
+  preview: string;
+};
 
 const factsOf = (row: GroupRow): RowFacts => {
   if (row.status === "removed")
-    return { muted: false, unread: 0, mentions: false, preview: `${row.removedBy} removed you` };
+    return {
+      muted: false,
+      unread: 0,
+      mentions: false,
+      removed: true,
+      preview: `${row.removedBy} removed you`,
+    };
   return {
     muted: row.notify === "muted",
     unread: row.unreadCount,
     mentions: row.needsYou && row.unreadCount > 0,
+    removed: false,
     preview: previewText(row.preview),
   };
 };
 
-const labelOf = (title: string, { unread, mentions, muted }: RowFacts) =>
+const labelOf = (title: string, { unread, mentions, muted, removed, preview }: RowFacts) =>
   [
     title,
+    removed ? preview : null,
     unread ? `${unread} unread` : null,
     mentions ? "mentions you" : null,
     muted ? "muted" : null,

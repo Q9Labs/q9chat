@@ -248,6 +248,9 @@ importers:
       '@q9labsai/config-tsconfig':
         specifier: https://github.com/Q9Labs/q9stack/releases/download/v0.3.0/q9labsai-config-tsconfig-0.3.0.tgz
         version: https://github.com/Q9Labs/q9stack/releases/download/v0.3.0/q9labsai-config-tsconfig-0.3.0.tgz
+      '@types/node':
+        specifier: 'catalog:'
+        version: 26.6.2
       '@types/react':
         specifier: 'catalog:'
         version: 19.3.0

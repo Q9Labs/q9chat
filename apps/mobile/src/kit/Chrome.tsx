@@ -40,7 +40,7 @@ function NavStartButton({ start }: { start: NavStart }) {
       accessibilityLabel={start.back ? "Back" : (start.label ?? "Back")}
       onPress={start.onPress}
       scaleTo={1}
-      style={{ height: 44, flexDirection: "row", alignItems: "center", gap: 2 }}
+      style={{ minHeight: 44, flexDirection: "row", alignItems: "center", gap: 2 }}
     >
       {start.back ? (
         <Icon name="back" size={24} color="tx" />
@@ -61,7 +61,7 @@ function NavEndButton({ end }: { end: NavEnd }) {
       disabled={end.disabled}
       onPress={end.onPress}
       scaleTo={1}
-      style={{ height: 44, justifyContent: "center", opacity: end.disabled ? 0.35 : 1 }}
+      style={{ minHeight: 44, justifyContent: "center", opacity: end.disabled ? 0.35 : 1 }}
     >
       <T size={16} weight={end.strong ? 600 : 400}>
         {end.label}
@@ -75,14 +75,14 @@ export function PageNav({ title, start, end }: { title: string; start?: NavStart
   return (
     <View
       style={{
-        height: 52,
+        minHeight: 52,
         paddingHorizontal: 12,
         flexDirection: "row",
         alignItems: "center",
         gap: 6,
       }}
     >
-      <View style={{ minWidth: 64, height: 44 }}>
+      <View style={{ minWidth: 64, minHeight: 44 }}>
         {start ? <NavStartButton start={start} /> : null}
       </View>
       <T
@@ -94,7 +94,7 @@ export function PageNav({ title, start, end }: { title: string; start?: NavStart
       >
         {title}
       </T>
-      <View style={{ minWidth: 64, height: 44, alignItems: "flex-end" }}>
+      <View style={{ minWidth: 64, minHeight: 44, alignItems: "flex-end" }}>
         {end ? <NavEndButton end={end} /> : null}
       </View>
     </View>
@@ -115,9 +115,9 @@ export function GroupsTop({
   return (
     <View
       style={{
-        height: 56,
-        paddingLeft: 20,
-        paddingRight: 12,
+        minHeight: 56,
+        paddingStart: 20,
+        paddingEnd: 12,
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",
@@ -156,7 +156,7 @@ export function SearchBox({ onPress }: { onPress: () => void }) {
       onPress={onPress}
       scaleTo={1}
       style={{
-        height: 40,
+        minHeight: 40,
         marginTop: 4,
         marginHorizontal: 16,
         marginBottom: 8,
@@ -183,7 +183,7 @@ export function OfflinePill() {
       accessibilityRole="alert"
       style={{
         alignSelf: "center",
-        height: 32,
+        minHeight: 32,
         paddingHorizontal: 14,
         marginVertical: 4,
         borderRadius: 999,
@@ -233,14 +233,14 @@ export function PermissionBanner({
           label="Not now"
           size="big"
           background="s0"
-          style={{ flex: 1, height: 36 }}
+          style={{ flex: 1, minHeight: 36 }}
           onPress={onNotNow}
         />
         <PillButton
           label="Turn on"
           variant="solid"
           size="big"
-          style={{ flex: 1, height: 36 }}
+          style={{ flex: 1, minHeight: 36 }}
           onPress={onTurnOn}
         />
       </View>

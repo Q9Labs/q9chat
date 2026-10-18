@@ -10,10 +10,12 @@ type Props = Omit<TextProps, "style"> & {
   lineHeight?: number;
   tabular?: boolean;
   italic?: boolean;
+  /** For tight fixed-size labels (badges, reaction counts, avatar initials): grow with the text size up to 1.3 times. */
+  capped?: boolean;
   style?: StyleProp<TextStyle>;
 };
 
-/** Figtree text at the mock's sizes: body 15px on the phone, line height 1.4. */
+/** Figtree text at the mock's sizes: body 15px on the phone, line height 1.4. It follows the person's text size. */
 export function T({
   size = 15,
   weight = 400,
@@ -21,6 +23,7 @@ export function T({
   lineHeight,
   tabular,
   italic,
+  capped,
   style,
   ...rest
 }: Props) {
@@ -28,7 +31,7 @@ export function T({
   const resolved = resolveColor(c, color);
   return (
     <RNText
-      maxFontSizeMultiplier={1.3}
+      maxFontSizeMultiplier={capped ? 1.3 : undefined}
       {...rest}
       style={[
         {

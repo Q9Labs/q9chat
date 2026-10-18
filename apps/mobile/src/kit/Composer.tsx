@@ -73,7 +73,7 @@ function Bar({
         gap: 8,
         marginHorizontal: 8,
         marginBottom: 8,
-        paddingLeft: 10,
+        paddingStart: 10,
         borderStartWidth: 2,
         borderStartColor: c.ac,
         minHeight: 32,
@@ -138,8 +138,8 @@ function RecordingPill({
       style={{
         minHeight: 44,
         paddingVertical: 3,
-        paddingRight: 3,
-        paddingLeft: 16,
+        paddingEnd: 3,
+        paddingStart: 16,
         borderRadius: 22,
         backgroundColor: c.s1,
         flexDirection: "row",
@@ -218,6 +218,7 @@ function TrailingButton({
       <SendButton
         label={editing ? "Save edit" : "Send"}
         icon={editing ? "check" : "up"}
+        disabled={!hasText}
         onPress={onSend}
       />
     );
@@ -232,7 +233,7 @@ function ComposeRow({ props, editing }: { props: Props; editing: boolean }) {
   const { draft } = props;
   const [focused, setFocused] = useState(false);
   const [inputHeight, setInputHeight] = useState(36);
-  const hasText = draft.length > 0;
+  const hasText = draft.trim().length > 0;
   return (
     <View
       style={{
@@ -319,10 +320,12 @@ export function Composer(props: Props) {
 function SendButton({
   label,
   icon = "up",
+  disabled = false,
   onPress,
 }: {
   label: string;
   icon?: IconName;
+  disabled?: boolean;
   onPress: () => void;
 }) {
   const { c } = useTheme();
@@ -330,12 +333,16 @@ function SendButton({
     <Press
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      hitSlop={4}
       onPress={onPress}
       scaleTo={0.92}
       style={{
         width: 36,
         height: 36,
         borderRadius: 18,
+        opacity: disabled ? 0.4 : 1,
         backgroundColor: c.ac,
         alignItems: "center",
         justifyContent: "center",

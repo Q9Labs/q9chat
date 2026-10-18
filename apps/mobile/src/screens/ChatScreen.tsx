@@ -101,11 +101,11 @@ function Header(props: HeaderProps) {
   return (
     <View
       style={{
-        height: 56,
+        minHeight: 56,
         flexDirection: "row",
         alignItems: "center",
-        paddingLeft: 4,
-        paddingRight: 6,
+        paddingStart: 4,
+        paddingEnd: 6,
         gap: 2,
       }}
     >
@@ -127,8 +127,8 @@ function Header(props: HeaderProps) {
           alignItems: "center",
           gap: 10,
           paddingVertical: 2,
-          paddingLeft: 2,
-          paddingRight: 8,
+          paddingStart: 2,
+          paddingEnd: 8,
           borderRadius: 999,
         }}
       >

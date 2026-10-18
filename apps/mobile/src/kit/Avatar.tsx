@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Image, View } from "react-native";
 
 import { useTheme } from "../theme";
@@ -21,9 +22,17 @@ const fontFor: Record<number, number> = {
 /** Round for people and groups alike: a photo, else initials on the person's fixed color. */
 export function Avatar({ avatar, size = 32 }: { avatar: AvatarData; size?: number }) {
   const { c } = useTheme();
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
   const base = { width: size, height: size, borderRadius: size / 2, overflow: "hidden" as const };
-  if (avatar.kind === "person" && avatar.photoUrl) {
-    return <Image source={{ uri: avatar.photoUrl }} style={base} accessibilityElementsHidden />;
+  if (avatar.kind === "person" && avatar.photoUrl && avatar.photoUrl !== failedUrl) {
+    return (
+      <Image
+        source={{ uri: avatar.photoUrl }}
+        style={base}
+        accessibilityElementsHidden
+        onError={() => setFailedUrl(avatar.photoUrl)}
+      />
+    );
   }
   const group = avatar.kind === "group";
   const font = fontFor[size] ?? Math.round(size * 0.375);
@@ -40,7 +49,7 @@ export function Avatar({ avatar, size = 32 }: { avatar: AvatarData; size?: numbe
         },
       ]}
     >
-      <T size={font} weight={600} lineHeight={font} color={group ? "tx2" : "#ffffff"}>
+      <T size={font} weight={600} lineHeight={font} capped color={group ? "tx2" : "#ffffff"}>
         {avatar.initials}
       </T>
     </View>
