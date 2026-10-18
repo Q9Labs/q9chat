@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import {
   KeyboardAvoidingView,
   ScrollView,
@@ -13,6 +13,7 @@ import { PillButton } from "../kit/Buttons";
 import { FieldIcon, Label, Note, TextField } from "../kit/Field";
 import { AppleGlyph, GoogleGlyph, Icon } from "../kit/Icon";
 import { Wordmark } from "../kit/Logo";
+import { Toast, type ToastNotice } from "../kit/Overlays";
 import { Press } from "../kit/Press";
 import { useTheme } from "../theme";
 import { T } from "../theme/Text";
@@ -24,7 +25,13 @@ import { backspaceInCode, CELL_IDS, CODE_LENGTH, type CodeDigits, typeIntoCode }
  * Centered column on the surface; the card is 100% wide with 24px sides, children 10px apart.
  * With the keyboard up the column shrinks to what is left and scrolls, so the fields and the button stay reachable.
  */
-function AuthFrame({ children }: { children: React.ReactNode }) {
+function AuthFrame({
+  children,
+  notice,
+}: {
+  children: React.ReactNode;
+  notice?: ToastNotice | null | undefined;
+}) {
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
   return (
@@ -37,6 +44,9 @@ function AuthFrame({ children }: { children: React.ReactNode }) {
         <View style={{ paddingHorizontal: 24, gap: 10 }}>{children}</View>
         <View style={{ height: insets.bottom }} />
       </ScrollView>
+      {notice ? (
+        <Toast text={notice.text} {...(notice.action ? { action: notice.action } : {})} />
+      ) : null}
     </KeyboardAvoidingView>
   );
 }
@@ -85,16 +95,18 @@ export function SignInScreen({
   onGoogle,
   onApple,
   onEmailCode,
+  notice,
 }: {
   email: string;
   onEmailChange: (email: string) => void;
   onGoogle: () => void;
   onApple: () => void;
   onEmailCode: () => void;
+  notice?: ToastNotice | null;
 }) {
   const { c } = useTheme();
   return (
-    <AuthFrame>
+    <AuthFrame notice={notice}>
       <Hero>
         <View style={{ marginTop: 4, marginBottom: 16 }}>
           <Wordmark size={30} />
@@ -156,19 +168,28 @@ export function CodeScreen({
   digits,
   onDigitsChange,
   error,
+  focusKey = 0,
   onResend,
   onChangeEmail,
+  notice,
 }: {
   email: string;
   digits: CodeDigits;
   onDigitsChange: (digits: CodeDigits) => void;
   /** The alert under the cells; empty when there is nothing to say. */
   error: string;
+  /** Focus goes to the first cell when the screen opens and whenever this number changes. */
+  focusKey?: number;
   onResend: () => void;
   onChangeEmail: () => void;
+  notice?: ToastNotice | null;
 }) {
   const { c } = useTheme();
   const refs = useRef<(TextInputInstance | null)[]>([]);
+  useEffect(() => {
+    refs.current[0]?.focus();
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- focusKey only asks for the focus again
+  }, [focusKey]);
   const nextIndex = digits.findIndex((digit) => !digit);
   const apply = (edit: { digits: CodeDigits; focus: number } | null) => {
     if (!edit) return;
@@ -177,7 +198,7 @@ export function CodeScreen({
   };
 
   return (
-    <AuthFrame>
+    <AuthFrame notice={notice}>
       <Hero>
         <View
           style={{
@@ -306,6 +327,7 @@ export function ProfileScreen({
   hasPhoto,
   onTogglePhoto,
   onContinue,
+  notice,
 }: {
   email: string;
   name: string;
@@ -314,9 +336,10 @@ export function ProfileScreen({
   hasPhoto: boolean;
   onTogglePhoto: () => void;
   onContinue: () => void;
+  notice?: ToastNotice | null;
 }) {
   return (
-    <AuthFrame>
+    <AuthFrame notice={notice}>
       <Hero>
         <T
           size={22}

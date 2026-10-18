@@ -26,6 +26,15 @@
     "expo-font",
     "expo-system-ui",
   ],
+  // The phone ports web's auth contracts and journey steps because the apps share no UI or client package.
+  "duplicates": {
+    "ignoredClones": [
+      "dup:c77b3abb6f87acd9-r1:2",
+      "dup:c77b3abb6f87acd9-r2:2",
+      "dup:c77b3abb6f87acd9-r3:2",
+      "dup:39277f89:2",
+    ],
+  },
   "audit": {
     "gate": "all",
   },

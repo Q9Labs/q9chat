@@ -263,13 +263,16 @@ export function SheetRow({
   );
 }
 
+/** A toast line, with an optional action such as "Try again". */
+export type ToastNotice = { text: string; action?: { label: string; onPress: () => void } };
+
 /** A transient status: slides up 8px and fades in over 200ms. */
-export function Toast({ text }: { text: string }) {
+export function Toast({ text, action }: ToastNotice) {
   const { c } = useTheme();
   const progress = useEased(1, motion.toast, 0);
   return (
     <View
-      pointerEvents="none"
+      pointerEvents="box-none"
       style={{
         position: "absolute",
         start: 0,
@@ -298,9 +301,16 @@ export function Toast({ text }: { text: string }) {
         }}
       >
         <Icon name="check" size={18} color="mu" />
-        <T size={14} numberOfLines={1}>
+        <T size={14} style={{ flexShrink: 1 }}>
           {text}
         </T>
+        {action ? (
+          <Press accessibilityRole="button" onPress={action.onPress} scaleTo={1} hitSlop={8}>
+            <T size={14} weight={600} color="ac">
+              {action.label}
+            </T>
+          </Press>
+        ) : null}
       </Animated.View>
     </View>
   );

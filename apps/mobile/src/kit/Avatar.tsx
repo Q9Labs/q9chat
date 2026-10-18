@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useContext, useState } from "react";
 import { Image, View } from "react-native";
 
 import { useTheme } from "../theme";
 import { T } from "../theme/Text";
 import type { Avatar as AvatarData } from "../types";
 import { Icon } from "./Icon";
+import { ImageAuthContext } from "./photoAuth";
 import { Press } from "./Press";
 
 const fontFor: Record<number, number> = {
@@ -21,19 +22,39 @@ const fontFor: Record<number, number> = {
 
 /** Round for people and groups alike: a photo, else initials on the person's fixed color. */
 export function Avatar({ avatar, size = 32 }: { avatar: AvatarData; size?: number }) {
+  if (avatar.kind === "person" && avatar.photoUrl)
+    return <PhotoAvatar key={avatar.photoUrl} avatar={avatar} url={avatar.photoUrl} size={size} />;
+  return <InitialsAvatar avatar={avatar} size={size} />;
+}
+
+const shapeOf = (size: number) => ({
+  width: size,
+  height: size,
+  borderRadius: size / 2,
+  overflow: "hidden" as const,
+});
+
+/** The protected photo; one that fails to load falls back to the initials. */
+function PhotoAvatar({ avatar, url, size }: { avatar: AvatarData; url: string; size: number }) {
+  const [failed, setFailed] = useState(false);
+  const auth = useContext(ImageAuthContext);
+  if (failed) return <InitialsAvatar avatar={avatar} size={size} />;
+  return (
+    <Image
+      source={{
+        uri: url,
+        ...(auth && url.startsWith(auth.origin) ? { headers: auth.headers } : {}),
+      }}
+      style={shapeOf(size)}
+      accessibilityElementsHidden
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
+function InitialsAvatar({ avatar, size }: { avatar: AvatarData; size: number }) {
   const { c } = useTheme();
-  const [failedUrl, setFailedUrl] = useState<string | null>(null);
-  const base = { width: size, height: size, borderRadius: size / 2, overflow: "hidden" as const };
-  if (avatar.kind === "person" && avatar.photoUrl && avatar.photoUrl !== failedUrl) {
-    return (
-      <Image
-        source={{ uri: avatar.photoUrl }}
-        style={base}
-        accessibilityElementsHidden
-        onError={() => setFailedUrl(avatar.photoUrl)}
-      />
-    );
-  }
+  const base = shapeOf(size);
   const group = avatar.kind === "group";
   const font = fontFor[size] ?? Math.round(size * 0.375);
   return (

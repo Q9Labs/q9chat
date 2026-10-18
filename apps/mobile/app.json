@@ -36,6 +36,14 @@
           "imageWidth": 200,
           "backgroundColor": "#111118"
         }
+      ],
+      "expo-secure-store",
+      "expo-web-browser",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Q9 Chat uses your photos so you can choose a profile picture."
+        }
       ]
     ]
   }
