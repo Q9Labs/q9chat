@@ -14,6 +14,7 @@ import { Route as GalleryRouteImport } from './routes/gallery'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as AuthErrorRouteImport } from './routes/auth/error'
 import { Route as AuthPhoneCallbackRouteImport } from './routes/auth/phone-callback'
+import { Route as JoinTokenRouteImport } from './routes/join/$token'
 import { Route as ApiAuthCallbackRouteImport } from './routes/api/auth/callback'
 import { Route as ApiAuthSignOutRouteImport } from './routes/api/auth/sign-out'
 import { Route as ApiAuthTokenRouteImport } from './routes/api/auth/token'
@@ -45,6 +46,11 @@ const AuthErrorRoute = AuthErrorRouteImport.update({
 const AuthPhoneCallbackRoute = AuthPhoneCallbackRouteImport.update({
   id: '/auth/phone-callback',
   path: '/auth/phone-callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const JoinTokenRoute = JoinTokenRouteImport.update({
+  id: '/join/$token',
+  path: '/join/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiAuthCallbackRoute = ApiAuthCallbackRouteImport.update({
@@ -89,6 +95,7 @@ export interface FileRoutesByFullPath {
   '/api/health': typeof ApiHealthRoute
   '/auth/error': typeof AuthErrorRoute
   '/auth/phone-callback': typeof AuthPhoneCallbackRoute
+  '/join/$token': typeof JoinTokenRoute
   '/api/auth/callback': typeof ApiAuthCallbackRoute
   '/api/auth/sign-out': typeof ApiAuthSignOutRoute
   '/api/auth/token': typeof ApiAuthTokenRoute
@@ -103,6 +110,7 @@ export interface FileRoutesByTo {
   '/api/health': typeof ApiHealthRoute
   '/auth/error': typeof AuthErrorRoute
   '/auth/phone-callback': typeof AuthPhoneCallbackRoute
+  '/join/$token': typeof JoinTokenRoute
   '/api/auth/callback': typeof ApiAuthCallbackRoute
   '/api/auth/sign-out': typeof ApiAuthSignOutRoute
   '/api/auth/token': typeof ApiAuthTokenRoute
@@ -118,6 +126,7 @@ export interface FileRoutesById {
   '/api/health': typeof ApiHealthRoute
   '/auth/error': typeof AuthErrorRoute
   '/auth/phone-callback': typeof AuthPhoneCallbackRoute
+  '/join/$token': typeof JoinTokenRoute
   '/api/auth/callback': typeof ApiAuthCallbackRoute
   '/api/auth/sign-out': typeof ApiAuthSignOutRoute
   '/api/auth/token': typeof ApiAuthTokenRoute
@@ -134,6 +143,7 @@ export interface FileRouteTypes {
     | '/api/health'
     | '/auth/error'
     | '/auth/phone-callback'
+    | '/join/$token'
     | '/api/auth/callback'
     | '/api/auth/sign-out'
     | '/api/auth/token'
@@ -148,6 +158,7 @@ export interface FileRouteTypes {
     | '/api/health'
     | '/auth/error'
     | '/auth/phone-callback'
+    | '/join/$token'
     | '/api/auth/callback'
     | '/api/auth/sign-out'
     | '/api/auth/token'
@@ -162,6 +173,7 @@ export interface FileRouteTypes {
     | '/api/health'
     | '/auth/error'
     | '/auth/phone-callback'
+    | '/join/$token'
     | '/api/auth/callback'
     | '/api/auth/sign-out'
     | '/api/auth/token'
@@ -177,6 +189,7 @@ export interface RootRouteChildren {
   ApiHealthRoute: typeof ApiHealthRoute
   AuthErrorRoute: typeof AuthErrorRoute
   AuthPhoneCallbackRoute: typeof AuthPhoneCallbackRoute
+  JoinTokenRoute: typeof JoinTokenRoute
   ApiAuthCallbackRoute: typeof ApiAuthCallbackRoute
   ApiAuthSignOutRoute: typeof ApiAuthSignOutRoute
   ApiAuthTokenRoute: typeof ApiAuthTokenRoute
@@ -221,6 +234,13 @@ declare module '@tanstack/react-router' {
       path: '/auth/phone-callback'
       fullPath: '/auth/phone-callback'
       preLoaderRoute: typeof AuthPhoneCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/join/$token': {
+      id: '/join/$token'
+      path: '/join/$token'
+      fullPath: '/join/$token'
+      preLoaderRoute: typeof JoinTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/auth/callback': {
@@ -281,6 +301,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiHealthRoute: ApiHealthRoute,
   AuthErrorRoute: AuthErrorRoute,
   AuthPhoneCallbackRoute: AuthPhoneCallbackRoute,
+  JoinTokenRoute: JoinTokenRoute,
   ApiAuthCallbackRoute: ApiAuthCallbackRoute,
   ApiAuthSignOutRoute: ApiAuthSignOutRoute,
   ApiAuthTokenRoute: ApiAuthTokenRoute,

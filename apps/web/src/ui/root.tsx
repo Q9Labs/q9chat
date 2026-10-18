@@ -4,6 +4,7 @@ import {
   useContext,
   useMemo,
   useState,
+  useSyncExternalStore,
   type FocusEvent,
   type MouseEvent,
   type ReactNode,
@@ -24,6 +25,7 @@ export function useRoot(): RootContextValue {
 }
 
 interface TipState {
+  readonly target: HTMLElement;
   readonly text: string;
   readonly left: number;
   readonly top: number;
@@ -38,6 +40,7 @@ function tipFor(target: HTMLElement, root: HTMLElement): TipState | null {
   const side = target.dataset["tipSide"];
   if (side === "start" || side === "end") {
     return {
+      target,
       text,
       side,
       left: side === "end" ? box.right - rootBox.left + 8 : box.left - rootBox.left - 8,
@@ -45,6 +48,7 @@ function tipFor(target: HTMLElement, root: HTMLElement): TipState | null {
     };
   }
   return {
+    target,
     text,
     side: null,
     left: box.left - rootBox.left + box.width / 2,
@@ -99,6 +103,19 @@ export function AppRoot({ children, theme = "system", clock }: AppRootProps) {
 }
 
 function Tip({ tip }: { readonly tip: TipState }) {
+  const subscribe = useCallback(
+    (notify: () => void) => {
+      const observer = new MutationObserver(notify);
+      observer.observe(tip.target, { attributes: true, attributeFilter: ["data-tip"] });
+      return () => observer.disconnect();
+    },
+    [tip.target],
+  );
+  const text = useSyncExternalStore(
+    subscribe,
+    () => tip.target.dataset["tip"] ?? tip.text,
+    () => tip.text,
+  );
   const [width, setWidth] = useState(0);
   const measure = useCallback((el: HTMLElement | null) => {
     if (el !== null) setWidth(el.offsetWidth);
@@ -111,7 +128,7 @@ function Tip({ tip }: { readonly tip: TipState }) {
       role="tooltip"
       style={{ left, top: tip.top }}
     >
-      {tip.text}
+      {text}
     </div>
   );
 }

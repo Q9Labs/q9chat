@@ -1,5 +1,6 @@
 import { api } from "@q9chat/convex";
 import { firstName, initials } from "@q9chat/domain";
+import { useSearch } from "@tanstack/react-router";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { Schema } from "effect";
@@ -12,10 +13,13 @@ import { ChatShell, PickAGroup } from "../screens/shell.js";
 import { NoGroupsYet, Sidebar } from "../screens/sidebar.js";
 import { Toast } from "../ui/overlay.js";
 import { AppRoot } from "../ui/root.js";
+import { GroupJourneyBoundary, useGroupJourney } from "./groups.js";
 import { OAuthArrival } from "./oauth-arrival.js";
 import { isPhotoRejection, photoSelectionError, uploadPhoto, usePhotos } from "./photos.js";
 import { ProfileSetup } from "./setup.js";
 import { SignInJourney } from "./sign-in.js";
+
+const InviteToken = createContext<string | undefined>(undefined);
 
 const SignOutAction = createContext<(() => void) | null>(null);
 function useSignOutAction() {
@@ -72,7 +76,13 @@ function useJourneySignOut() {
   return { signOutStatus, leave, clearSignOutStatus: () => setSignOutStatus("idle") };
 }
 
-export function Journey({ authError }: { readonly authError: boolean }) {
+export function Journey({
+  authError,
+  inviteToken,
+}: {
+  readonly authError: boolean;
+  readonly inviteToken?: string;
+}) {
   const session = useSession();
   const [now, setNow] = useState(Date.now);
   const { signOutStatus, leave, clearSignOutStatus } = useJourneySignOut();
@@ -93,7 +103,9 @@ export function Journey({ authError }: { readonly authError: boolean }) {
             onSignInAttempt={clearSignOutStatus}
           />
         ) : (
-          <ProfileGate key={session.user.id} />
+          <InviteToken.Provider value={inviteToken}>
+            <ProfileGate key={session.user.id} />
+          </InviteToken.Provider>
         )}
         {signOutStatus === "failed" ? (
           <Toast
@@ -160,7 +172,11 @@ function CompleteProfile({
         onFinished={() => setSetup("complete")}
       />
     );
-  return <Groups profile={me.profile} welcome={setup === "complete"} />;
+  return (
+    <GroupJourneyBoundary>
+      <Groups profile={me.profile} welcome={setup === "complete"} />
+    </GroupJourneyBoundary>
+  );
 }
 
 type LiveGroup = FunctionReturnType<typeof api.groups.list>[number];
@@ -172,7 +188,14 @@ function groupRow(row: LiveGroup, photos: ReadonlyMap<string, string>): GroupLis
   };
   return row.status === "removed"
     ? { ...row, avatar, removedBy: row.removedBy.name }
-    : { ...row, avatar };
+    : {
+        ...row,
+        avatar,
+        preview:
+          row.kind === "pair" && row.preview.summary === ""
+            ? { by: null, summary: `This is the start of your group with ${firstName(row.title)}` }
+            : row.preview,
+      };
 }
 
 function accountProvider(method: ReturnType<typeof useSession>["method"]): Me["provider"] {
@@ -183,6 +206,11 @@ function accountProvider(method: ReturnType<typeof useSession>["method"]): Me["p
 
 function photoPaths(profile: ReadyProfile, groups: readonly LiveGroup[]) {
   return [profile.photo, ...groups.map((row) => row.avatar.photo)].filter((path) => path !== null);
+}
+
+function useSelectedGroup(groups: readonly LiveGroup[] | undefined) {
+  const search = useSearch({ strict: false });
+  return groups?.find((row) => row.groupId === search.group)?.groupId ?? null;
 }
 
 function Groups({
@@ -211,6 +239,12 @@ function Groups({
     },
   };
   const rows = (groups ?? []).map((row) => groupRow(row, photos));
+  const workspace = useGroupJourney({
+    selectedGroup: useSelectedGroup(groups),
+    token: useContext(InviteToken),
+    onNotice: setNotice,
+    renderEmpty: (onNewGroup) => <GroupsContent groups={groups} onNewGroup={onNewGroup} />,
+  });
   const unavailable = () => setNotice("This is coming in the next journey.");
 
   return (
@@ -220,16 +254,21 @@ function Groups({
           <Sidebar
             me={me}
             rows={rows}
-            selectedGroupId={null}
-            onSelect={unavailable}
-            onNewGroup={unavailable}
+            selectedGroupId={workspace.selected}
+            onSelect={(id) => {
+              const row = groups?.find((group) => group.groupId === id);
+              if (row) workspace.open(row.groupId);
+            }}
+            onNewGroup={workspace.newGroup}
             onSearch={unavailable}
             onAccount={() => setAccountOpen(true)}
           />
         }
-        main={<GroupsContent groups={groups} onNewGroup={unavailable} />}
+        main={workspace.main}
+        info={workspace.info}
         onOpenSearch={unavailable}
       />
+      {workspace.dialog}
       {accountOpen ? (
         <Account
           me={me}

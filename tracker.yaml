@@ -37,16 +37,19 @@ outcomes:
   - id: chat.create_groups
     title: Create a group or start a group of two
     area: groups
-    state: planned
-    summary: Not built.
+    state: in_progress
+    summary: Web group creation, people search, pairs, adding members and joining by invite are wired to the dev backend. Phone wiring remains.
     theory: theory.md#groups
-    code: []
+    code:
+      - apps/web/src/journey/groups.tsx
+      - tests/j2-web.e2e.ts
+      - convex/groups.ts
     priority: P0
     size: M
-    size_reason: Group creation, invitations by email and the group-of-two shortcut on both apps.
+    size_reason: The phone needs group creation, pairs, member addition and invite joining.
     remaining:
-      - Create a group and add people by email invitation.
-      - Start a group of two from someone's name; reopen the existing one for the same pair.
+      - Create groups, start pairs and add people on the phone.
+      - Join a group by invite link on the phone.
 
   - id: chat.send_messages
     title: Send text, images, files and voice notes

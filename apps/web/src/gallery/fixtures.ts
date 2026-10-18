@@ -116,13 +116,12 @@ function member(key: PersonKey, options: Options = {}): Member {
   return {
     ...author(key, options),
     fullName: options.long === true && key === "bilal" ? LONG_BILAL : PEOPLE[key].full,
-    email: PEOPLE[key].email,
   };
 }
 
 export function match(key: PersonKey, options: Options = {}): PersonMatch {
   const person = member(key, options);
-  return { ...author(key, options), fullName: person.fullName, email: person.email };
+  return { ...author(key, options), fullName: person.fullName, email: PEOPLE[key].email };
 }
 
 export function me(options: Options = {}): Me {

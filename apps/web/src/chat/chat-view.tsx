@@ -48,7 +48,7 @@ function ChatTitle({
 }
 
 /** Group avatar and name (opens Group info), the member count, and the two quiet tools. */
-function ChatHeader({ group, onOpenInfo, onSearchGroup }: ChatHeaderProps) {
+export function ChatHeader({ group, onOpenInfo, onSearchGroup }: ChatHeaderProps) {
   return (
     <header className="chat-header">
       <ChatTitle group={group} onOpenInfo={onOpenInfo} />

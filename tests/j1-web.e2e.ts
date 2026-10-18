@@ -5,7 +5,7 @@ import { expect, type App, type Screen } from "e2e";
 import { Schema } from "effect";
 
 import { Session } from "../apps/web/src/lib/auth/contracts.js";
-import { browserEngine } from "./support/browser.js";
+import { browserEngine, expectMainFullWidth } from "./support/browser.js";
 import {
   magicCode,
   removeTestUser,
@@ -309,6 +309,7 @@ test(
       expect(await avatarColor(".account-button .av")).toBe(setupColor);
       expect(await avatarColor(".profile-avatar .av")).toBe(setupColor);
       await screen.getByRole("button", "Close", { exact: true }).tap();
+      await expectMainFullWidth();
       await shot("04-empty-groups");
       await screen.getByRole("button", "Account", { exact: true }).tap();
       await expect(screen.getByRole("dialog", "Account")).toBeVisible();

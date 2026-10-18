@@ -18,7 +18,11 @@ export const Route = createFileRoute("/auth/error")({
         }
         return new Response(null, {
           status: 302,
-          headers: { Location: "/?authError=1", "Cache-Control": "no-store" },
+          headers: {
+            Location: "/?authError=1",
+            "Cache-Control": "no-store",
+            "Referrer-Policy": "no-referrer",
+          },
         });
       },
     },
