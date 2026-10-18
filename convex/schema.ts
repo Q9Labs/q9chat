@@ -68,10 +68,13 @@ export const notifyModeValidator = v.union(
   v.literal("muted"),
 );
 
-// Leaving or being removed deletes the row, which ends access.
+// Leaving or being removed deletes the row, which ends access. searchName is
+// the member's display name in lower case, kept here so finding people by name
+// reads only the caller's groups' member rows, never one profile per member.
 const memberships = defineTable({
   groupId: v.id("groups"),
   profileId: v.id("profiles"),
+  searchName: v.string(),
   notify: notifyModeValidator,
   joinedAt: v.number(),
 })
@@ -81,7 +84,9 @@ const memberships = defineTable({
 // A person removed from a group. The group stays in their list as "Shoaib
 // removed you" until they dismiss it, and the row keeps them from rejoining
 // through the invite link until a member adds them back. It grants no access
-// to the group's messages.
+// to the group's messages. A person has at most 20 undismissed notices: a 21st
+// dismisses the oldest, so the group list reads a bounded set however many
+// groups have removed them.
 const removals = defineTable({
   groupId: v.id("groups"),
   profileId: v.id("profiles"),
@@ -90,7 +95,7 @@ const removals = defineTable({
   dismissedAt: v.optional(v.number()),
 })
   .index("by_group_profile", ["groupId", "profileId"])
-  .index("by_profile", ["profileId"]);
+  .index("by_profile_dismissed", ["profileId", "dismissedAt"]);
 
 // Kept apart from memberships so marking a group read does not re-run every
 // query that checks membership. lastNeedsYouSequence is the latest message
@@ -116,10 +121,12 @@ const unreadPosts = defineTable({
 
 // A file uploaded through the authenticated upload route and not yet used.
 // Sending a post or setting a photo consumes it, so each upload is used once
-// and only by its uploader. A cron deletes uploads left unused for a day.
+// and only by its uploader, and only as the kind the upload route found in its
+// first bytes. A cron deletes uploads left unused for a day.
 const uploads = defineTable({
   ownerId: v.id("profiles"),
   storageId: v.id("_storage"),
+  kind: v.union(v.literal("image"), v.literal("file"), v.literal("voice")),
   contentType: v.string(),
   size: v.number(),
 }).index("by_owner", ["ownerId"]);
@@ -172,8 +179,8 @@ export const memberEventValidator = v.union(
   v.object({ type: v.literal("left"), profileId: v.id("profiles") }),
 );
 
-// sequence orders a group's history; it is gap-free, so it also counts unread
-// messages and finds a message far back in the history.
+// sequence orders a group's history; it is gap-free, so a range of sequences
+// addresses any page and finds a message far back in the history.
 export const messageValidator = v.union(
   v.object({
     kind: v.literal("post"),
@@ -189,6 +196,11 @@ export const messageValidator = v.union(
     replyToId: v.optional(v.id("messages")),
     mentions: v.array(v.id("profiles")),
     attachments: v.array(attachmentValidator),
+    // One entry per emoji with at least one reaction, kept in step with the
+    // reactions rows. People who left keep their reactions, so a post's
+    // reactors aren't bounded by the group's size; this lets a page of
+    // messages show counts without reading every reaction.
+    reactionCounts: v.array(v.object({ emoji: reactionEmojiValidator, count: v.number() })),
     editedAt: v.optional(v.number()),
   }),
   // Deleting a post drops its content and files but keeps its place, so
@@ -221,6 +233,7 @@ const reactions = defineTable({
   emoji: reactionEmojiValidator,
 })
   .index("by_message_profile", ["messageId", "profileId"])
+  .index("by_message_emoji", ["messageId", "emoji"])
   .index("by_profile", ["profileId"]);
 
 // Who is typing right now: the only presence Q9 Chat shows. The apps hide a
