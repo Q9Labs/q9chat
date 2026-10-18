@@ -59,7 +59,7 @@ export function SignInScreen({
   return (
     <AuthFrame>
       <Hero>
-        <View style={{ marginTop: 4, marginBottom: 6 }}>
+        <View style={{ marginTop: 4, marginBottom: 16 }}>
           <Wordmark size={30} />
         </View>
         <T color="mu" style={{ textAlign: "center" }}>
@@ -127,6 +127,7 @@ export function CodeScreen({
   const { c } = useTheme();
   const refs = useRef<(TextInputInstance | null)[]>([]);
   const digits = Array.from({ length: CODE_LENGTH }, (_, index) => code[index] ?? "");
+  const nextIndex = digits.findIndex((digit) => !digit);
 
   const write = (index: number, text: string) => {
     const typed = text.replace(/\D/g, "");
@@ -168,6 +169,7 @@ export function CodeScreen({
             index={index}
             digit={digit}
             bad={bad}
+            next={index === nextIndex}
             setRef={(node) => {
               refs.current[index] = node;
             }}
@@ -195,6 +197,7 @@ function CodeCell({
   index,
   digit,
   bad,
+  next,
   setRef,
   onType,
   onBackspace,
@@ -202,6 +205,8 @@ function CodeCell({
   index: number;
   digit: string;
   bad: boolean;
+  /** The cell the next digit lands in; the screen keeps focus there, so it carries the focus ring. */
+  next: boolean;
   setRef: (node: TextInputInstance | null) => void;
   onType: (text: string) => void;
   onBackspace: () => void;
@@ -228,7 +233,7 @@ function CodeCell({
         padding: 0,
         borderRadius: radius.input,
         borderWidth: 1,
-        borderColor: bad ? c.er : "transparent",
+        borderColor: bad ? c.er : next ? c.tx : "transparent",
         backgroundColor: c.s1,
         textAlign: "center",
         fontFamily: fonts[600],

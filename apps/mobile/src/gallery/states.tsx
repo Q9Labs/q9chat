@@ -138,7 +138,7 @@ const eventsWorld = () =>
 export const STATES: GalleryState[] = [
   { id: "signin", title: "Sign in", group: "Auth", render: () => <SignInScreen email="hasan@q9labs.ai" onEmailChange={noop} onGoogle={noop} onApple={noop} onEmailCode={noop} /> },
   { id: "code", title: "Email code", group: "Auth", render: () => <CodeScreen email="hasan@q9labs.ai" code="481" onCodeChange={noop} bad={false} onResend={noop} onChangeEmail={noop} /> },
-  { id: "code-bad", title: "Email code, rejected", group: "Auth", render: () => <CodeScreen email="hasan@q9labs.ai" code="000000" onCodeChange={noop} bad onResend={noop} onChangeEmail={noop} /> },
+  { id: "code-bad", title: "Email code, rejected", group: "Auth", render: () => <CodeScreen email="hasan@q9labs.ai" code="" onCodeChange={noop} bad onResend={noop} onChangeEmail={noop} /> },
   { id: "profile", title: "Set up profile", group: "Auth", render: () => <ProfileScreen email="nadia@q9labs.ai" name="Nadia" onNameChange={noop} avatar={avatarOf("nadia")} hasPhoto={false} onTogglePhoto={noop} onContinue={noop} /> },
   { id: "profile-photo", title: "Set up profile, with photo", group: "Auth", render: () => <ProfileScreen email="nadia@q9labs.ai" name="Nadia" onNameChange={noop} avatar={avatarOf("nadia", photoUri)} hasPhoto onTogglePhoto={noop} onContinue={noop} /> },
 
@@ -169,11 +169,11 @@ export const STATES: GalleryState[] = [
   { id: "chat-reply", title: "Composer, replying", group: "Chat", render: () => chat("launch", { composer: { kind: "reply", author: "Bilal", summary: "Build 1 is up on TestFlight. @Hasan can you try sign in with Apple?" } }) },
   { id: "chat-edit", title: "Composer, editing", group: "Chat", render: () => chat("launch", { composer: { kind: "edit" }, draft: "Web goes up on chat.q9labs.ai tonight. Phone builds are going through EAS." }) },
   { id: "chat-draft", title: "Composer, with text", group: "Chat", render: () => chat("launch", { draft: "On it. I'll test Apple sign in tonight." }) },
-  { id: "chat-recording", title: "Composer, recording", group: "Chat", render: () => chat("launch", { composer: { kind: "recording", seconds: 7, levels: waveSamples(11, 30) } }) },
+  { id: "chat-recording", title: "Composer, recording", group: "Chat", render: () => chat("launch", { composer: { kind: "recording", seconds: 0, levels: waveSamples(11, 30) } }) },
   { id: "chat-offline", title: "Chat, offline with a queued message", group: "Chat", render: () => chat("launch", { offline: true }, { world: queuedWorld(), unread: 0 }) },
   { id: "chat-sending", title: "Chat, sending", group: "Chat", render: () => chat("launch", {}, { world: sendingWorld(), unread: 0 }) },
   { id: "chat-failed", title: "Chat, failed send", group: "Chat", render: () => chat("launch", {}, { world: failedWorld(), unread: 0 }) },
-  { id: "chat-events", title: "Chat, deleted message and removal line", group: "Chat", render: () => chat("launch", {}, { world: eventsWorld(), unread: 0 }) },
+  { id: "chat-events", title: "Chat, deleted message and removal line", group: "Chat", render: () => chat("launch", { subtitle: "4 members" }, { world: eventsWorld(), unread: 0 }) },
   { id: "chat-long", title: "Chat, long names and long message", group: "Chat", render: () => chat("launch", {}, { world: longWorld() }) },
   { id: "chat-removed", title: "Chat, removed from group", group: "Chat", render: () => chat("launch", { removed: { by: "Shoaib", when: "today at 10:44" } }) },
 

@@ -176,7 +176,7 @@ export function Composer(props: Props) {
           onChangeText={onDraftChange}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
-          onContentSizeChange={(event) => setInputHeight(Math.min(140, Math.max(36, event.nativeEvent.contentSize.height + 16)))}
+          onContentSizeChange={(event) => setInputHeight(Math.min(140, Math.max(36, event.nativeEvent.contentSize.height)))}
           placeholder={`Message ${name}`}
           placeholderTextColor={c.mu}
           selectionColor={c.ac}

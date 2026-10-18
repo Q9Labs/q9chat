@@ -188,7 +188,7 @@ export function Timeline({ items, typingText, latestKey, ...actions }: TimelineP
         keyboardDismissMode="interactive"
         contentContainerStyle={{ flexGrow: 1, justifyContent: "flex-end", paddingTop: 4, paddingHorizontal: 12, paddingBottom: 8 }}
         onContentSizeChange={() => {
-          if (!first.current && seenKey.current === latestKey) return;
+          if (away && seenKey.current === latestKey) return;
           ref.current?.scrollToEnd({ animated: !first.current });
           first.current = false;
           seenKey.current = latestKey;
