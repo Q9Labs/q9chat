@@ -4,6 +4,7 @@ import { test } from "node:test";
 import { groupRows, msUntilMidnight, photoUrlOf, rowStamp } from "../src/journey/groupRows.ts";
 import { saveThenCheck } from "../src/journey/nameRules.ts";
 import { MAX_PHOTO_BYTES, photoTooLarge } from "../src/journey/photoRules.ts";
+import { saveSetup } from "../src/journey/setupRules.ts";
 
 const at = (iso: string) => new Date(iso);
 const now = at("2026-10-18T15:30:00");
@@ -169,4 +170,38 @@ void test("a name save finishes with the screen free to leave only if the field 
     ),
     true,
   );
+});
+
+void test("a setup save in flight stops writing when the account changes, so the next account's name stays", async () => {
+  let signedInAs: string = "a";
+  const who = () => signedInAs;
+  const slow = Promise.withResolvers<void>();
+  const written: string[] = [];
+  const saving = saveSetup({
+    setUp: () => slow.promise,
+    photo: async () => ({}),
+    update: async () => {
+      written.push(who());
+    },
+    stillSignedIn: () => signedInAs === "a",
+  });
+  // The person signs out and account B, which already has a profile, signs in.
+  signedInAs = "b";
+  slow.resolve();
+  assert.equal(await saving, false);
+  assert.deepEqual([...written], []);
+
+  signedInAs = "a";
+  assert.equal(
+    await saveSetup({
+      setUp: async () => {},
+      photo: async () => ({}),
+      update: async () => {
+        written.push(who());
+      },
+      stillSignedIn: () => signedInAs === "a",
+    }),
+    true,
+  );
+  assert.deepEqual(written, ["a"]);
 });

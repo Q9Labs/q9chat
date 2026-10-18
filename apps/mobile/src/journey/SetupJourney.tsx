@@ -8,6 +8,7 @@ import { ProfileScreen } from "../screens/AuthScreens";
 import { sessionClient, type Session } from "../session/client";
 import { MAX_NAME } from "./nameRules";
 import { photoNoticeOf, pickPhoto, type PickedPhoto, uploadPhoto } from "./photos";
+import { saveSetup } from "./setupRules";
 import { useSignOut } from "./SignOut";
 
 /** The `photoUploadId` field for the chosen photo, or nothing when there is none. */
@@ -17,15 +18,23 @@ async function uploadedPhoto(photo: PickedPhoto | null) {
   return { photoUploadId: await uploadPhoto(photo, token) };
 }
 
+const signedInAs = (userId: string) => {
+  const state = sessionClient.snapshot();
+  return state.status === "authenticated" && state.session.user.id === userId;
+};
+
 /** First sign-in: a name (required, up to 60 characters) and an optional photo, then Groups. */
 export function SetupJourney({
   session,
   onStarted,
   onFinished,
+  onStopped,
 }: {
   session: Session;
   onStarted: () => void;
   onFinished: (displayName: string) => void;
+  /** The save stopped because another account took over; nothing was written for this one. */
+  onStopped: () => void;
 }) {
   const { user } = session;
   const setUp = useAction(api.profiles.setUp);
@@ -35,6 +44,12 @@ export function SetupJourney({
   const [toast, showToast] = useToast();
   const working = useRef(false);
   const signOut = useSignOut();
+
+  function reportFailure(error: unknown) {
+    const notice = photoNoticeOf(error);
+    if (notice) setPhoto(null);
+    showToast(notice ?? "Couldn't save your profile. Try again.");
+  }
 
   async function save() {
     const displayName = name.trim();
@@ -46,14 +61,17 @@ export function SetupJourney({
     working.current = true;
     onStarted();
     try {
-      await setUp({ displayName });
       // setUp is idempotent: a failed photo upload can retry without creating another profile.
-      await update({ displayName, ...(await uploadedPhoto(photo)) });
-      onFinished(displayName);
+      const saved = await saveSetup({
+        setUp: () => setUp({ displayName }),
+        photo: () => uploadedPhoto(photo),
+        update: (uploaded) => update({ displayName, ...uploaded }),
+        stillSignedIn: () => signedInAs(user.id),
+      });
+      if (saved) onFinished(displayName);
+      else onStopped();
     } catch (error) {
-      const notice = photoNoticeOf(error);
-      if (notice) setPhoto(null);
-      showToast(notice ?? "Couldn't save your profile. Try again.");
+      reportFailure(error);
     } finally {
       working.current = false;
     }

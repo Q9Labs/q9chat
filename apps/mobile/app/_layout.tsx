@@ -6,6 +6,7 @@ import {
   Figtree_700Bold,
   useFonts,
 } from "@expo-google-fonts/figtree";
+import { useConvexConnectionState } from "convex/react";
 import { Stack, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
@@ -53,10 +54,17 @@ function Navigator() {
 function Photos({ children }: { children: React.ReactNode }) {
   const state = useSessionState();
   const token = state.status === "authenticated" ? state.session.accessToken : null;
+  const { isWebSocketConnected } = useConvexConnectionState();
   const auth = useMemo(
     () =>
-      token ? { origin: config.siteUrl, headers: { Authorization: `Bearer ${token}` } } : undefined,
-    [token],
+      token
+        ? {
+            origin: config.siteUrl,
+            headers: { Authorization: `Bearer ${token}` },
+            connected: isWebSocketConnected,
+          }
+        : undefined,
+    [token, isWebSocketConnected],
   );
   return <ImageAuthContext.Provider value={auth}>{children}</ImageAuthContext.Provider>;
 }

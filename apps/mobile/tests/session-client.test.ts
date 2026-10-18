@@ -698,3 +698,27 @@ void test("a saved email code expires after ten minutes, and a different email d
   assert.equal(keychain.value("emailAttempt"), null);
   assert.equal(await restart().resumeEmail(), null);
 });
+
+void test("signing out while an older sign-out is still revoking is not ignored: it runs after the old revoke", async () => {
+  const { worker, keychain, client } = harness({
+    refreshToken: "refresh-b",
+    pendingRevoke: JSON.stringify(["refresh-old"]),
+  });
+  worker.auto("token", () => json(phoneSession("b2")));
+  const starting = client.bootstrap();
+  const oldRevoke = await worker.next("sign-out");
+  assert.equal(oldRevoke.body.refreshToken, "refresh-old");
+  assert.equal(client.revokeStatus(), "revoking");
+
+  const signingOut = client.signOut();
+  assert.equal(statusOf(client), "unauthenticated");
+  oldRevoke.reply(json({}));
+  const ownRevoke = await worker.next("sign-out");
+  assert.equal(ownRevoke.body.refreshToken, "refresh-b2");
+  ownRevoke.reply(json({}));
+  await Promise.all([starting, signingOut]);
+
+  assert.equal(keychain.value("refreshToken"), null);
+  assert.equal(keychain.value("pendingRevoke"), null);
+  assert.equal(client.revokeStatus(), "idle");
+});

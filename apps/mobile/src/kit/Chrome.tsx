@@ -248,6 +248,17 @@ export function PermissionBanner({
   );
 }
 
+/** What Groups shows before its first load while the live connection is down. */
+export function CantConnectYet() {
+  return (
+    <CenterState
+      icon="wifiOff"
+      title="Can't connect"
+      text="Your groups will load when you're back online."
+    />
+  );
+}
+
 /** Centered empty or removed state: round badge, 18px heading, muted copy, optional action. */
 export function CenterState({
   icon,

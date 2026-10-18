@@ -44,22 +44,24 @@ const shapeOf = (size: number) => ({
 
 /** A person with a protected photo: the initials and color stay underneath for good, so a transparent photo keeps its base. */
 function PersonAvatar({ avatar, url, size }: { avatar: AvatarData; url: string; size: number }) {
-  const [photo, setPhoto] = useState<"loading" | "loaded" | "failed">("loading");
+  const [loaded, setLoaded] = useState(false);
+  // A failed photo is remembered with the token and connection it failed under, so it is tried again
+  // once when either changes, and never in a loop.
+  const [failedUnder, setFailedUnder] = useState<string | null>(null);
   const auth = useContext(ImageAuthContext);
+  const protectedPhoto = auth !== undefined && url.startsWith(auth.origin);
+  const attempt = protectedPhoto ? `${auth.headers.Authorization}|${auth.connected}` : "open";
   return (
-    <View testID={photo === "loaded" ? "avatar-photo" : "avatar-initials"} style={shapeOf(size)}>
+    <View testID={loaded ? "avatar-photo" : "avatar-initials"} style={shapeOf(size)}>
       <Initials avatar={avatar} size={size} />
-      {photo === "failed" ? null : (
+      {failedUnder === attempt ? null : (
         <Image
-          source={{
-            uri: url,
-            ...(auth && url.startsWith(auth.origin) ? { headers: auth.headers } : {}),
-          }}
+          source={{ uri: url, ...(protectedPhoto ? { headers: auth.headers } : {}) }}
           style={StyleSheet.absoluteFill}
           accessibilityElementsHidden
           importantForAccessibility="no-hide-descendants"
-          onLoad={() => setPhoto("loaded")}
-          onError={() => setPhoto("failed")}
+          onLoad={() => setLoaded(true)}
+          onError={() => setFailedUnder(attempt)}
         />
       )}
     </View>

@@ -2,7 +2,7 @@ import { firstName } from "@q9chat/domain";
 import { useState } from "react";
 
 import { PillButton } from "../kit/Buttons";
-import { CenterState } from "../kit/Chrome";
+import { CantConnectYet, CenterState, OfflinePill } from "../kit/Chrome";
 import { Screen } from "../kit/Chrome";
 import { sessionClient } from "../session/client";
 import { GroupsJourney } from "./GroupsJourney";
@@ -40,24 +40,46 @@ function CantConnect() {
   );
 }
 
+/** The account is still loading and the connection is down: the same offline line and message as Groups. */
+function Disconnected() {
+  return (
+    <Screen>
+      <OfflinePill />
+      <CantConnectYet />
+    </Screen>
+  );
+}
+
+/** What shows while there is no profile to look at yet. */
+const WITHOUT_PROFILE = {
+  loading: Loading,
+  signedOut: SignInJourney,
+  disconnected: Disconnected,
+  offline: CantConnect,
+  unavailable: AccountUnavailable,
+} as const;
+
 /** Journey 1: sign in, set up the profile the first time, and land in your groups. */
 export function Journey() {
   const stage = useStage();
-  // Setup stays on screen while the profile saves, even after the profile exists.
-  const [saving, setSaving] = useState(false);
-  if (stage.kind === "loading") return <Loading />;
-  if (stage.kind === "signedOut") return <SignInJourney />;
-  if (stage.kind === "offline") return <CantConnect />;
-  if (stage.kind === "unavailable") return <AccountUnavailable />;
-  if (stage.kind === "needsSetup" || saving)
+  // Setup stays on screen while that account's profile saves, even after the profile exists; another account never inherits it.
+  const [savingFor, setSavingFor] = useState<string | null>(null);
+  if (stage.kind !== "needsSetup" && stage.kind !== "ready") {
+    const View = WITHOUT_PROFILE[stage.kind];
+    return <View />;
+  }
+  const userId = stage.session.user.id;
+  if (stage.kind === "needsSetup" || savingFor === userId)
     return (
       <SetupJourney
+        key={userId}
         session={stage.session}
-        onStarted={() => setSaving(true)}
+        onStarted={() => setSavingFor(userId)}
         onFinished={(displayName) => {
           postNotice(`Welcome, ${firstName(displayName)}`);
-          setSaving(false);
+          setSavingFor((current) => (current === userId ? null : current));
         }}
+        onStopped={() => setSavingFor((current) => (current === userId ? null : current))}
       />
     );
   return <GroupsJourney profile={stage.profile} />;

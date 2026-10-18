@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { PillButton } from "../kit/Buttons";
 import {
+  CantConnectYet,
   CenterState,
   GroupsTop,
   OfflinePill,
@@ -67,11 +68,7 @@ export function GroupsScreen(props: GroupsScreenProps) {
           ListFooterComponent={<View style={{ height: Math.max(insets.bottom, 8) }} />}
         />
       ) : props.rows === null ? (
-        <CenterState
-          icon="wifiOff"
-          title="Can't connect"
-          text="Your groups will load when you're back online."
-        />
+        <CantConnectYet />
       ) : (
         <CenterState
           icon="users"

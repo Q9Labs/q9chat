@@ -123,6 +123,7 @@ export const accountHandlers: Pick<
   | "onTogglePhoto"
   | "onBack"
   | "onSignOut"
+  | "signingOut"
   | "onAskDelete"
   | "onConfirmDelete"
   | "onCancelDelete"
@@ -133,6 +134,7 @@ export const accountHandlers: Pick<
   onTogglePhoto: noop,
   onBack: noop,
   onSignOut: noop,
+  signingOut: false,
   onAskDelete: noop,
   onConfirmDelete: noop,
   onCancelDelete: noop,
