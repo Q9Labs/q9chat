@@ -144,7 +144,9 @@ void test("real staging email sign-in, refresh persistence and sign-out", async 
   const refreshed = await post("token", {}, firstCookie);
   assert.equal(refreshed.status, 200);
   const second = Schema.decodeUnknownSync(Session)(await refreshed.json());
-  const rotatedCookie = sessionCookie(refreshed);
+  const rotatedCookie = refreshed.headers.has("set-cookie")
+    ? sessionCookie(refreshed)
+    : firstCookie;
   console.warn(`Observed WorkOS refresh token changed: ${firstCookie !== rotatedCookie}`);
   const payload = second.accessToken.split(".")[1];
   assert.ok(payload);

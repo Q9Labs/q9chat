@@ -446,3 +446,35 @@ void test("sign-out clears every transaction; late email, phone and OAuth grants
     },
   );
 });
+
+void test("refresh with an unchanged WorkOS refresh token sends no Set-Cookie", async () => {
+  await outside(
+    async () => {
+      const signedIn = await call("verify", verifyBody());
+      const refreshed = await call("token", {}, "", cookies(signedIn));
+      assert.equal(refreshed.status, 200);
+      assert.deepEqual(refreshed.headers.getSetCookie(), []);
+    },
+    async () => Response.json(auth()),
+  );
+});
+
+void test("refresh with a rotated WorkOS refresh token updates the session cookie", async () => {
+  let rotate = false;
+  await outside(
+    async () => {
+      const signedIn = await call("verify", verifyBody());
+      rotate = true;
+      const refreshed = await call("token", {}, "", cookies(signedIn));
+      assert.equal(refreshed.status, 200);
+      assert.equal(refreshed.headers.getSetCookie().length, 1);
+      assert.match(
+        refreshed.headers.get("set-cookie") ?? "",
+        /q9_session=.+HttpOnly; Secure; SameSite=Lax; Path=\/api\/auth/,
+      );
+      assert.notEqual(cookies(refreshed), cookies(signedIn));
+    },
+    async () =>
+      Response.json({ ...auth(), refresh_token: rotate ? "rotated-refresh" : "test-refresh" }),
+  );
+});

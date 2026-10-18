@@ -45,10 +45,9 @@ consume their transaction. Wrong email codes keep it so the person can retry.
 Sign-out clears the session and all three transaction cookies. A verify or
 callback arriving after completed sign-out cannot exchange a code. An exchange
 already running when sign-out arrives (including refresh) may finish and write its cookie: v1
-explicitly accepts that window. Likewise, an older refresh already running during
-an account change can write its cookie last; tabs reconcile to the resulting
-shared cookie. Preventing these in-flight writes requires ordering or server-side
-state, which this design deliberately does not add. There is no server-side
+explicitly accepts that window. Refresh writes a cookie only when WorkOS returns a different refresh token.
+An unchanged-token refresh cannot overwrite a newer account cookie; a genuinely
+rotated token can still write last. Tabs reconcile to the resulting shared cookie. There is no server-side
 transaction store.
 
 ## Worker endpoints
@@ -93,7 +92,8 @@ Both forms wrap the WorkOS token and original method in an HMAC-signed value.
 Clients treat that value as opaque and replace it on every refresh. This keeps
 the method when WorkOS omits it in refresh responses. Signing uses the server-only
 WorkOS key. Rotating that key invalidates local sessions. The web cookie expires
-after 30 days; WorkOS also enforces its session expiry.
+after 30 days from sign-in or token rotation; unchanged-token refreshes do not
+extend it. WorkOS also enforces its session expiry.
 
 `workos.server.ts` owns all WorkOS calls. Each call has a ten-second deadline and typed errors.
 Only idempotent session revocation retries HTTP 5xx twice with exponential delay.

@@ -168,7 +168,9 @@ export function token(request: Request) {
         grant_type: "refresh_token",
         refresh_token: credentials.refreshToken,
       });
-      return await sessionResponse(auth, credentials.client, credentials.method);
+      const response = await sessionResponse(auth, credentials.client, credentials.method);
+      if (auth.refresh_token === credentials.refreshToken) response.headers.delete("Set-Cookie");
+      return response;
     } catch (error) {
       if (
         error instanceof WorkosError &&
