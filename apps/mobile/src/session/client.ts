@@ -2,10 +2,10 @@ import * as Crypto from "expo-crypto";
 import * as WebBrowser from "expo-web-browser";
 import { useSyncExternalStore } from "react";
 
-import { createSessionClient, type SessionState } from "./core.ts";
+import { createSessionClient, type RevokeStatus, type SessionState } from "./core.ts";
 import { tokenStore } from "./tokenStore";
 
-export type { Session, SessionState } from "./core.ts";
+export type { RevokeStatus, Session, SessionState } from "./core.ts";
 
 // The session lives outside React because Convex asks for tokens outside it too.
 export const sessionClient = createSessionClient({
@@ -24,4 +24,9 @@ export const sessionClient = createSessionClient({
 
 export function useSessionState(): SessionState {
   return useSyncExternalStore(sessionClient.subscribe, sessionClient.snapshot);
+}
+
+/** Whether a sign-out is still waiting for the server to confirm it. */
+export function useRevokeStatus(): RevokeStatus {
+  return useSyncExternalStore(sessionClient.subscribe, sessionClient.revokeStatus);
 }

@@ -8,10 +8,9 @@ import {
   type ReactNode,
 } from "react";
 
-import { sessionClient } from "../session/client";
+import { sessionClient, useRevokeStatus } from "../session/client";
 
-type SignOutStatus = "idle" | "pending" | "complete" | "failed";
-type SignOutApi = { status: SignOutStatus; leave: () => void; clear: () => void };
+type SignOutApi = { complete: boolean; leave: () => void; clear: () => void };
 
 const SignOutContext = createContext<SignOutApi | null>(null);
 
@@ -22,29 +21,29 @@ export function useSignOut(): SignOutApi {
 }
 
 /**
- * Signing out takes the person to Sign in at once; "Signed out" appears only after the server
- * confirms, and "Couldn't sign out" with a retry when it does not. The status outlives the screens.
+ * Signing out takes the person to Sign in at once. "Signed out" shows once the server confirms; until
+ * then the session client keeps the revocation pending (its status is `useRevokeStatus`), so it survives
+ * a failure, new sign-in attempts and a restart.
  */
 export function SignOutProvider({ children }: { children: ReactNode }) {
-  const [status, setStatus] = useState<SignOutStatus>("idle");
-  const generation = useRef(0);
+  const [complete, setComplete] = useState(false);
+  const revoke = useRevokeStatus();
+  const latest = useRef(0);
   const leave = useCallback(() => {
-    if (status === "pending") return;
-    const started = ++generation.current;
-    setStatus("pending");
+    if (revoke === "revoking") return;
+    const started = ++latest.current;
+    setComplete(false);
     void sessionClient.signOut().then(
       () => {
-        if (started === generation.current) setStatus("complete");
+        if (started === latest.current) setComplete(true);
       },
-      () => {
-        if (started === generation.current) setStatus("failed");
-      },
+      () => {},
     );
-  }, [status]);
+  }, [revoke]);
   const clear = useCallback(() => {
-    generation.current += 1;
-    setStatus("idle");
+    latest.current += 1;
+    setComplete(false);
   }, []);
-  const value = useMemo(() => ({ status, leave, clear }), [status, leave, clear]);
+  const value = useMemo(() => ({ complete, leave, clear }), [complete, leave, clear]);
   return <SignOutContext.Provider value={value}>{children}</SignOutContext.Provider>;
 }
