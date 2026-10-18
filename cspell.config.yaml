@@ -59,6 +59,8 @@ words:
   - worktrees
   - Wrangler
   - ratelimits
+  # React Native's accessibility action name for a long press.
+  - longpress
   # The people in the mock's seed data, used by the web gallery fixtures.
   - Bilal
   - Hasan
