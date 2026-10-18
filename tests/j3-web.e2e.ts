@@ -727,7 +727,7 @@ test(
         const requests = rangeRequests.slice(before).filter((request) => request.groupId === own);
         process.stdout.write(`J3 own-only wire ranges: ${JSON.stringify(requests)}\n`);
         // Development remounts can register the same range again; no other page may be read.
-        const pages = [...new Set(requests.map(({ fromSequence }) => fromSequence))].sort(
+        const pages = [...new Set(requests.map(({ fromSequence }) => fromSequence))].toSorted(
           (left, right) => left - right,
         );
         expect(pages).toEqual([201, 301]);
