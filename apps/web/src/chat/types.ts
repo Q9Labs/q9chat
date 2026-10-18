@@ -24,6 +24,7 @@ export interface PersonRef {
 }
 
 export interface Author extends PersonRef {
+  readonly deleted?: boolean;
   readonly avatar: Avatar;
 }
 

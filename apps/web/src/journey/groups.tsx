@@ -531,6 +531,11 @@ function LiveGroupInfo({
   );
 }
 
+function useInfoState(detail: Detail | undefined) {
+  const [open, setOpen] = useState(false);
+  return { infoOpen: open && detail?.status === "member", setInfoOpen: setOpen };
+}
+
 export function useGroupJourney({
   token,
   selectedGroup,
@@ -545,9 +550,9 @@ export function useGroupJourney({
   const navigate = useNavigate();
   const invite = useInvite(token);
   const selected = selectedGroup ?? invite.groupId;
-  const [infoOpen, setInfoOpen] = useState(false);
   const [picker, setPicker] = useState<PickerMode | null>(null);
   const detail = useQuery(api.groups.get, selected ? { groupId: selected } : "skip");
+  const { infoOpen, setInfoOpen } = useInfoState(detail);
   const openPair = useMutation(api.groups.openPair);
   const { photos } = usePhotos(groupPhotoPaths(detail), onNotice);
   const { copied, copy, reset } = useInviteCopy(detail, onNotice);
