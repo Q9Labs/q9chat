@@ -24,8 +24,8 @@ catalog:
   "@cloudflare/vite-plugin": 1.59.0
   "@cloudflare/workers-types": 5.20260924.1
   wrangler: 4.138.0
+  effect: 3.22.2
   convex: 1.46.0
-  "@workos-inc/authkit-react": 0.16.3
   "@playwright/test": 1.63.0
   turbo: 2.11.3
   tsdown: 0.23.0
@@ -75,6 +75,6 @@ overrides:
   sharp: 0.35.5
   "@tanstack/react-start": "catalog:"
 
-# These workspace tools are distributed only as GitHub release tarballs.
+# Q9 packages are GitHub release tarballs, not registry publishes with provenance.
 trustPolicyExclude:
   - "@q9labsai/*"

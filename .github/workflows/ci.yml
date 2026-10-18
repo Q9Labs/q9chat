@@ -14,6 +14,7 @@ jobs:
     env:
       # The codegen drift lane regenerates convex/_generated against the dev
       # deployment; codegen never changes the code running there.
+      VITE_CONVEX_URL: https://quixotic-crab-23.convex.cloud
       CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEV_DEPLOY_KEY }}
     steps:
       - name: Checkout
@@ -39,8 +40,23 @@ jobs:
       - name: Validate project docs
         run: pnpm tracker:check && pnpm changelog:check
 
+      - name: Configure server-only secret canary
+        run: printf '%s\n' 'WORKOS_API_KEY=q9-auth-server-only-canary' 'WORKOS_CLIENT_ID=test-only' > apps/web/.dev.vars
+
       - name: Run base gate
         run: pnpm exec q9gate run --base origin/main
+
+      - name: Build browser artifact for secret exclusion
+        run: pnpm --filter @q9chat/web build
+
+      - name: Check built client excludes server secrets
+        run: node --test apps/web/tests/client-bundle.test.ts
+
+      - name: Install Chromium
+        run: pnpm --filter @q9chat/web exec playwright install --with-deps chromium
+
+      - name: Check browser auth lifecycle
+        run: pnpm --filter @q9chat/web exec playwright test e2e/auth-session.spec.ts --workers=1
 
       - name: Upload gate report
         if: ${{ always() }}

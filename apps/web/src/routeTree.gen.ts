@@ -12,6 +12,15 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as GalleryRouteImport } from './routes/gallery'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
+import { Route as AuthErrorRouteImport } from './routes/auth/error'
+import { Route as AuthPhoneCallbackRouteImport } from './routes/auth/phone-callback'
+import { Route as ApiAuthCallbackRouteImport } from './routes/api/auth/callback'
+import { Route as ApiAuthSignOutRouteImport } from './routes/api/auth/sign-out'
+import { Route as ApiAuthTokenRouteImport } from './routes/api/auth/token'
+import { Route as ApiAuthEmailStartRouteImport } from './routes/api/auth/email/start'
+import { Route as ApiAuthEmailVerifyRouteImport } from './routes/api/auth/email/verify'
+import { Route as ApiAuthOauthProviderRouteImport } from './routes/api/auth/oauth/$provider'
+import { Route as ApiAuthOauthExchangeRouteImport } from './routes/api/auth/oauth/exchange'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -28,35 +37,153 @@ const ApiHealthRoute = ApiHealthRouteImport.update({
   path: '/api/health',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthErrorRoute = AuthErrorRouteImport.update({
+  id: '/auth/error',
+  path: '/auth/error',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthPhoneCallbackRoute = AuthPhoneCallbackRouteImport.update({
+  id: '/auth/phone-callback',
+  path: '/auth/phone-callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthCallbackRoute = ApiAuthCallbackRouteImport.update({
+  id: '/api/auth/callback',
+  path: '/api/auth/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthSignOutRoute = ApiAuthSignOutRouteImport.update({
+  id: '/api/auth/sign-out',
+  path: '/api/auth/sign-out',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthTokenRoute = ApiAuthTokenRouteImport.update({
+  id: '/api/auth/token',
+  path: '/api/auth/token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthEmailStartRoute = ApiAuthEmailStartRouteImport.update({
+  id: '/api/auth/email/start',
+  path: '/api/auth/email/start',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthEmailVerifyRoute = ApiAuthEmailVerifyRouteImport.update({
+  id: '/api/auth/email/verify',
+  path: '/api/auth/email/verify',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthOauthProviderRoute = ApiAuthOauthProviderRouteImport.update({
+  id: '/api/auth/oauth/$provider',
+  path: '/api/auth/oauth/$provider',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthOauthExchangeRoute = ApiAuthOauthExchangeRouteImport.update({
+  id: '/api/auth/oauth/exchange',
+  path: '/api/auth/oauth/exchange',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/gallery': typeof GalleryRoute
   '/api/health': typeof ApiHealthRoute
+  '/auth/error': typeof AuthErrorRoute
+  '/auth/phone-callback': typeof AuthPhoneCallbackRoute
+  '/api/auth/callback': typeof ApiAuthCallbackRoute
+  '/api/auth/sign-out': typeof ApiAuthSignOutRoute
+  '/api/auth/token': typeof ApiAuthTokenRoute
+  '/api/auth/email/start': typeof ApiAuthEmailStartRoute
+  '/api/auth/email/verify': typeof ApiAuthEmailVerifyRoute
+  '/api/auth/oauth/$provider': typeof ApiAuthOauthProviderRoute
+  '/api/auth/oauth/exchange': typeof ApiAuthOauthExchangeRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/gallery': typeof GalleryRoute
   '/api/health': typeof ApiHealthRoute
+  '/auth/error': typeof AuthErrorRoute
+  '/auth/phone-callback': typeof AuthPhoneCallbackRoute
+  '/api/auth/callback': typeof ApiAuthCallbackRoute
+  '/api/auth/sign-out': typeof ApiAuthSignOutRoute
+  '/api/auth/token': typeof ApiAuthTokenRoute
+  '/api/auth/email/start': typeof ApiAuthEmailStartRoute
+  '/api/auth/email/verify': typeof ApiAuthEmailVerifyRoute
+  '/api/auth/oauth/$provider': typeof ApiAuthOauthProviderRoute
+  '/api/auth/oauth/exchange': typeof ApiAuthOauthExchangeRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/gallery': typeof GalleryRoute
   '/api/health': typeof ApiHealthRoute
+  '/auth/error': typeof AuthErrorRoute
+  '/auth/phone-callback': typeof AuthPhoneCallbackRoute
+  '/api/auth/callback': typeof ApiAuthCallbackRoute
+  '/api/auth/sign-out': typeof ApiAuthSignOutRoute
+  '/api/auth/token': typeof ApiAuthTokenRoute
+  '/api/auth/email/start': typeof ApiAuthEmailStartRoute
+  '/api/auth/email/verify': typeof ApiAuthEmailVerifyRoute
+  '/api/auth/oauth/$provider': typeof ApiAuthOauthProviderRoute
+  '/api/auth/oauth/exchange': typeof ApiAuthOauthExchangeRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/gallery' | '/api/health'
+  fullPaths:
+    | '/'
+    | '/gallery'
+    | '/api/health'
+    | '/auth/error'
+    | '/auth/phone-callback'
+    | '/api/auth/callback'
+    | '/api/auth/sign-out'
+    | '/api/auth/token'
+    | '/api/auth/email/start'
+    | '/api/auth/email/verify'
+    | '/api/auth/oauth/$provider'
+    | '/api/auth/oauth/exchange'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/gallery' | '/api/health'
-  id: '__root__' | '/' | '/gallery' | '/api/health'
+  to:
+    | '/'
+    | '/gallery'
+    | '/api/health'
+    | '/auth/error'
+    | '/auth/phone-callback'
+    | '/api/auth/callback'
+    | '/api/auth/sign-out'
+    | '/api/auth/token'
+    | '/api/auth/email/start'
+    | '/api/auth/email/verify'
+    | '/api/auth/oauth/$provider'
+    | '/api/auth/oauth/exchange'
+  id:
+    | '__root__'
+    | '/'
+    | '/gallery'
+    | '/api/health'
+    | '/auth/error'
+    | '/auth/phone-callback'
+    | '/api/auth/callback'
+    | '/api/auth/sign-out'
+    | '/api/auth/token'
+    | '/api/auth/email/start'
+    | '/api/auth/email/verify'
+    | '/api/auth/oauth/$provider'
+    | '/api/auth/oauth/exchange'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   GalleryRoute: typeof GalleryRoute
   ApiHealthRoute: typeof ApiHealthRoute
+  AuthErrorRoute: typeof AuthErrorRoute
+  AuthPhoneCallbackRoute: typeof AuthPhoneCallbackRoute
+  ApiAuthCallbackRoute: typeof ApiAuthCallbackRoute
+  ApiAuthSignOutRoute: typeof ApiAuthSignOutRoute
+  ApiAuthTokenRoute: typeof ApiAuthTokenRoute
+  ApiAuthEmailStartRoute: typeof ApiAuthEmailStartRoute
+  ApiAuthEmailVerifyRoute: typeof ApiAuthEmailVerifyRoute
+  ApiAuthOauthProviderRoute: typeof ApiAuthOauthProviderRoute
+  ApiAuthOauthExchangeRoute: typeof ApiAuthOauthExchangeRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -82,6 +209,69 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiHealthRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/auth/error': {
+      id: '/auth/error'
+      path: '/auth/error'
+      fullPath: '/auth/error'
+      preLoaderRoute: typeof AuthErrorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/phone-callback': {
+      id: '/auth/phone-callback'
+      path: '/auth/phone-callback'
+      fullPath: '/auth/phone-callback'
+      preLoaderRoute: typeof AuthPhoneCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/callback': {
+      id: '/api/auth/callback'
+      path: '/api/auth/callback'
+      fullPath: '/api/auth/callback'
+      preLoaderRoute: typeof ApiAuthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/sign-out': {
+      id: '/api/auth/sign-out'
+      path: '/api/auth/sign-out'
+      fullPath: '/api/auth/sign-out'
+      preLoaderRoute: typeof ApiAuthSignOutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/token': {
+      id: '/api/auth/token'
+      path: '/api/auth/token'
+      fullPath: '/api/auth/token'
+      preLoaderRoute: typeof ApiAuthTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/email/start': {
+      id: '/api/auth/email/start'
+      path: '/api/auth/email/start'
+      fullPath: '/api/auth/email/start'
+      preLoaderRoute: typeof ApiAuthEmailStartRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/email/verify': {
+      id: '/api/auth/email/verify'
+      path: '/api/auth/email/verify'
+      fullPath: '/api/auth/email/verify'
+      preLoaderRoute: typeof ApiAuthEmailVerifyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/oauth/$provider': {
+      id: '/api/auth/oauth/$provider'
+      path: '/api/auth/oauth/$provider'
+      fullPath: '/api/auth/oauth/$provider'
+      preLoaderRoute: typeof ApiAuthOauthProviderRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/oauth/exchange': {
+      id: '/api/auth/oauth/exchange'
+      path: '/api/auth/oauth/exchange'
+      fullPath: '/api/auth/oauth/exchange'
+      preLoaderRoute: typeof ApiAuthOauthExchangeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -89,6 +279,15 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   GalleryRoute: GalleryRoute,
   ApiHealthRoute: ApiHealthRoute,
+  AuthErrorRoute: AuthErrorRoute,
+  AuthPhoneCallbackRoute: AuthPhoneCallbackRoute,
+  ApiAuthCallbackRoute: ApiAuthCallbackRoute,
+  ApiAuthSignOutRoute: ApiAuthSignOutRoute,
+  ApiAuthTokenRoute: ApiAuthTokenRoute,
+  ApiAuthEmailStartRoute: ApiAuthEmailStartRoute,
+  ApiAuthEmailVerifyRoute: ApiAuthEmailVerifyRoute,
+  ApiAuthOauthProviderRoute: ApiAuthOauthProviderRoute,
+  ApiAuthOauthExchangeRoute: ApiAuthOauthExchangeRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
