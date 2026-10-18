@@ -237,5 +237,7 @@ protected files; rendering and playback belong to journey 4.
 
 `tests/j3-web.e2e.ts` seeds fresh staging accounts and genuine dev history via the
 public APIs. Run it with J1 and J2 using `pnpm test:e2e` on test box. It writes its
-live flow screenshots to `artifacts/j3-round2/` and deletes its profiles and WorkOS users
+live flow screenshots to `artifacts/j3-round3/` and deletes its profiles and WorkOS users
 in a cleanup, including on assertion failure.
+
+History captures `groups.get.firstUnreadSequence` at open: null starts at latest, otherwise the indexed unread sequence selects the initial page and divider. It does not scan history to discover incoming posts. Automatic page slides are canceled if the visible post/event anchor moves into the outgoing page; explicit Jump to latest replaces the window and focuses the log once. Modal coverage is passed from the journey and pauses visible-post read marking. The history log has live announcements off; a separate hidden polite region announces incoming posts, not history navigation. Speech output is not verified by the DOM e2e.

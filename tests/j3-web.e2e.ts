@@ -1,5 +1,5 @@
 import { surfaceOf, test } from "@e2e-dev/web";
-import { api } from "@q9chat/convex";
+import { api, type Id } from "@q9chat/convex";
 import type { ConvexHttpClient } from "convex/browser";
 import { expect } from "e2e";
 import { Schema } from "effect";
@@ -21,11 +21,12 @@ const QueryChanges = Schema.Struct({
     ),
   ),
 });
+const ServerPing = Schema.Struct({ type: Schema.Literal("Ping") });
 const origin = "http://localhost:3000";
 
 test(
   "journey 3: unread, history, live activity, typing and post states",
-  { timeout: 480_000 },
+  { timeout: 900_000 },
   async ({ app, browser, screen }) => {
     const surface = surfaceOf(browserEngine);
     if (!surface) throw new Error("Missing live e2e browser surface");
@@ -36,12 +37,15 @@ test(
     // Count the actual Convex wire subscriptions, not rendered messages or query declarations.
     let maximumSubscriptions = 0;
     let currentSubscriptions = 0;
+    let rangeAdds = 0;
+    let connectionCount = 0;
     let holdResponses = false;
     const heldResponses: (string | Buffer)[] = [];
     let releaseResponses = () => {
       holdResponses = false;
     };
     await page.routeWebSocket("wss://quixotic-crab-23.convex.cloud/**", (socket) => {
+      connectionCount++;
       const server = socket.connectToServer();
       const ranges = new Set<number>();
       socket.onMessage((message) => {
@@ -49,7 +53,10 @@ test(
         if (Schema.is(QueryChanges)(parsed)) {
           for (const change of parsed.modifications) {
             if (change.type === "Remove") ranges.delete(change.queryId);
-            else if (change.udfPath === "messages:range") ranges.add(change.queryId);
+            else if (change.udfPath === "messages:range") {
+              ranges.add(change.queryId);
+              rangeAdds++;
+            }
           }
           currentSubscriptions = ranges.size;
           maximumSubscriptions = Math.max(maximumSubscriptions, ranges.size);
@@ -57,7 +64,8 @@ test(
         server.send(message);
       });
       server.onMessage((message) => {
-        if (holdResponses) heldResponses.push(message);
+        const parsed: unknown = JSON.parse(message.toString());
+        if (holdResponses && !Schema.is(ServerPing)(parsed)) heldResponses.push(message);
         else socket.send(message);
       });
       releaseResponses = () => {
@@ -67,7 +75,7 @@ test(
     });
     await page.reload();
     const contexts: BrowserContext[] = [];
-    const clients: ConvexHttpClient[] = [];
+    const clients: { readonly client: ConvexHttpClient; readonly context: BrowserContext }[] = [];
     const addresses: string[] = [];
     const stamp = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
     async function account(person: string, context: BrowserContext) {
@@ -88,12 +96,12 @@ test(
         ).status(),
       ).toBe(200);
       const client = await devClient(context);
-      clients.push(client);
+      clients.push({ client, context });
       const id = await client.action(api.profiles.setUp, { displayName: `${person} Journey` });
       return { client, id };
     }
     async function shot(name: string) {
-      await page.screenshot({ path: `artifacts/j3-round2/${name}.png` });
+      await page.screenshot({ path: `artifacts/j3-round3/${name}.png` });
     }
     async function bottom() {
       await page.locator("[role=log]").evaluate((el) => {
@@ -115,6 +123,13 @@ test(
         return { id: node.id, offset: node.getBoundingClientRect().top - bounds.top };
       }, top);
 
+    const anchorOffset = (id: string) =>
+      page.locator(`[id="${id}"]`).evaluate((node) => {
+        const log = node.closest("[role=log]");
+        if (!log) throw new Error("Missing log");
+        return node.getBoundingClientRect().top - log.getBoundingClientRect().top;
+      });
+
     async function pageOlder() {
       const first = await page.locator("[role=log] .msg").first().getAttribute("id");
       await page.locator("[role=log]").evaluate((el) => {
@@ -126,10 +141,13 @@ test(
       );
       await page.locator('[role=log][aria-busy="false"]').waitFor();
     }
+    const refreshClients = () =>
+      Promise.all(clients.map(({ context, client }) => devClient(context, client)));
     async function cleanup() {
       const failures = [];
-      for (const client of clients) {
+      for (const { client, context } of clients) {
         try {
+          await devClient(context, client);
           await client.mutation(api.profiles.deleteAccount, {});
         } catch (error) {
           failures.push(error);
@@ -137,7 +155,11 @@ test(
       }
       await Promise.all(contexts.map((context) => context.close()));
       await Promise.all(addresses.map(removeTestUser));
-      expect(failures.length).toBe(0);
+      expect(
+        failures.map((error) =>
+          error instanceof Error ? error.message : "Unknown cleanup failure",
+        ),
+      ).toEqual([]);
       process.stdout.write(
         `J3 cleanup: ${clients.length} fresh profiles submitted to deleteAccount; WorkOS users removed; peer contexts closed\n`,
       );
@@ -244,11 +266,7 @@ test(
             const log = document.querySelector('[role=log][aria-busy="false"]');
             return log && log.querySelector(".msg")?.id !== id;
           }, firstId);
-          const preserved = await page.locator(`[id="${anchor.id}"]`).evaluate((node) => {
-            const log = node.closest("[role=log]");
-            if (!log) throw new Error("Missing log");
-            return node.getBoundingClientRect().top - log.getBoundingClientRect().top;
-          });
+          const preserved = await anchorOffset(anchor.id);
           expect(Math.abs(preserved - anchor.offset) <= 2).toBe(true);
           process.stdout.write(
             `J3 concurrent prepend ${i + 1}: anchor delta ${Math.abs(preserved - anchor.offset)}px\n`,
@@ -281,10 +299,23 @@ test(
         await bottom();
         const live = await send("A live arrival");
         await page.locator(`#m-${live.messageId}`).waitFor({ state: "visible" });
+        await expect(browser.locator(".arrival-announcement")).toHaveText("Bilal: A live arrival");
+        await expect(browser.locator("[role=log]")).toHaveAttribute("aria-live", "off");
         await page.waitForFunction(() => {
           const el = document.querySelector("[role=log]");
           return el && el.scrollHeight - el.scrollTop - el.clientHeight <= 1;
         });
+        await expect(browser.locator(".list .row.sel .badge")).toHaveCount(0);
+        await page.getByRole("button", { name: "New group", exact: true }).click();
+        await page.getByRole("dialog").waitFor();
+        const coveredPost = await send("Behind a modal");
+        await page.locator(`#m-${coveredPost.messageId}`).waitFor({ state: "attached" });
+        await expect(browser.locator(".list .row.sel .badge")).toHaveText("1");
+        const coveredDetail = await a.client.query(api.groups.get, { groupId });
+        expect(coveredDetail?.status === "member" && coveredDetail.firstUnreadSequence).toBe(
+          coveredPost.sequence,
+        );
+        await page.getByRole("button", { name: "Cancel", exact: true }).click();
         await expect(browser.locator(".list .row.sel .badge")).toHaveCount(0);
         await b.client.mutation(api.messages.send, {
           groupId: elsewhere,
@@ -359,7 +390,150 @@ test(
         "This is the start of your group with Bilal",
       );
       await shot("06-pair");
+      async function verifyLiveCatchUp(backlog: Id<"groups">) {
+        await refreshClients();
+        async function verifyShortLatestPage() {
+          // A fully read conversation whose latest page has just one post must still scroll to older history.
+          await app.open(`/?group=${pair}`);
+          const beforeTail = await a.client.query(api.groups.get, { groupId: backlog });
+          if (beforeTail?.status !== "member") throw new Error("Missing backlog");
+          const tailSequence = (Math.floor(beforeTail.lastSequence / 100) + 1) * 100 + 1;
+          const remaining = tailSequence - beforeTail.lastSequence;
+          for (let from = 0; from < remaining; from += 5)
+            await Promise.all(
+              Array.from({ length: Math.min(5, remaining - from) }, (_, index) =>
+                b.client.mutation(
+                  api.messages.send,
+                  {
+                    groupId: backlog,
+                    body: `Tail context ${from + index}`,
+                    clientKey: crypto.randomUUID(),
+                    attachments: [],
+                  },
+                  { skipQueue: true },
+                ),
+              ),
+            );
+          await a.client.mutation(api.readStates.markRead, {
+            groupId: backlog,
+            sequence: tailSequence,
+          });
+          await app.open(`/?group=${backlog}`);
+          await expect(browser.locator(".newline")).toHaveCount(0);
+          await expect(browser.locator("[role=log] .msg")).toHaveCount(101);
+          expect(
+            await page.locator("[role=log]").evaluate((el) => el.scrollHeight > el.clientHeight),
+          ).toBe(true);
+          await pageOlder();
+          await page.getByRole("button", { name: "Jump to latest", exact: true }).click();
+          await page.waitForFunction(() => document.activeElement?.getAttribute("role") === "log");
+          await page.locator('[role=log][aria-busy="false"]').waitFor();
+          expect(maximumSubscriptions).toBe(3);
+          process.stdout.write(
+            `J3 short latest page: 101 rendered posts, older history reachable\n`,
+          );
+        }
+        await verifyShortLatestPage();
+        // Cross a live page boundary, then repeat identical text: both are genuine arrivals.
+        for (let index = 0; index < 99; index += 5)
+          await Promise.all(
+            Array.from({ length: Math.min(5, 99 - index) }, (_, offset) =>
+              b.client.mutation(
+                api.messages.send,
+                {
+                  groupId: backlog,
+                  body: `Boundary padding ${index + offset}`,
+                  clientKey: crypto.randomUUID(),
+                  attachments: [],
+                },
+                { skipQueue: true },
+              ),
+            ),
+          );
+        await bottom();
+        const repeatedBody = "The same live post ".repeat(8);
+        const repeatArrival = () =>
+          b.client.mutation(api.messages.send, {
+            groupId: backlog,
+            body: repeatedBody,
+            clientKey: crypto.randomUUID(),
+            attachments: [],
+          });
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const arrival = await repeatArrival();
+          await expect(browser.locator(".arrival-announcement")).toHaveText(
+            `Bilal: ${repeatedBody.slice(0, 100)}`,
+          );
+          await expect(browser.locator(".arrival-announcement span")).toHaveAttribute(
+            "data-arrival",
+            arrival.messageId,
+          );
+        }
+        process.stdout.write(
+          "J3 announcer: live page boundary and repeated text update distinct arrival nodes; 100-character limit verified\n",
+        );
+        const deliveryConnection = connectionCount;
+        holdResponses = true;
+        for (let index = 0; index < 305; index += 5)
+          await Promise.all(
+            Array.from({ length: 5 }, (_, offset) =>
+              b.client.mutation(
+                api.messages.send,
+                {
+                  groupId: backlog,
+                  body: `Held catch-up ${index + offset}`,
+                  clientKey: crypto.randomUUID(),
+                  attachments: [],
+                },
+                { skipQueue: true },
+              ),
+            ),
+          );
+        const catchUp = await b.client.mutation(api.messages.send, {
+          groupId: backlog,
+          body: "Caught up after held delivery",
+          clientKey: crypto.randomUUID(),
+          attachments: [],
+        });
+        await expect.poll(() => heldResponses.length > 0).toBe(true);
+        releaseResponses();
+        const snapshot = () =>
+          page.locator("[role=log]").evaluate((el) => ({
+            top: el.scrollTop,
+            height: el.scrollHeight,
+            viewport: el.clientHeight,
+            busy: el.getAttribute("aria-busy"),
+            first: el.querySelector<HTMLElement>("[data-sequence]")?.dataset["sequence"],
+            last: Array.from(el.querySelectorAll<HTMLElement>("[data-sequence]")).at(-1)?.dataset[
+              "sequence"
+            ],
+          }));
+        try {
+          await page
+            .locator(`#m-${catchUp.messageId}`)
+            .waitFor({ state: "visible", timeout: 10000 });
+        } finally {
+          process.stdout.write(`J3 delivered window: ${JSON.stringify(await snapshot())}\n`);
+        }
+        await page.locator('[role=log][aria-busy="false"]').waitFor();
+        expect(connectionCount).toBe(deliveryConnection);
+        const catchUpPosition = await snapshot();
+        process.stdout.write(`J3 catch-up position: ${JSON.stringify(catchUpPosition)}\n`);
+        await page.waitForFunction(
+          () => {
+            const log = document.querySelector("[role=log]");
+            return log && log.scrollHeight - log.scrollTop - log.clientHeight <= 1;
+          },
+          undefined,
+          { timeout: 10000 },
+        );
+        expect(currentSubscriptions <= 3).toBe(true);
+        process.stdout.write(
+          "J3 bottom-pinned catch-up: 306 held arrivals replaced the obsolete anchor; latest visible\n",
+        );
+      }
       async function verifyCappedUnread() {
+        await refreshClients();
         const backlog = await a.client.mutation(api.groups.create, {
           name: "A larger unread backlog",
           memberIds: [b.id],
@@ -409,6 +583,22 @@ test(
         );
         await expect(browser.locator(`#m-${away.messageId}`)).toHaveCount(0);
         await expect(browser.locator(".jump.on")).toHaveCount(1);
+        // Extend beyond page 4 while it stays off-window, permitting reversal in both directions.
+        for (let from = 0; from < 200; from += 5)
+          await Promise.all(
+            Array.from({ length: 5 }, (_, index) =>
+              b.client.mutation(
+                api.messages.send,
+                {
+                  groupId: backlog,
+                  body: `Off-window ${from + index}`,
+                  clientKey: crypto.randomUUID(),
+                  attachments: [],
+                },
+                { skipQueue: true },
+              ),
+            ),
+          );
         for (let i = 0; i < 3; i++) {
           const last = await page.locator("[role=log] .msg").last().getAttribute("id");
           await page.locator("[role=log]").evaluate((el) => {
@@ -421,62 +611,119 @@ test(
           await page.locator('[role=log][aria-busy="false"]').waitFor();
           expect(currentSubscriptions <= 3).toBe(true);
         }
+        async function reversePendingSlide(direction: "older" | "newer") {
+          const announcement = await page.locator(".arrival-announcement").textContent();
+          holdResponses = true;
+          await page.locator("[role=log]").evaluate((el, older) => {
+            el.scrollTop = older ? 0 : el.scrollHeight;
+          }, direction === "older");
+          await page.locator('[role=log][aria-busy="true"]').waitFor();
+          const anchor = await page.locator("[role=log]").evaluate(
+            (el, sequence) => {
+              const node = el.querySelector<HTMLElement>(`[data-sequence="${sequence}"]`);
+              if (!node) throw new Error("Missing outgoing-page post");
+              el.scrollTop +=
+                node.getBoundingClientRect().top - el.getBoundingClientRect().top - 70;
+              const bounds = el.getBoundingClientRect();
+              const visible = Array.from(el.querySelectorAll<HTMLElement>("[data-sequence]")).find(
+                (item) => item.getBoundingClientRect().bottom > bounds.top,
+              );
+              if (!visible) throw new Error("Missing outgoing anchor");
+              return {
+                id: visible.id,
+                offset: visible.getBoundingClientRect().top - bounds.top,
+                sequence: Number(visible.dataset["sequence"]),
+              };
+            },
+            direction === "older" ? 450 : 250,
+          );
+          expect(direction === "older" ? anchor.sequence > 400 : anchor.sequence <= 300).toBe(true);
+          // Let the browser dispatch the reversal scroll before releasing server delivery.
+          await page.evaluate(
+            () =>
+              new Promise<void>((resolve) => {
+                requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+              }),
+          );
+          await expect.poll(() => heldResponses.length > 0).toBe(true);
+          releaseResponses();
+          await page.locator('[role=log][aria-busy="false"]').waitFor();
+          const offset = await anchorOffset(anchor.id);
+          expect(Math.abs(offset - anchor.offset) <= 2).toBe(true);
+          expect(currentSubscriptions <= 3).toBe(true);
+          await expect(browser.locator(".arrival-announcement")).toHaveText(announcement ?? "");
+          process.stdout.write(
+            `J3 outgoing-page reversal ${direction}: before ${anchor.offset}px; after ${offset}px; delta ${Math.abs(offset - anchor.offset)}px\n`,
+          );
+        }
+        await reversePendingSlide("older");
+        await reversePendingSlide("newer");
         for (let i = 0; i < 2; i++) {
           await pageOlder();
           expect(currentSubscriptions <= 3).toBe(true);
         }
-        await page.getByRole("button", { name: "Jump to latest", exact: true }).click();
-        await page.locator(`#m-${away.messageId}`).waitFor({ state: "visible" });
+        holdResponses = true;
+        const jump = page.getByRole("button", { name: "Jump to latest", exact: true });
+        await jump.focus();
+        await page.keyboard.press("Enter");
+        expect(
+          await page.locator("[role=log]").evaluate((el) => el === document.activeElement),
+        ).toBe(true);
+        await page.locator('[role=log][aria-busy="true"]').waitFor();
+        await page.keyboard.press("Shift+Tab");
+        const focus = await page.locator(":focus").getAttribute("aria-label");
+        expect(focus !== null).toBe(true);
+        await expect.poll(() => heldResponses.length > 0).toBe(true);
+        releaseResponses();
+        await page.locator('[role=log][aria-busy="false"]').waitFor();
+        expect(await page.locator(":focus").getAttribute("aria-label")).toBe(focus);
+        await expect(browser.locator("[role=log]")).toContainText("Off-window");
         await expect(browser.locator(".list .row.sel .badge")).toHaveCount(0);
         expect(maximumSubscriptions <= 3).toBe(true);
         expect(maximumSubscriptions).toBe(3);
-        async function verifyShortLatestPage() {
-          // A fully read conversation whose latest page has just one post must still scroll to older history.
-          await app.open(`/?group=${pair}`);
-          const beforeTail = await a.client.query(api.groups.get, { groupId: backlog });
-          if (beforeTail?.status !== "member") throw new Error("Missing backlog");
-          const tailSequence = (Math.floor(beforeTail.lastSequence / 100) + 1) * 100 + 1;
-          const remaining = tailSequence - beforeTail.lastSequence;
-          for (let from = 0; from < remaining; from += 5)
-            await Promise.all(
-              Array.from({ length: Math.min(5, remaining - from) }, (_, index) =>
-                b.client.mutation(
-                  api.messages.send,
-                  {
-                    groupId: backlog,
-                    body: `Tail context ${from + index}`,
-                    clientKey: crypto.randomUUID(),
-                    attachments: [],
-                  },
-                  { skipQueue: true },
-                ),
-              ),
-            );
-          await a.client.mutation(api.readStates.markRead, {
-            groupId: backlog,
-            sequence: tailSequence,
-          });
-          await app.open(`/?group=${backlog}`);
-          await expect(browser.locator(".newline")).toHaveCount(0);
-          await expect(browser.locator("[role=log] .msg")).toHaveCount(101);
-          expect(
-            await page.locator("[role=log]").evaluate((el) => el.scrollHeight > el.clientHeight),
-          ).toBe(true);
-          await pageOlder();
-          await page.getByRole("button", { name: "Jump to latest", exact: true }).click();
-          await page.waitForFunction(() => document.activeElement?.getAttribute("role") === "log");
-          await page.locator('[role=log][aria-busy="false"]').waitFor();
-          expect(maximumSubscriptions).toBe(3);
-          process.stdout.write(
-            `J3 short latest page: 101 rendered posts, older history reachable\n`,
-          );
-        }
-        await verifyShortLatestPage();
+        await verifyLiveCatchUp(backlog);
         process.stdout.write(
           `J3 subscriptions: 450 unread; opening ${openingSubscriptions}; maximum live messages.range subscriptions ${maximumSubscriptions}; cap 3; final ${currentSubscriptions}\n`,
         );
       }
       await verifyCappedUnread();
+      async function verifyOwnOnlyHistory() {
+        await refreshClients();
+        const own = await a.client.mutation(api.groups.create, {
+          name: "Own posts, no incoming unread",
+          memberIds: [],
+          inviteToken: crypto.randomUUID().replaceAll("-", ""),
+        });
+        for (let index = 0; index < 305; index += 5)
+          await Promise.all(
+            Array.from({ length: 5 }, (_, offset) =>
+              a.client.mutation(
+                api.messages.send,
+                {
+                  groupId: own,
+                  body: `Own-only ${index + offset}`,
+                  clientKey: crypto.randomUUID(),
+                  attachments: [],
+                },
+                { skipQueue: true },
+              ),
+            ),
+          );
+        const detail = await a.client.query(api.groups.get, { groupId: own });
+        if (detail?.status !== "member") throw new Error("Missing own-only group");
+        expect(detail.firstUnreadSequence).toBe(null);
+        expect(detail.lastReadSequence < detail.lastSequence).toBe(true);
+        const before = rangeAdds;
+        await app.open(`/?group=${own}`);
+        await page.locator('[role=log][aria-busy="false"]').waitFor();
+        await expect(browser.locator("[role=log]")).toContainText("Own-only 304");
+        await expect(browser.locator(".newline")).toHaveCount(0);
+        expect(rangeAdds - before).toBe(2);
+        process.stdout.write(
+          "J3 own-only history: 305 posts, no unread divider, 2 range adds, no page walk\n",
+        );
+      }
+      await verifyOwnOnlyHistory();
       async function verifyCappedEvent() {
         const additional = [];
         for (const name of ["Eli", "Faye", "Gus", "Hana"]) additional.push(await createPeer(name));

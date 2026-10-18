@@ -24,6 +24,7 @@ export async function expectMainFullWidth() {
 /** Public web-session exchange for the genuine dev backend, shared by journey fixtures. */
 export async function devClient(
   context: ReturnType<NonNullable<ReturnType<typeof surfaceOf>>["context"]>,
+  client = new ConvexHttpClient("https://quixotic-crab-23.convex.cloud"),
 ) {
   const response = await context.request.post("http://localhost:3000/api/auth/token", {
     headers: { Origin: "http://localhost:3000" },
@@ -31,7 +32,6 @@ export async function devClient(
   });
   expect(response.status()).toBe(200);
   const session = Schema.decodeUnknownSync(Session)(await response.json());
-  const client = new ConvexHttpClient("https://quixotic-crab-23.convex.cloud");
   client.setAuth(session.accessToken);
   return client;
 }
