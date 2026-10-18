@@ -2,6 +2,7 @@ import { ScrollView, TextInput, View } from "react-native";
 
 import { Avatar } from "../kit/Avatar";
 import { Screen } from "../kit/Chrome";
+import { truncate } from "../kit/format";
 import { Icon } from "../kit/Icon";
 import { Press } from "../kit/Press";
 import { useTheme } from "../theme";
@@ -24,7 +25,7 @@ const SCOPE_LIMIT = 22;
 
 function ScopeChip({ title, onClear }: { title: string; onClear: () => void }) {
   const { c } = useTheme();
-  const shown = title.length > SCOPE_LIMIT ? `${title.slice(0, SCOPE_LIMIT - 1)}…` : title;
+  const shown = truncate(title, SCOPE_LIMIT);
   return (
     <View
       style={{
