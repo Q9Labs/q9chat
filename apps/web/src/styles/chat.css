@@ -1625,6 +1625,10 @@
   }
 }
 .dlg {
+  margin: 0;
+  border: 0;
+  inset-inline-end: auto;
+  color: inherit;
   position: absolute;
   left: 50%;
   top: 50%;
@@ -1733,6 +1737,7 @@
 }
 .msep {
   height: 1px;
+  border: 0;
   background: var(--ln);
   margin: 6px 4px;
 }
@@ -1753,6 +1758,8 @@
   background: var(--s1);
 }
 .radio {
+  position: relative;
+  cursor: pointer;
   display: flex;
   align-items: flex-start;
   gap: 12px;
@@ -1774,10 +1781,19 @@
   flex: none;
   margin-block-start: 1px;
 }
-.radio[aria-checked="true"] .rd {
+.radio input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.radio:has(input:focus-visible) {
+  outline: 2px solid var(--tx);
+  outline-offset: 2px;
+}
+.radio:has(input:checked) .rd {
   border-color: var(--tx);
 }
-.radio[aria-checked="true"] .rd::after {
+.radio:has(input:checked) .rd::after {
   content: "";
   width: 9px;
   height: 9px;
@@ -1801,6 +1817,10 @@
   font-weight: 400;
 }
 .npop {
+  margin: 0;
+  border: 0;
+  inset-inline-end: auto;
+  color: inherit;
   position: absolute;
   width: 320px;
   z-index: 31;
@@ -2384,4 +2404,21 @@
     animation: none !important;
     transition: none !important;
   }
+}
+.radios {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.photo {
+  display: block;
+  width: 320px;
+  max-width: 100%;
+  height: auto;
+  border-radius: 14px;
+}
+a.file {
+  color: inherit;
+  text-decoration: none;
 }

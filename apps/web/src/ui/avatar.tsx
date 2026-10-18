@@ -1,5 +1,3 @@
-import type { CSSProperties } from "react";
-
 import type { Avatar as AvatarData } from "../chat/types.js";
 
 // The eight fixed avatar colors and the lightened name color used in dark mode.
@@ -50,11 +48,7 @@ export function Avatar({
     );
   }
   return (
-    <span
-      className={`av${sizeClass}`}
-      aria-hidden="true"
-      style={{ "--c": avatar.color } as CSSProperties}
-    >
+    <span className={`av${sizeClass}`} aria-hidden="true" style={{ "--c": avatar.color }}>
       {avatar.initials}
     </span>
   );

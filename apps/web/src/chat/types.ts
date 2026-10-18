@@ -15,12 +15,16 @@ export interface Avatar {
   readonly color: string | null;
 }
 
-/** A person as shown in a group. `name` is the first word of the display name. */
-export interface Author {
+/** Every person in a query result carries `id` and `isYou`, so the apps never match by name. */
+export interface PersonRef {
   readonly id: string;
+  /** The first word of the display name. */
   readonly name: string;
-  readonly avatar: Avatar;
   readonly isYou: boolean;
+}
+
+export interface Author extends PersonRef {
+  readonly avatar: Avatar;
 }
 
 export interface Member extends Author {
@@ -31,24 +35,27 @@ export interface Member extends Author {
 // ---------- groups.list ----------
 
 export interface Preview {
-  /** "you", a first name, or null for an event sentence. */
-  readonly by: "you" | string | null;
+  /** The last sender, or null when the last line is an event sentence. */
+  readonly by: PersonRef | null;
   readonly summary: string;
 }
 
 export interface GroupRow {
+  readonly status: "member";
   readonly groupId: string;
   readonly kind: "group" | "pair";
   readonly title: string;
   readonly avatar: Avatar;
   readonly lastActivityAt: number;
   readonly preview: Preview;
+  /** Counts stop at 100; the list shows "99+". */
   readonly unreadCount: number;
   readonly needsYou: boolean;
   readonly notify: NotifyMode;
 }
 
 export interface RemovedRow {
+  readonly status: "removed";
   readonly groupId: string;
   readonly kind: "group" | "pair";
   readonly title: string;
@@ -58,10 +65,6 @@ export interface RemovedRow {
 }
 
 export type GroupListRow = GroupRow | RemovedRow;
-
-export function isRemovedRow(row: GroupListRow): row is RemovedRow {
-  return "removedBy" in row;
-}
 
 // ---------- groups.get ----------
 
@@ -73,6 +76,8 @@ export interface GroupDetail {
   readonly avatar: Avatar;
   readonly memberCount: number;
   readonly members: readonly Member[];
+  /** The other person in a pair. */
+  readonly partner?: Member;
   readonly notify: NotifyMode;
   readonly inviteToken?: string;
   readonly lastSequence: number;
@@ -110,17 +115,18 @@ export interface Reaction {
   readonly emoji: Emoji;
   readonly count: number;
   readonly mine: boolean;
-  /** Display labels of the reactors in order, "You" first when mine. */
-  readonly names: readonly string[];
+  readonly people: readonly PersonRef[];
 }
 
-export interface ReplyTo {
-  readonly id: string;
-  readonly sequence: number;
-  readonly author: Author;
-  readonly summary: string;
-  readonly deleted: boolean;
-}
+export type ReplyTo =
+  | {
+      readonly deleted?: false;
+      readonly id: string;
+      readonly sequence: number;
+      readonly author: PersonRef;
+      readonly summary: string;
+    }
+  | { readonly deleted: true; readonly id: string; readonly sequence: number };
 
 export type MemberEvent =
   | { readonly type: "created"; readonly by: Author }
@@ -179,11 +185,9 @@ export interface SearchHit {
 
 // ---------- people.find ----------
 
-export interface PersonMatch {
-  readonly id: string;
-  readonly name: string;
+export interface PersonMatch extends Author {
+  readonly fullName: string;
   readonly email: string;
-  readonly avatar: Avatar;
 }
 
 // ---------- profiles.me ----------

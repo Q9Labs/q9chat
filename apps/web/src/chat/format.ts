@@ -1,4 +1,4 @@
-import type { Author, MemberEvent, Preview } from "./types.js";
+import type { MemberEvent, PersonRef, Preview } from "./types.js";
 
 /** The reader's "now" and zone. The gallery fixes both so shots are repeatable. */
 export interface Clock {
@@ -83,34 +83,42 @@ export function joinNames(names: readonly string[]): string {
   return `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
 }
 
-export function authorLabel(author: Author): string {
+export function authorLabel(author: PersonRef): string {
   return author.isYou ? "You" : author.name;
 }
 
 /** "Shoaib removed Omar" as plain text, for previews and quotes. */
 export function eventText(event: MemberEvent): string {
-  const people = "people" in event ? joinNames(event.people.map(authorLabel)) : "";
-  switch (event.type) {
-    case "created":
-      return `${authorLabel(event.by)} created this group`;
-    case "added":
-      return `${authorLabel(event.by)} added ${people}`;
-    case "removed":
-      return `${authorLabel(event.by)} removed ${people}`;
-    case "joined":
-      return `${people} joined`;
-    case "left":
-      return `${people} left`;
-    case "start":
-      return `This is the start of your group with ${people}`;
-  }
+  const people = joinNames(("people" in event ? event.people : []).map(authorLabel));
+  const by = "by" in event ? authorLabel(event.by) : "";
+  if (event.type === "created") return `${by} created this group`;
+  if (event.type === "added") return `${by} added ${people}`;
+  if (event.type === "removed") return `${by} removed ${people}`;
+  if (event.type === "joined") return `${people} joined`;
+  if (event.type === "left") return `${people} left`;
+  return `This is the start of your group with ${people}`;
 }
 
 /** The group-row preview line: "You: ...", "Sara: ..." or the bare summary in a pair or event. */
 export function previewLine(preview: Preview, kind: "group" | "pair"): string {
-  if (preview.by === "you") return `You: ${preview.summary}`;
-  if (preview.by === null || kind === "pair") return preview.summary;
-  return `${preview.by}: ${preview.summary}`;
+  const { by, summary } = preview;
+  if (by === null) return summary;
+  if (by.isYou) return `You: ${summary}`;
+  return kind === "pair" ? summary : `${by.name}: ${summary}`;
+}
+
+/** "99+" once the count reaches the server's cap. */
+export function countLabel(count: number): string {
+  return count > 99 ? "99+" : String(count);
+}
+
+/** Who reacted, "You" first: "You and Sara". */
+export function reactorNames(people: readonly PersonRef[]): string {
+  const mine = people.filter((person) => person.isYou).map(() => "You");
+  return joinNames([
+    ...mine,
+    ...people.filter((person) => !person.isYou).map((person) => person.name),
+  ]);
 }
 
 /** Names over 28 characters shorten to 27 plus an ellipsis in the composer placeholder. */
@@ -135,4 +143,12 @@ export function splitMatches(
   }
   if (at < text.length) out.push({ text: text.slice(at), match: false });
   return out;
+}
+
+/** "today at 10:44", "yesterday at 10:44" or "on 30 September at 10:44". */
+export function whenLabel(ms: number, clock: Clock): string {
+  const label = dayLabel(ms, clock);
+  const at = clockTime(ms, clock.timeZone);
+  if (label === "Today" || label === "Yesterday") return `${label.toLowerCase()} at ${at}`;
+  return `on ${label} at ${at}`;
 }
