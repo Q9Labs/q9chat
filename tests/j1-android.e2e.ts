@@ -7,7 +7,7 @@ import { crc32, deflateSync } from "node:zlib";
 import { test } from "@e2e-dev/mobile";
 import { api } from "@q9chat/convex";
 import { ConvexHttpClient } from "convex/browser";
-import { expect } from "e2e";
+import { expect, type Screen } from "e2e";
 
 import { expectLinkHeights } from "./support/targets.js";
 import {
@@ -68,6 +68,47 @@ function openDevClient(device: Device) {
     "run-as ai.q9labs.chat sh -c 'mkdir -p shared_prefs && cp /data/local/tmp/q9-devmenu.xml shared_prefs/expo.modules.devmenu.sharedpreferences.xml'",
   );
   return device.openLink(devClientLink);
+}
+
+/** Pixels per dp on the emulator, from `wm density` (160 dpi is 1). */
+function screenDensity() {
+  const dpi = Number(/(\d+)\s*$/u.exec(adbShell("wm density").trim())?.[1]);
+  return dpi / 160;
+}
+
+// This emulator image ships no clipboard shell service, so `device.setClipboard` is unsupported. Instead the
+// text is typed into a system text field (the Settings search box), selected and copied with the keyboard
+// shortcuts, and Back returns to the app.
+async function copyToClipboard(text: string) {
+  adbShell("am force-stop com.android.settings");
+  adbShell("am start -a android.settings.APP_SEARCH_SETTINGS");
+  await new Promise((resolve) => setTimeout(resolve, 2500));
+  adbShell(`input text ${text}`);
+  adbShell("input keycombination 113 29");
+  adbShell("input keycombination 113 31");
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  // Back closes the keyboard first, then Settings, which returns to the app.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    adbShell("input keyevent 4");
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    if (
+      adbShell("dumpsys activity activities | grep -m1 topResumedActivity").includes(
+        "ai.q9labs.chat",
+      )
+    )
+      break;
+  }
+}
+
+// The text-selection toolbar is a system window that neither the app's accessibility tree nor a second
+// uiautomator client (the e2e engine already holds the only one) can see, so its Paste item is tapped by
+// position. On this 1080 x 2400 emulator the floating toolbar opens just above the code cells, and Paste is
+// 278 px right of the field's left edge and 36 px above its top edge (measured from a screenshot).
+async function tapPasteItem(field: ReturnType<Screen["getByLabel"]>) {
+  const box = await field.boundingBox();
+  if (!box) throw new Error("The code field has no bounding box");
+  shot("paste-toolbar");
+  adbShell(`input tap ${Math.round(box.x + 278)} ${Math.round(box.y - 36)}`);
 }
 
 function pngChunk(type: string, data: Buffer) {
@@ -140,8 +181,13 @@ test(
       await expect(screen.getByRole("heading", "Check your email")).toBeVisible();
       await expect(screen.getByLabel("6-digit code")).toBeFocused();
       await expect(screen.getByText(`Enter the 6-digit code we sent to ${email}.`)).toBeVisible();
-      // The two links are separate press targets, each at least 44 pixels tall.
-      await expectLinkHeights(screen, ["Send a new code", "Use a different email"], 44);
+      // The two links are separate press targets, each 44 dp tall (one pixel of rounding allowed).
+      await expectLinkHeights(
+        screen,
+        ["Send a new code", "Use a different email"],
+        Math.floor(44 * screenDensity()) - 1,
+        "group",
+      );
       shot("02-code");
 
       await magicCode(email);
@@ -161,9 +207,10 @@ test(
       await expect(screen.getByLabel("6-digit code")).toBeFocused();
       // The right code is pasted over a digit already in the field: the paste must replace it, not pile on.
       await screen.getByLabel("6-digit code").pressSequentially("9");
-      await device.setClipboard(code);
+      shot("02b-one-digit");
+      await copyToClipboard(code);
       await screen.getByLabel("6-digit code").longPress();
-      await screen.getByText("Paste", { exact: true }).tap();
+      await tapPasteItem(screen.getByLabel("6-digit code"));
 
       await expect(screen.getByRole("heading", "Set up your profile")).toBeVisible();
       await expect(
@@ -231,6 +278,15 @@ test(
       await expect(screen.getByText("Journey live group", { exact: false })).toBeVisible();
       await screen.getByRole("button", "Account", { exact: true }).tap();
       await expect(name).toHaveValue("Nadia Back");
+      shot("06b-account-after-system-back");
+      // The same through the hardware Back key (KEYCODE_BACK) sent straight to the emulator.
+      await name.fill("Nadia Key");
+      await device.dismissKeyboard();
+      adbShell("input keyevent 4");
+      await expect(screen.getByText("Journey live group", { exact: false })).toBeVisible();
+      await screen.getByRole("button", "Account", { exact: true }).tap();
+      await expect(name).toHaveValue("Nadia Key");
+      shot("06c-account-after-key-back");
       await screen.getByRole("button", "Sign out", { exact: true }).tap();
       await expect(screen.getByRole("button", "Email me a code")).toBeVisible();
       await expect(screen.getByText("Signed out")).toBeVisible();
