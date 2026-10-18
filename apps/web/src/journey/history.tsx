@@ -62,11 +62,13 @@ function messageView(row: Row, group: Group, photos: ReadonlyMap<string, string>
     author: person,
     mentions: group.members.filter((p) => mentionIds.has(p.id)).map((p) => p.name),
     attachments: [],
-    attachmentLabels: row.attachments.map((file) =>
-      file.kind === "file"
-        ? `${file.name} · ${file.contentType}`
-        : `${file.kind === "image" ? "Image" : "Voice note"} · ${file.contentType}`,
-    ),
+    attachmentLabels: row.attachments.map((file) => ({
+      id: file.url,
+      label:
+        file.kind === "file"
+          ? `${file.name} · ${file.contentType}`
+          : `${file.kind === "image" ? "Image" : "Voice note"} · ${file.contentType}`,
+    })),
     replyTo:
       row.replyTo === null
         ? null

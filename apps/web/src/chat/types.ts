@@ -155,7 +155,7 @@ export interface PostView extends MessageBase {
   readonly kind: "post";
   readonly author: Author;
   readonly body: string;
-  readonly attachmentLabels?: readonly string[];
+  readonly attachmentLabels?: readonly { readonly id: string; readonly label: string }[];
   /** First names that `@Name` highlights in the body. */
   readonly mentions: readonly string[];
   readonly attachments: readonly Attachment[];

@@ -8,12 +8,18 @@ import { useTimelineViewport } from "./timeline-viewport.js";
 import { buildTimeline } from "./timeline.js";
 import type { Author, EventView, MemberEvent, MessageView } from "./types.js";
 
-function Names({ people }: { readonly people: readonly Author[] }) {
+function Names({
+  people,
+  remainder = false,
+}: {
+  readonly people: readonly Author[];
+  readonly remainder?: boolean;
+}) {
   return (
     <>
       {people.map((person, index) => (
         <Fragment key={person.id}>
-          {index === 0 ? "" : index === people.length - 1 ? " and " : ", "}
+          {index === 0 ? "" : !remainder && index === people.length - 1 ? " and " : ", "}
           <b>{authorLabel(person)}</b>
         </Fragment>
       ))}
@@ -37,7 +43,8 @@ function eventNodes(event: MemberEvent): ReactNode {
   if (event.type === "added" || event.type === "removed") {
     return (
       <>
-        <b>{authorLabel(event.by)}</b> {event.type} <Names people={event.people} />
+        <b>{authorLabel(event.by)}</b> {event.type}{" "}
+        <Names people={event.people} remainder={event.type === "added" && !!event.othersCount} />
         <OtherMembers event={event} />
       </>
     );

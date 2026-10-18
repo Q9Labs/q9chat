@@ -470,8 +470,8 @@ export function Message({
   return (
     <div className={messageClass(sendState, highlighted, menuOpen)} id={`m-${message.id}`}>
       <Bubble message={message} onOpenQuote={handlers.onOpenQuote} readOnly={readOnly} />
-      {message.attachmentLabels?.map((label) => (
-        <div className="file" key={label}>
+      {message.attachmentLabels?.map(({ id, label }) => (
+        <div className="file" key={id}>
           {label}
         </div>
       ))}
