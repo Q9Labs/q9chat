@@ -40,8 +40,9 @@ export async function pickPhoto(): Promise<PickResult> {
   if (!asset) return { kind: "cancelled" };
   const mimeType = asset.mimeType ?? "image/jpeg";
   if (!SUPPORTED_TYPES.has(mimeType)) return { kind: "refused", notice: photoRejectedNotice };
-  if (asset.fileSize !== undefined && photoTooLarge(asset.fileSize))
-    return { kind: "refused", notice: photoTooLargeNotice };
+  // The picker re-encodes some PNGs and, when it cannot, returns a uri with no file and no fileSize behind it.
+  if (typeof asset.fileSize !== "number") return { kind: "refused", notice: photoRejectedNotice };
+  if (photoTooLarge(asset.fileSize)) return { kind: "refused", notice: photoTooLargeNotice };
   return { kind: "picked", photo: { uri: asset.uri, mimeType } };
 }
 

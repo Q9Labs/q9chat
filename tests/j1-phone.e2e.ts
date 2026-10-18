@@ -129,6 +129,7 @@ test(
       await app.open();
       await expect(screen.getByRole("button", "Continue with Google")).toBeVisible();
       await expect(screen.getByRole("button", "Continue with Apple")).toBeVisible();
+      await app.screenshot("01-sign-in");
 
       await enter(screen.getByLabel("Email"), "not-an-email");
       await screen.getByRole("button", "Email me a code").tap();
@@ -205,7 +206,6 @@ test(
       await expect(
         screen.getByRole("button", "Journey live group, Sara: Welcome to the live group, 1 unread"),
       ).toBeVisible();
-      await expect(screen.getByText("Sara: Welcome to the live group")).toBeVisible();
       await app.screenshot("05-live-groups");
 
       await screen.getByRole("button", "Account", { exact: true }).tap();

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { truncate } from "../src/kit/format.ts";
+import { characterClusters, truncate } from "../src/kit/format.ts";
 
 void test("short text is left alone", () => {
   assert.equal(truncate("Q9 launch", 28), "Q9 launch");
@@ -21,4 +21,20 @@ void test("a family emoji and an accented letter count as one character each", (
   assert.equal(truncate(`${family}${family}${family}`, 3), `${family}${family}${family}`);
   assert.equal(truncate(`${family}${family}${family}${family}`, 3), `${family}${family}…`);
   assert.equal(truncate("café au lait", 5), "café…");
+});
+
+void test("without Intl.Segmenter, as on Hermes, clusters keep joiners, marks, skin tones and flags whole", () => {
+  const family = "👨‍👩‍👧";
+  const wave = "👋🏽";
+  const flag = "🇳🇴";
+  assert.deepEqual(characterClusters(`a${family}${wave}${flag}${flag}e\u0301!`), [
+    "a",
+    family,
+    wave,
+    flag,
+    flag,
+    "e\u0301",
+    "!",
+  ]);
+  assert.deepEqual(characterClusters("🇳🇴🇸🇪🇩"), ["🇳🇴", "🇸🇪", "🇩"]);
 });

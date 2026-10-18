@@ -257,7 +257,6 @@ function ComposeRow({ props, editing }: { props: Props; editing: boolean }) {
         />
       )}
       <TextInput
-        accessibilityLabel="Message"
         multiline
         value={draft}
         onChangeText={props.onDraftChange}
