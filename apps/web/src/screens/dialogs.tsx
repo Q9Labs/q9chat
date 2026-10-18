@@ -28,6 +28,7 @@ interface NewGroupDialogProps {
   readonly people: readonly PersonMatch[];
   readonly onRemovePerson: (person: PersonMatch) => void;
   readonly query: string;
+  readonly queryError?: string | undefined;
   readonly onQueryChange: (query: string) => void;
   /** Up to four matches for the query. */
   readonly suggestions: readonly PersonMatch[];
@@ -37,6 +38,9 @@ interface NewGroupDialogProps {
   /** In new mode with one person and no name: the pair already exists, so the action opens it. */
   readonly pairExists: boolean;
   readonly inviteToken: string;
+  readonly inviteUrl?: string | undefined;
+  readonly pending?: boolean;
+  readonly error?: string;
   readonly linkCopied: boolean;
   readonly onCopyLink: () => void;
   readonly onSubmit: () => void;
@@ -123,6 +127,7 @@ type PeoplePickerProps = Pick<
   | "people"
   | "onRemovePerson"
   | "query"
+  | "queryError"
   | "onQueryChange"
   | "suggestions"
   | "onPick"
@@ -134,6 +139,7 @@ function PeoplePicker({
   people,
   onRemovePerson,
   query,
+  queryError,
   onQueryChange,
   suggestions,
   onPick,
@@ -165,6 +171,8 @@ function PeoplePicker({
           id="new-group-people"
           data-autofocus={focusOnOpen ? "" : undefined}
           value={query}
+          aria-invalid={queryError ? true : undefined}
+          aria-describedby={queryError ? "new-group-query-error" : undefined}
           placeholder={people.length > 0 ? "Add another" : "Name or email"}
           autoComplete="off"
           spellCheck={false}
@@ -173,6 +181,11 @@ function PeoplePicker({
         />
       </div>
       <Suggestions suggestions={suggestions} onPick={onPick} />
+      {queryError ? (
+        <p role="alert" id="new-group-query-error">
+          {queryError}
+        </p>
+      ) : null}
       <PickerHint unknownEmail={unknownEmail} idle={query.trim() === "" && people.length === 0} />
     </Field>
   );
@@ -181,17 +194,23 @@ function PeoplePicker({
 function InviteField({
   add,
   inviteToken,
+  inviteUrl,
   linkCopied,
   onCopyLink,
 }: {
   readonly add: boolean;
   readonly inviteToken: string;
+  readonly inviteUrl?: string | undefined;
   readonly linkCopied: boolean;
   readonly onCopyLink: () => void;
 }) {
   return (
     <Field label="Invite link">
-      <LinkBox url={`chat.q9labs.ai/join/${inviteToken}`} copied={linkCopied} onCopy={onCopyLink} />
+      <LinkBox
+        url={inviteUrl ?? `chat.q9labs.ai/join/${inviteToken}`}
+        copied={linkCopied}
+        onCopy={onCopyLink}
+      />
       <small className="note" style={{ margin: "0 2px" }}>
         {add
           ? "Anyone with the link can join and read the whole group."
@@ -230,12 +249,18 @@ export function NewGroupDialog(props: NewGroupDialogProps) {
       <InviteField
         add={add}
         inviteToken={inviteToken}
+        inviteUrl={props.inviteUrl}
         linkCopied={linkCopied}
         onCopyLink={onCopyLink}
       />
+      {props.error ? <p role="alert">{props.error}</p> : null}
       <DialogActions>
         <Button onClick={props.onClose}>Cancel</Button>
-        <Button variant="solid" disabled={!canSubmit(props)} onClick={props.onSubmit}>
+        <Button
+          variant="solid"
+          disabled={props.pending === true || !canSubmit(props)}
+          onClick={props.onSubmit}
+        >
           {primaryLabel(props)}
         </Button>
       </DialogActions>

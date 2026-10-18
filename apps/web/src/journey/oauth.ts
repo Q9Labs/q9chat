@@ -10,7 +10,10 @@ function tryStorage<T>(operation: (storage: Storage) => T): T | null {
 
 export function startOAuth(provider: "google" | "apple") {
   tryStorage((storage) => storage.setItem(arrivalKey, provider));
-  window.location.assign(`/api/auth/oauth/${provider}?client=web`);
+  const returnTo = window.location.pathname.startsWith("/join/")
+    ? `&returnTo=${encodeURIComponent(window.location.pathname)}`
+    : "";
+  window.location.assign(`/api/auth/oauth/${provider}?client=web${returnTo}`);
 }
 
 export function oauthArrivalMessage(method: string | null) {

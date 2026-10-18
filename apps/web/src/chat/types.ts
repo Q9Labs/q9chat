@@ -29,7 +29,6 @@ export interface Author extends PersonRef {
 
 export interface Member extends Author {
   readonly fullName: string;
-  readonly email: string;
 }
 
 // ---------- groups.list ----------
