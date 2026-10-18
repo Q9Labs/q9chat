@@ -22,7 +22,9 @@ export default defineGate({
     }),
     lanes.depcruise(),
     lanes.osv(),
-    lanes.gitleaks(),
+    // T3 keeps every agent turn as a checkpoint under refs/t3/. Those are not
+    // project history, so a dropped draft there must not block every commit.
+    lanes.gitleaks({ mode: "git", logOpts: "--exclude=refs/t3/* --all" }),
     lanes.cspell(),
     lanes.syncpack(),
     lanes.testPresence({ sourceRoots: ["apps/*/src", "packages/*/src"] }),
