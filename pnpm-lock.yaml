@@ -3025,46 +3025,46 @@ packages:
     resolution: {integrity: sha512-dCED+QRChTVatE9ibtoaxc+WkdzOSjYTKi/+uacHWIsfodVfpsueo3+DKpgU5Px8qXjgmXkSvhXvSCz3fnP9lw==}
 
   '@q9labsai/cli@https://github.com/Q9Labs/q9stack/releases/download/v0.4.3/q9labsai-cli-0.4.3.tgz':
-    resolution: {tarball: https://github.com/Q9Labs/q9stack/releases/download/v0.4.3/q9labsai-cli-0.4.3.tgz}
+    resolution: {integrity: sha512-8NuB2cMKdq0SGG4ljxDoPsC4pVFBv4Ithpgwm/96/I9OaBypSrbRBFAJVH5iPQmD59B7fTx134iMAoUtdTb4sg==, tarball: https://github.com/Q9Labs/q9stack/releases/download/v0.4.3/q9labsai-cli-0.4.3.tgz}
     version: 0.4.3
     engines: {node: '>=24'}
     hasBin: true
 
   '@q9labsai/config-depcruise@https://github.com/Q9Labs/q9stack/releases/download/v0.3.0/q9labsai-config-depcruise-0.3.0.tgz':
-    resolution: {tarball: https://github.com/Q9Labs/q9stack/releases/download/v0.3.0/q9labsai-config-depcruise-0.3.0.tgz}
+    resolution: {integrity: sha512-ka7JIpkHwXqD+aCdohV+hNSflKBE3bmeHLsWr/eR0CuTC35kwmZ6/5xQGgLShkP+RlPRp5nLFfhooXaIdUqwNQ==, tarball: https://github.com/Q9Labs/q9stack/releases/download/v0.3.0/q9labsai-config-depcruise-0.3.0.tgz}
     version: 0.3.0
     engines: {node: '>=24'}
     peerDependencies:
       dependency-cruiser: ^18.2.0
 
   '@q9labsai/config-oxlint@https://github.com/Q9Labs/q9stack/releases/download/v0.3.0/q9labsai-config-oxlint-0.3.0.tgz':
-    resolution: {tarball: https://github.com/Q9Labs/q9stack/releases/download/v0.3.0/q9labsai-config-oxlint-0.3.0.tgz}
+    resolution: {integrity: sha512-WWB3NzcsVuztDssLUfqrqQNJqw/sr8s4QuIvi6i5HoE81mgqyEDgRIpxMzbJm3Tl/iHETD0OSTTAEvl/2eC+FQ==, tarball: https://github.com/Q9Labs/q9stack/releases/download/v0.3.0/q9labsai-config-oxlint-0.3.0.tgz}
     version: 0.3.0
     engines: {node: '>=24'}
 
   '@q9labsai/config-semgrep@https://github.com/Q9Labs/q9stack/releases/download/v0.3.0/q9labsai-config-semgrep-0.3.0.tgz':
-    resolution: {tarball: https://github.com/Q9Labs/q9stack/releases/download/v0.3.0/q9labsai-config-semgrep-0.3.0.tgz}
+    resolution: {integrity: sha512-rYWnVWRMxyrqh4efO37YoRJwBWIIXVkto9gn4WmxLIgXG88BVEU2KW3Qr0J+w2phCVHWsxkLYrdR0NGGeCYp0A==, tarball: https://github.com/Q9Labs/q9stack/releases/download/v0.3.0/q9labsai-config-semgrep-0.3.0.tgz}
     version: 0.3.0
     engines: {node: '>=24'}
 
   '@q9labsai/config-tsconfig@https://github.com/Q9Labs/q9stack/releases/download/v0.3.0/q9labsai-config-tsconfig-0.3.0.tgz':
-    resolution: {tarball: https://github.com/Q9Labs/q9stack/releases/download/v0.3.0/q9labsai-config-tsconfig-0.3.0.tgz}
+    resolution: {integrity: sha512-EVfI4Uf/XYaPt2mpf5y9aF5wx4kEHjYBAWhHR9Gf+Ly/eE0y0ROrNDrXjSJq+F1IIsgCQW+Dr18P4vFQwMXkEw==, tarball: https://github.com/Q9Labs/q9stack/releases/download/v0.3.0/q9labsai-config-tsconfig-0.3.0.tgz}
     version: 0.3.0
     engines: {node: '>=24'}
 
   '@q9labsai/diagnostics@https://github.com/Q9Labs/q9stack/releases/download/v0.4.0/q9labsai-diagnostics-0.4.0.tgz':
-    resolution: {tarball: https://github.com/Q9Labs/q9stack/releases/download/v0.4.0/q9labsai-diagnostics-0.4.0.tgz}
+    resolution: {integrity: sha512-iGF/EC8+Us1uyVMjJAuHnUcKC86AU4Dl+Hsioeo5l9DvZWXLpZOmrn9mh3eJ9HvbBIadfxHHVQpteT8LgQl/zQ==, tarball: https://github.com/Q9Labs/q9stack/releases/download/v0.4.0/q9labsai-diagnostics-0.4.0.tgz}
     version: 0.4.0
     engines: {node: '>=24'}
 
   '@q9labsai/gates@https://github.com/Q9Labs/q9stack/releases/download/v0.3.1/q9labsai-gates-0.3.1.tgz':
-    resolution: {tarball: https://github.com/Q9Labs/q9stack/releases/download/v0.3.1/q9labsai-gates-0.3.1.tgz}
+    resolution: {integrity: sha512-80fRfwyoitMcq0FsBxMVKlLTTLrta+neGcPT4negyBCwVcnrIhBL68T25TCSn1jLx/sc/FzU9eD5+RuTt07L5w==, tarball: https://github.com/Q9Labs/q9stack/releases/download/v0.3.1/q9labsai-gates-0.3.1.tgz}
     version: 0.3.1
     engines: {node: '>=24'}
     hasBin: true
 
   '@q9labsai/ui@https://github.com/Q9Labs/q9stack/releases/download/v0.3.0/q9labsai-ui-0.3.0.tgz':
-    resolution: {tarball: https://github.com/Q9Labs/q9stack/releases/download/v0.3.0/q9labsai-ui-0.3.0.tgz}
+    resolution: {integrity: sha512-/QzaA0zh8zwNypivLCCMT0h/K12jDkQq5NaZQE1uNq7C3z/UO3Eg/LRpeaIA4ySTYlbFpQzb1g1yizd+RpIuJw==, tarball: https://github.com/Q9Labs/q9stack/releases/download/v0.3.0/q9labsai-ui-0.3.0.tgz}
     version: 0.3.0
     engines: {node: '>=24'}
     peerDependencies:
