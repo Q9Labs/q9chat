@@ -22,6 +22,7 @@ export const profileValidator = v.union(
     status: v.literal("deleting"),
     authUserId: v.string(),
     requestedAt: v.number(),
+    lastStepAt: v.optional(v.number()),
     photoStorageId: v.optional(v.id("_storage")),
     signInAccountDeletedAt: v.optional(v.number()),
   }),
@@ -228,7 +229,10 @@ const typing = defineTable({
   groupId: v.id("groups"),
   profileId: v.id("profiles"),
   expiresAt: v.number(),
-}).index("by_group_profile", ["groupId", "profileId"]);
+})
+  .index("by_group_profile", ["groupId", "profileId"])
+  .index("by_profile", ["profileId"])
+  .index("by_expiry", ["expiresAt"]);
 
 // Expo's push service delivers to APNs and FCM; browsers use Web Push.
 export const deviceValidator = v.union(
