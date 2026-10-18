@@ -34,6 +34,7 @@ import {
   withRemoved,
   type Options,
 } from "./fixtures.js";
+import { Playground } from "./playground.js";
 import { ChatScene, GroupsScene } from "./scene.js";
 
 const noop = () => {};
@@ -211,7 +212,7 @@ export const STATES: readonly GalleryState[] = [
     render: () => (
       <ChatScene
         group={launchGroup({ notify: "muted" })}
-        rows={withMuted(groupRows({}, "launch"), "launch")}
+        rows={withMuted(groupRows({}, ["launch"]), "launch")}
       />
     ),
   },
@@ -219,14 +220,19 @@ export const STATES: readonly GalleryState[] = [
     id: "chat-long",
     title: "Chat, long names and message",
     render: () => (
-      <ChatScene options={LONG} group={launchGroup(LONG)} messages={launchMessages(LONG)} />
+      <ChatScene
+        options={LONG}
+        group={launchGroup(LONG)}
+        messages={launchMessages(LONG)}
+        newFromSequence={11}
+      />
     ),
   },
   {
     id: "chat-removed",
     title: "Chat, removed from group",
     render: () => (
-      <ChatScene group={removedGroup()} rows={withRemoved(groupRows({}, "launch"), "launch")} />
+      <ChatScene group={removedGroup()} rows={withRemoved(groupRows({}, ["launch"]), "launch")} />
     ),
   },
   {
@@ -337,7 +343,7 @@ export const STATES: readonly GalleryState[] = [
     render: () => (
       <ChatScene
         group={removedGroup()}
-        rows={withRemoved(groupRows({}, "launch"), "launch")}
+        rows={withRemoved(groupRows({}, ["launch"]), "launch")}
         info={{}}
       />
     ),
@@ -353,7 +359,7 @@ export const STATES: readonly GalleryState[] = [
     render: () => (
       <ChatScene
         group={launchGroup({ notify: "muted" })}
-        rows={withMuted(groupRows({}, "launch"), "launch")}
+        rows={withMuted(groupRows({}, ["launch"]), "launch")}
         info={{ notificationsOpen: true }}
       />
     ),
@@ -478,7 +484,7 @@ export const STATES: readonly GalleryState[] = [
   {
     id: "account-new",
     title: "Account, email code",
-    render: () => <GroupsScene options={NEW_PERSON} empty overlay={account(NEW_PERSON)} />,
+    render: () => <GroupsScene options={NEW_PERSON} empty banner overlay={account(NEW_PERSON)} />,
   },
   {
     id: "delete-message",
@@ -579,4 +585,5 @@ export const STATES: readonly GalleryState[] = [
       />
     ),
   },
+  { id: "playground", title: "Live chat for the keyboard check", render: () => <Playground /> },
 ];

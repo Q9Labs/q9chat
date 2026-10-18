@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import { ChatView } from "../chat/chat-view.js";
-import type { ComposerMode, Recording } from "../chat/composer.js";
+import type { ComposerMode, ComposerProps, Recording } from "../chat/composer.js";
 import type { MessageHandlers } from "../chat/message.js";
 import type {
   GroupDetail,
@@ -56,6 +56,9 @@ export interface ChatScene {
   } | null;
   /** Dialogs and popovers drawn over the screen. */
   readonly overlay?: ReactNode;
+  /** The playground wires these to local state; every other state leaves them as no-ops. */
+  readonly onOpenSearch?: () => void;
+  readonly composerHandlers?: Partial<ComposerProps>;
 }
 
 /** The signed-in app with a chat open: sidebar, history, composer and optionally Group info. */
@@ -67,14 +70,11 @@ export function ChatScene(scene: ChatScene) {
   return (
     <>
       <ChatShell
-        onOpenSearch={noop}
+        onOpenSearch={scene.onOpenSearch ?? noop}
         sidebar={
           <Sidebar
             me={me(options)}
-            rows={
-              scene.rows ??
-              groupRows(options, scene.selected === undefined ? "launch" : scene.selected)
-            }
+            rows={scene.rows ?? groupRows(options, ["launch", scene.selected ?? "launch"])}
             selectedGroupId={scene.selected === undefined ? "launch" : scene.selected}
             onSelect={noop}
             onNewGroup={noop}
@@ -117,6 +117,7 @@ export function ChatScene(scene: ChatScene) {
               recording: scene.recording ?? null,
               onCancelRecording: noop,
               onSendRecording: noop,
+              ...scene.composerHandlers,
             }}
           />
         }

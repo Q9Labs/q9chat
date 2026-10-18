@@ -547,7 +547,7 @@ function row(init: GroupInit, options: Options): GroupRow {
 
 export function groupRows(
   options: Options = {},
-  opened: string | null = null,
+  opened: readonly string[] = [],
 ): readonly GroupListRow[] {
   const long = options.long === true;
   return readOpened(
@@ -664,9 +664,9 @@ export function groupRows(
 }
 
 /** Opening a group reads it: the mock clears the count and the @ when the chat is on screen. */
-function readOpened(rows: readonly GroupRow[], opened: string | null): readonly GroupRow[] {
+function readOpened(rows: readonly GroupRow[], opened: readonly string[]): readonly GroupRow[] {
   return rows.map((entry) =>
-    entry.groupId === opened ? { ...entry, unreadCount: 0, needsYou: false } : entry,
+    opened.includes(entry.groupId) ? { ...entry, unreadCount: 0, needsYou: false } : entry,
   );
 }
 
@@ -795,16 +795,6 @@ export function searchHits(options: Options = {}): readonly SearchHit[] {
       "Apple account is ready under CollabEZ. I'll add everyone to TestFlight once the build lands.",
     ),
     hit(
-      "bilal",
-      nameOf("bilal", options),
-      avatarOf("bilal"),
-      1,
-      "hasan",
-      18,
-      "18:02",
-      "Can you send me the TestFlight invite when it's ready?",
-    ),
-    hit(
       "chalk",
       "Chalk",
       groupAvatar("CH"),
@@ -813,6 +803,16 @@ export function searchHits(options: Options = {}): readonly SearchHit[] {
       6,
       "14:02",
       "TestFlight build for Chalk is next week.",
+    ),
+    hit(
+      "bilal",
+      nameOf("bilal", options),
+      avatarOf("bilal"),
+      1,
+      "hasan",
+      18,
+      "18:02",
+      "Can you send me the TestFlight invite when it's ready?",
     ),
   ];
 }
