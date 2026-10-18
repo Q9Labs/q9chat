@@ -5,10 +5,10 @@
 ### Added
 
 - **Create and join groups on the web**: Find people by name or exact email, create groups or pairs, add members, and share or join invite links. Group info keeps member email addresses private.
-
 - **Project scaffold**: Generated `q9chat` with its selected backend, shared UI, and quality tooling.
 - **Headless sign-in endpoints and web sessions**: Sign in through email codes, Google or Apple with shared web and phone auth endpoints and a cookie-backed web session.
 - **Sign in and find your groups on the web**: Sign in by email code, set up a profile, see live group previews and unread counts, and manage your account and sign out. Google and Apple start the shared sign-in flow.
+- **Sign in and find your groups on the phone**: Sign in by email code, Google or Apple, set up a profile with an optional photo, see live group previews and unread counts, manage your account and sign out. A saved sign-in survives a lost connection and shows a retry.
 
 ### Fixed
 
