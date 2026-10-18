@@ -9,9 +9,10 @@ import {
 import { Stack, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
+import { reducedMotionLoaded } from "../src/kit/motion";
 import { ThemeProvider, useTheme } from "../src/theme";
 
 void SplashScreen.preventAutoHideAsync();
@@ -39,8 +40,12 @@ export default function RootLayout() {
     Figtree_600SemiBold,
     Figtree_700Bold,
   });
+  const [motionKnown, setMotionKnown] = useState(false);
+  useEffect(() => {
+    void reducedMotionLoaded.then(() => setMotionKnown(true));
+  }, []);
   // A font that fails to load leaves the system font in place; the app still opens.
-  const ready = loaded || fontError !== null;
+  const ready = (loaded || fontError !== null) && motionKnown;
   useEffect(() => {
     if (ready) void SplashScreen.hideAsync();
   }, [ready]);
