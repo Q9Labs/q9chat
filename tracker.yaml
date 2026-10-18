@@ -20,19 +20,21 @@ outcomes:
     title: Sign in and land in groups
     area: groups
     state: in_progress
-    summary: Web email sign-in, profile setup, live groups and Account are wired to the dev backend. Phone sign-in and browser checks of Google and Apple remain.
+    summary: Email sign-in, profile setup with a photo, live groups, Account and sign out run on web and on the phone, and the phone end-to-end test passes on an iOS simulator and an Android emulator against the dev backend. The phone sends Google and Apple to WorkOS and back through the phone-callback page, but no real provider sign-in has been completed.
     theory: theory.md#version-1-journeys
     code:
       - apps/web/src/journey/journey.tsx
       - apps/web/src/lib/session.tsx
+      - apps/mobile/src/journey/Journey.tsx
+      - apps/mobile/src/session/client.ts
       - convex/profiles.ts
       - convex/groups.ts
     priority: P0
     size: M
-    size_reason: Phone sign-in and group landing still need their own implementation and verification.
+    size_reason: Only the provider click-through with a real account and a run on a physical phone remain.
     remaining:
-      - Sign in on the phone and land in the person's groups.
-      - Verify Google and Apple click-through in the browser.
+      - Verify Google and Apple click-through in the browser and on a phone with a real account.
+      - Run the phone journey on a physical device.
 
   - id: chat.create_groups
     title: Create a group or start a group of two
@@ -167,15 +169,16 @@ outcomes:
   - id: mobile.app
     title: The phone app offers every journey
     area: mobile
-    state: planned
-    summary: The scaffold has no mobile app.
+    state: in_progress
+    summary: The Expo app has every version 1 phone screen. Sign in, profile setup, the live groups list, Account and sign out are wired to the dev backend; chat, group info, new group and search still run on gallery fixtures.
     theory: theory.md#fast-and-reliable
-    code: []
+    code:
+      - apps/mobile
     priority: P0
     size: L
-    size_reason: A new Expo app sharing the Convex API and domain package.
+    size_reason: Most journeys still need their screens wired to Convex and a device run.
     remaining:
-      - Add an Expo app that signs in and offers the version 1 journeys, built alongside the web app.
+      - Wire chat, group info, new group and search to the backend.
 
   - id: release.first_live
     title: Q9's team uses Q9 Chat on chat.q9labs.ai and TestFlight

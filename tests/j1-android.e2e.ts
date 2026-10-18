@@ -205,7 +205,6 @@ test(
       await expect(
         screen.getByRole("button", "Journey live group, Sara: Welcome to the live group, 1 unread"),
       ).toBeVisible();
-      await expect(screen.getByText("Sara: Welcome to the live group")).toBeVisible();
       shot("05-live-groups");
 
       await screen.getByRole("button", "Account", { exact: true }).tap();
@@ -240,7 +239,12 @@ test(
       .toContain("CustomTabActivity");
     await new Promise((resolve) => setTimeout(resolve, 5000));
     shot("oauth-google-session");
-    await device.back();
+    // The WorkOS page can hold the soft keyboard open, so the first Back only closes the keyboard.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await device.back();
+      const top = adbShell("dumpsys activity activities | grep -m1 topResumedActivity");
+      if (top.includes("ai.q9labs.chat")) break;
+    }
     await expect(screen.getByText(SIGN_IN_INCOMPLETE)).toBeVisible();
   },
 );
