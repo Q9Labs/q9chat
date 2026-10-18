@@ -135,3 +135,103 @@ test("OAuth navigation bootstraps a changed user and announces it to the existin
   await expect(second.getByTestId("session")).toHaveText("authenticated:after-oauth");
   await expect(page.getByTestId("session")).toHaveText("authenticated:after-oauth");
 });
+
+test("an old terminal refresh failure cannot delete a newer sign-in cookie in another tab", async ({
+  context,
+  page,
+}) => {
+  // Execute the actual public token route; substitute only the outside WorkOS HTTP response.
+  const { call, outside, seal } = await import("../tests/auth-fixture.ts");
+  const old = await seal({
+    refreshToken: "old-refresh",
+    method: "email",
+    sessionId: "old-session",
+  });
+  let failed: Response | undefined;
+  await outside(
+    async () => {
+      failed = await call("token", {}, "", `q9_session=${old}`);
+    },
+    async (url) => {
+      expect(typeof url === "string" ? url : url instanceof URL ? url.href : url.url).toBe(
+        "https://api.workos.com/user_management/authenticate",
+      );
+      return Response.json({ code: "session_revoked" }, { status: 400 });
+    },
+  );
+  if (!failed) throw new Error("Missing public token response");
+  const failure = {
+    status: failed.status,
+    headers: Object.fromEntries(failed.headers),
+    body: await failed.text(),
+  };
+  expect(failure.status).toBe(401);
+  const started = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  let held = false;
+  await context.addCookies([
+    {
+      name: "q9_session",
+      value: old,
+      domain: "127.0.0.1",
+      path: "/api/auth",
+      httpOnly: true,
+      secure: true,
+      sameSite: "Lax",
+    },
+  ]);
+  await context.route("**/api/auth/**", async (route) => {
+    if (new URL(route.request().url()).pathname.endsWith("email/verify")) {
+      await route.fulfill({
+        json: session("new-account"),
+        headers: { "Set-Cookie": cookie("new-account") },
+      });
+      return;
+    }
+    const incoming = (await route.request().allHeaders())["cookie"] ?? "";
+    if (!held && incoming.includes(old)) {
+      held = true;
+      started.resolve();
+      await release.promise;
+      await route.fulfill(failure);
+    } else {
+      const newer = incoming.includes("q9_session=new-account");
+      await route.fulfill({
+        status: newer || incoming.includes(old) ? 200 : 401,
+        json: session(newer ? "new-account" : "old-account"),
+      });
+    }
+  });
+  try {
+    await page.goto("/tests/session-harness.html");
+    await started.promise;
+    const second = await context.newPage();
+    await second.goto("/tests/session-harness.html");
+    await expect(second.getByTestId("session")).toHaveText("authenticated:old-account");
+    await second.getByRole("button", { name: "Verify", exact: true }).click();
+    await expect(second.getByTestId("session")).toHaveText("authenticated:new-account");
+    release.resolve();
+    await expect(page.getByTestId("session")).toHaveText("authenticated:new-account");
+    expect((await context.cookies()).find((entry) => entry.name === "q9_session")?.value).toBe(
+      "new-account",
+    );
+    await second.reload();
+    await expect(second.getByTestId("session")).toHaveText("authenticated:new-account");
+  } finally {
+    release.resolve();
+  }
+});
+
+test("cancelled email transaction shows request-new-code copy rather than retrying a wrong code", async ({
+  context,
+  page,
+}) => {
+  await context.route("**/api/auth/token", (route) => route.fulfill({ status: 401, json: {} }));
+  await page.goto("/tests/session-harness.html");
+  await expect(page.getByTestId("session")).toHaveText("unauthenticated:none");
+  // No transaction cookie: both attempts go through the real Worker verifier.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await page.getByRole("button", { name: "Verify", exact: true }).click();
+    await expect(page.getByRole("alert")).toHaveText("That code has expired. Send a new one.");
+  }
+});

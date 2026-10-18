@@ -23,10 +23,17 @@ await verifyEmail(email, code);
 ```
 
 `status` is `loading`, `authenticated`, or `unauthenticated`. `user` and `method`
-are null outside a session. `verifyEmail` throws `invalid_code` for a rejected
-code. Other request failures throw `auth_unavailable`. OAuth buttons redirect to
+are null outside a session. `verifyEmail` throws `EmailVerificationError` (exported
+from the same module) with `code: "invalid_code"` for a rejected code or
+`code: "invalid_transaction"` for a cancelled, expired or replaced email flow.
+Render its `message` in the code screen's alert. Invalid transactions say
+"That code has expired. Send a new one." and need `startEmail` again, not another
+attempt with the same code. Other request failures throw `auth_unavailable`. OAuth buttons redirect to
 `/api/auth/oauth/google?client=web` or `/api/auth/oauth/apple?client=web`.
 The optional `returnTo` accepts only same-origin paths.
+
+Only sign-out deletes `q9_session`. Terminal refresh failures return 401 without
+a cookie write, so an old response cannot delete a newer account cookie.
 
 Access tokens stay in provider memory. Convex calls `fetchAccessToken`, which
 refreshes when requested or within 30 seconds of expiry. A shared promise coalesces
@@ -43,9 +50,11 @@ creates an email-bound cookie, OAuth start creates the state/PKCE cookie, and
 phone exchange preflight creates a verifier-bound cookie. Successful exchanges
 consume their transaction. Wrong email codes keep it so the person can retry.
 Sign-out clears the session and all three transaction cookies. A verify or
-callback arriving after completed sign-out cannot exchange a code. An exchange
-already running when sign-out arrives (including refresh) may finish and write its cookie: v1
-explicitly accepts that window. Refresh writes a cookie only when WorkOS returns a different refresh token.
+callback arriving after completed sign-out cannot exchange a code without a
+transaction. A sign-in started before sign-out may still finish afterwards,
+including a delayed email-start response restoring its transaction or an exchange
+already running. Finishing still needs the emailed code or provider account;
+v1 accepts this regardless of timing, including slow WorkOS responses. Refresh writes a cookie only when WorkOS returns a different refresh token.
 An unchanged-token refresh cannot overwrite a newer account cookie; a genuinely
 rotated token can still write last. Tabs reconcile to the resulting shared cookie. There is no server-side
 transaction store.

@@ -41,7 +41,7 @@ jobs:
         run: pnpm tracker:check && pnpm changelog:check
 
       - name: Configure server-only secret canary
-        run: printf 'WORKOS_API_KEY=q9-auth-server-only-canary\nWORKOS_CLIENT_ID=test-only\n' > apps/web/.dev.vars
+        run: printf '%s\n' 'WORKOS_API_KEY=q9-auth-server-only-canary' 'WORKOS_CLIENT_ID=test-only' > apps/web/.dev.vars
 
       - name: Run base gate
         run: pnpm exec q9gate run --base origin/main

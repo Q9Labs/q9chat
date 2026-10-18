@@ -357,3 +357,23 @@ void test("sign-out invalidates a peer's initial bootstrap even before it has a 
     globalThis.fetch = original;
   }
 });
+
+void test("email verification preserves expired transaction errors and actionable copy", async () => {
+  const original = globalThis.fetch;
+  try {
+    for (const code of ["invalid_transaction", "invalid_code"] as const) {
+      globalThis.fetch = async () => Response.json({ error: code }, { status: 401 });
+      const client = createSessionClient();
+      await assert.rejects(client.verifyEmail("test@example.net", "123456"), {
+        code,
+        message:
+          code === "invalid_transaction"
+            ? "That code has expired. Send a new one."
+            : "That code didn't work. Check it and try again.",
+      });
+      assert.equal(client.getSnapshot().session, null);
+    }
+  } finally {
+    globalThis.fetch = original;
+  }
+});

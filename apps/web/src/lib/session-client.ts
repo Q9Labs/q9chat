@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import { Either, Schema } from "effect";
 
 import { Session } from "./auth/contracts.js";
 
@@ -13,8 +13,29 @@ async function post(path: string, body: object = {}, keepalive = false) {
     body: JSON.stringify(body),
   });
 }
+const VerificationFailure = Schema.Struct({
+  error: Schema.Literal("invalid_code", "invalid_transaction"),
+});
+export class EmailVerificationError extends Error {
+  readonly code: typeof VerificationFailure.Type.error;
+  constructor(code: typeof VerificationFailure.Type.error) {
+    super(
+      code === "invalid_transaction"
+        ? "That code has expired. Send a new one."
+        : "That code didn't work. Check it and try again.",
+    );
+    this.name = "EmailVerificationError";
+    this.code = code;
+  }
+}
 async function readSession(response: Response) {
-  if (!response.ok) throw new Error(response.status === 401 ? "invalid_code" : "auth_unavailable");
+  if (!response.ok) {
+    if (response.status === 401) {
+      const failure = Schema.decodeUnknownEither(VerificationFailure)(await response.json());
+      if (Either.isRight(failure)) throw new EmailVerificationError(failure.right.error);
+    }
+    throw new Error("auth_unavailable");
+  }
   return Schema.decodeUnknownSync(Session)(await response.json());
 }
 

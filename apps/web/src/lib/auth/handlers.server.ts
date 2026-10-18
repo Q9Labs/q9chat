@@ -178,11 +178,8 @@ export function token(request: Request) {
           error.code,
         )
       )
-        return json(
-          { error: "unauthenticated" },
-          401,
-          new Headers({ "Set-Cookie": setCookie(sessionCookie, "", 0) }),
-        );
+        // Only sign-out deletes the cookie: this response may follow a newer sign-in.
+        return json({ error: "unauthenticated" }, 401);
       throw error;
     }
   });
