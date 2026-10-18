@@ -1,14 +1,10 @@
 import { surfaceOf, test } from "@e2e-dev/web";
 import { api } from "@q9chat/convex";
-import { ConvexHttpClient } from "convex/browser";
+import type { ConvexHttpClient } from "convex/browser";
 import { expect } from "e2e";
-import { Schema } from "effect";
 
-import { Session } from "../apps/web/src/lib/auth/contracts.js";
-import { browserEngine, expectMainFullWidth } from "./support/browser.js";
+import { browserEngine, devClient, expectMainFullWidth } from "./support/browser.js";
 import { magicCode, removeTestUser } from "./support/workos.js";
-
-const convexUrl = "https://quixotic-crab-23.convex.cloud";
 
 function required<T>(value: T | null | undefined, message: string): T {
   if (value === null || value === undefined) throw new Error(message);
@@ -52,17 +48,6 @@ test(
         "This is the start of your group with Bilal",
       );
     }
-    async function clientFor(context: typeof bContext) {
-      const response = await context.request.post("http://localhost:3000/api/auth/token", {
-        headers: { Origin: "http://localhost:3000" },
-        data: {},
-      });
-      expect(response.status()).toBe(200);
-      const session = Schema.decodeUnknownSync(Session)(await response.json());
-      const client = new ConvexHttpClient(convexUrl);
-      client.setAuth(session.accessToken);
-      return client;
-    }
     async function peer(context: typeof bContext, person: string, name: string) {
       const headers = { Origin: "http://localhost:3000" };
       expect(
@@ -81,7 +66,7 @@ test(
           })
         ).status(),
       ).toBe(200);
-      const client = await clientFor(context);
+      const client = await devClient(context);
       const id = await client.action(api.profiles.setUp, { displayName: name });
       clients.push(client);
       return { client, id };
@@ -123,7 +108,7 @@ test(
       await app.open("/");
       await signUp("a", "Amal Journey");
       await expect(screen.getByRole("heading", "No groups yet")).toBeVisible();
-      const a = await clientFor(surface.context());
+      const a = await devClient(surface.context());
       clients.push(a);
       await screen.getByRole("button", "New group", { exact: true }).first().tap();
       await expect(screen.getByRole("button", "Create group", { exact: true })).toBeDisabled();
@@ -335,7 +320,7 @@ test(
       expect(new URL(await browser.url()).pathname).toBe(new URL(link).pathname);
       await signUp("d", "Dalia Journey");
       await expectInvitePrompt(new URL(link).pathname);
-      const dClient = await clientFor(surface.context());
+      const dClient = await devClient(surface.context());
       clients.push(dClient);
       const ownGroup = await dClient.mutation(api.groups.create, {
         name: "Dalia's group",
