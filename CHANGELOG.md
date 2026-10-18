@@ -10,3 +10,4 @@
 ### Fixed
 
 - **Local development**: Keep generated build output and local server logs out of git.
+- **Harden sign-in redirects and session lifecycle**: Keep OAuth callbacks on-site, prevent one-time-code replays and late sign-in after sign-out, synchronize open tabs, and budget email authentication requests.

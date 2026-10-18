@@ -29,8 +29,11 @@ code. Other request failures throw `auth_unavailable`. OAuth buttons redirect to
 The optional `returnTo` accepts only same-origin paths.
 
 Access tokens stay in provider memory. Convex calls `fetchAccessToken`, which
-refreshes when requested or within 30 seconds of expiry. A shared promise and
-Web Lock serialize refreshes within the page and across tabs. No token enters
+refreshes when requested or within 30 seconds of expiry. A shared promise coalesces refreshes within the page. A Web Lock serializes
+all cookie writers (verification, refresh, and sign-out) across tabs. Session
+generations discard stale results; sign-out waits for older cookie writes before
+clearing the cookie. BroadcastChannel carries only signed-out/changed notices,
+invalidating other tabs without sending or storing tokens. No token enters
 localStorage, sessionStorage, or SSR markup.
 
 ## Worker endpoints
@@ -45,11 +48,15 @@ foreign Origin are rejected. No cross-origin CORS permission is granted.
 - `GET /api/auth/oauth/$provider?client=web` accepts `google` and `apple`, creates
   a ten-minute signed state and PKCE cookie, and redirects to WorkOS.
 - `GET /api/auth/callback?code&state` exchanges the code, sets the session cookie,
-  clears the OAuth transaction, and redirects to the saved path.
+  clears the OAuth transaction, and redirects to the saved same-origin URL.
+  Cancellation, invalid state, and upstream failure also clear the transaction
+  and redirect to `/auth/error` with a fixed safe reason. Concurrent callbacks
+  rely on WorkOS single-use authorization codes; the cookie is not a server-side
+  atomic transaction store.
 - `GET /auth/phone-callback?code&state` redirects to
   `q9chat://auth/callback?code&state`. The phone checks its own state.
 - `POST /api/auth/oauth/exchange { code, codeVerifier }` exchanges a phone code.
-- `POST /api/auth/token { refreshToken? }` rotates the session and returns
+- `POST /api/auth/token { refreshToken? }` refreshes the session and returns
   `{ accessToken, expiresAt, user: { id, email, firstName, lastName }, method }`.
   `expiresAt` is Unix time in milliseconds. `method` is `email`, `google`, or
   `apple`. Missing or invalid sessions return `401 { error: "unauthenticated" }`.
@@ -64,8 +71,9 @@ the method when WorkOS omits it in refresh responses. Signing uses the server-on
 WorkOS key. Rotating that key invalidates local sessions. The web cookie expires
 after 30 days; WorkOS also enforces its session expiry.
 
-`workos.server.ts` owns all WorkOS calls. Each call has a ten-second deadline,
-retries only HTTP 5xx twice with exponential delay, and returns typed errors.
+`workos.server.ts` owns all WorkOS calls. Each call has a ten-second deadline and typed errors.
+Only idempotent session revocation retries HTTP 5xx twice with exponential delay.
+Code creation, one-time authentication grants, and refresh grants never retry.
 No Effect runtime is used for application state.
 
 ## Local configuration and checks
@@ -98,3 +106,26 @@ omit its method, in which case the signed original method is retained.
 rejection through the exported public email route. It replaces only WorkOS's
 outside HTTP transport, returns a Password session, and asserts revocation and
 a 403 response without a session cookie. It does not mock Q9 auth code.
+
+## Abuse budgets and regression checks
+
+Four Cloudflare Workers rate-limit bindings run before WorkOS: email start is
+20/minute/IP and 3/minute/email; verification is 60/minute/IP and 10/minute/email.
+Keys use Cloudflare's trusted `CF-Connecting-IP` (not forwarded headers) and a
+SHA-256 digest of the normalized email. Missing IPs share an unknown bucket.
+Email-start responses remain `{ ok: true }` when limited; verification returns
+429 with `Retry-After: 60`. These are our own budgets, not a claim about WorkOS's
+create-code endpoint limit. Cloudflare counters are per-location and eventually
+consistent, not a strict global quota. Wrangler/Vite simulates them locally;
+`rate-limit.test.ts` exercises the actual configured bindings.
+
+`pnpm test` runs deterministic public-route, session lifecycle, and local binding
+cases one file at a time. `pnpm test:staging` runs the separate live lane; it
+finds `magic_auth.created` through the staging events API, then retrieves that
+exact challenge. It never creates a replacement challenge.
+
+The focused Chromium checks are `pnpm exec playwright test e2e/auth-session.spec.ts
+--workers=1` (run on a disposable cloud box). They mount the real provider in a test-only harness
+and control its HTTP transport, testing cookie persistence, delayed verify versus
+logout, and two-tab invalidation. Public-route tests separately exercise the
+production server code with only WorkOS and rate-limit bindings substituted.

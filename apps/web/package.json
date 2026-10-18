@@ -35,8 +35,9 @@
     "preview": "vite preview",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
-    "test": "node --test tests/auth-policy.test.ts",
-    "e2e": "playwright test"
+    "test": "node --test --test-concurrency=1 tests/auth-policy.test.ts tests/session.test.ts tests/rate-limit.test.ts",
+    "e2e": "playwright test",
+    "test:staging": "node --test tests/auth.test.ts"
   },
   "dependencies": {
     "@fontsource-variable/geist": "catalog:",
