@@ -15,5 +15,5 @@
     "types": ["node"]
   },
   "include": ["packages/convex/src", "convex"],
-  "exclude": ["packages/convex/dist"]
+  "exclude": ["packages/convex/dist", "convex/**/*.test.ts", "convex/vitest.config.ts"]
 }

@@ -74,3 +74,7 @@ overrides:
   undici: 7.30.0
   sharp: 0.35.5
   "@tanstack/react-start": "catalog:"
+
+# These workspace tools are distributed only as GitHub release tarballs.
+trustPolicyExclude:
+  - "@q9labsai/*"

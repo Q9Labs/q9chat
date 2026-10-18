@@ -34,10 +34,14 @@
     "deploy:web": "pnpm --filter @q9chat/web run deploy",
     "convex:dev": "convex dev",
     "convex:deploy": "convex deploy",
-    "convex:codegen": "convex codegen"
+    "convex:codegen": "convex codegen",
+    "test:backend": "vitest run --config convex/vitest.config.ts"
   },
   "dependencies": {
-    "convex": "catalog:"
+    "@q9chat/domain": "workspace:*",
+    "convex": "catalog:",
+    "effect": "3.22.2",
+    "web-push": "3.6.7"
   },
   "devDependencies": {
     "@q9labsai/cli": "catalog:",
@@ -47,6 +51,8 @@
     "@q9labsai/config-tsconfig": "catalog:",
     "@q9labsai/gates": "catalog:",
     "@types/node": "catalog:",
+    "@types/web-push": "3.6.4",
+    "convex-test": "0.0.62",
     "cspell": "catalog:",
     "dependency-cruiser": "catalog:",
     "fallow": "catalog:",
@@ -59,7 +65,8 @@
     "tsdown": "catalog:",
     "turbo": "catalog:",
     "typescript": "catalog:",
-    "vite": "catalog:"
+    "vite": "catalog:",
+    "vitest": "4.1.11"
   },
   "engines": {
     "node": ">=24"

@@ -29,7 +29,12 @@ export default defineGate({
     lanes.reactDoctor(),
     lanes.shellcheck(),
     lanes.actionlint(),
-    lanes.convexCodegenDrift(),
+    lanes.contractDrift({
+      id: "convex-codegen-drift",
+      title: "Convex codegen drift",
+      generate: "convex codegen --system-udfs --typecheck disable",
+      paths: ["convex/_generated"],
+    }),
     // Budget covers the client deploy artifact (JS + CSS); fonts and the SSR
     // worker ship separately and are not part of the interactive payload.
     lanes.bundleSize({ budgets: { "apps/web/dist/client/assets/*.{js,css}": "325 kB" } }),
