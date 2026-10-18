@@ -153,7 +153,7 @@ function BubbleOf({ message, actions }: { message: Message; actions: GroupAction
   );
 }
 
-/** The name in the person's colour (the lighter one in dark), then the time. */
+/** The name in the person's color (the lighter one in dark), then the time. */
 function GroupHeader({
   item,
   onAuthorPress,
