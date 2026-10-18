@@ -142,7 +142,7 @@ export function SearchScreen(props: SearchScreenProps) {
             returnKeyType="search"
             style={{
               flex: 1,
-              minWidth: 108,
+              minWidth: 124,
               height: "100%",
               padding: 0,
               fontFamily: fonts[400],

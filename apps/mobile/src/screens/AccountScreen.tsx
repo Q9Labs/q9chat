@@ -74,12 +74,20 @@ export function AccountScreen(props: AccountScreenProps) {
           />
         </Field>
         <Field label="Photo">
-          <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              flexWrap: "wrap",
+              columnGap: 12,
+              rowGap: 10,
+            }}
+          >
             <PillButton
               label={props.hasPhoto ? "Remove photo" : "Upload photo"}
               onPress={props.onTogglePhoto}
             />
-            <Note style={{ margin: 0, flexShrink: 1 }}>
+            <Note style={{ margin: 0, flexShrink: 1, lineHeight: 14.4 }}>
               {props.hasPhoto
                 ? "People see your photo."
                 : "Without a photo, people see your initials on your color."}

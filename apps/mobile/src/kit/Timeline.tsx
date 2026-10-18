@@ -234,8 +234,8 @@ type TimelineProps = {
 } & GroupActions;
 
 const FAR_FROM_LATEST = 240;
-/** The unread divider rests this far under the top edge when a group opens with unread messages. */
-const DIVIDER_INSET = 90;
+/** The unread divider rests this far under the top of the list when a group opens with unread messages: the mock puts it 90px under its screen top, 67px of which are the header. */
+const DIVIDER_INSET = 23;
 
 type Metrics = { viewport: number; content: number; divider: number | null };
 
