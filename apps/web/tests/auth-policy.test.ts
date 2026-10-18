@@ -36,16 +36,28 @@ const routes = {
   signOut: (await import("../src/routes/api/auth/sign-out.ts")).Route,
   phone: (await import("../src/routes/auth/phone-callback.ts")).Route,
 };
+const { beginTransaction } = await import("../src/lib/auth/cookies.server.ts");
 const origin = "https://chat.example.test";
 let sequence = 0;
+async function fixtureTransaction(route: keyof typeof routes, body?: object) {
+  if (!body) return "";
+  if (route === "verify" && "email" in body && typeof body.email === "string")
+    return (await beginTransaction("q9_email", body.email.toLowerCase())).split(";")[0] ?? "";
+  if (route === "exchange" && "codeVerifier" in body && typeof body.codeVerifier === "string") {
+    const start = await call("exchange", { codeVerifier: body.codeVerifier }, "", "");
+    return cookies(start);
+  }
+  return "";
+}
 async function call(
   route: keyof typeof routes,
   body?: object,
   query = "",
-  cookie = "",
+  cookie?: string,
   ip?: string,
   requestOrigin?: string,
 ) {
+  cookie ??= await fixtureTransaction(route, body);
   const handlers = routes[route].options.server?.handlers;
   assert.ok(handlers && typeof handlers !== "function");
   const handler = body
@@ -321,7 +333,7 @@ void test("per-email and per-IP budgets stop requests before WorkOS, without enu
       assert.equal(calls, 10);
       calls = 0;
       for (let index = 0; index < 62; index++)
-        await call("verify", verifyBody(), "", "", "same-verify-ip");
+        await call("verify", verifyBody(), "", undefined, "same-verify-ip");
       assert.equal(calls, 60);
     },
     async () => {
@@ -385,6 +397,52 @@ void test("refresh grants are not retried on 5xx either", async () => {
       if (!failing) return Response.json(auth());
       calls++;
       return Response.json({}, { status: 502 });
+    },
+  );
+});
+
+void test("sign-out clears every transaction; late email, phone and OAuth grants never reach WorkOS", async () => {
+  let upstream = 0;
+  await outside(
+    async () => {
+      const email = "transaction@example.net";
+      const start = await call("start", { email });
+      assert.match(cookies(start), /q9_email=.+/);
+      const tx = await transaction();
+      const phone = await call("exchange", { codeVerifier: "a".repeat(43) }, "", "");
+      assert.match(cookies(phone), /q9_phone=.+/);
+      const logout = await call(
+        "signOut",
+        {},
+        "",
+        `${cookies(start)}; ${tx.cookie}; ${cookies(phone)}`,
+      );
+      for (const name of ["q9_session", "q9_email", "q9_oauth", "q9_phone"])
+        assert.ok(
+          logout.headers
+            .getSetCookie()
+            .some((value) => value.startsWith(`${name}=;`) && value.includes("Max-Age=0")),
+        );
+      upstream = 0;
+      const verify = await call("verify", verifyBody(email), "", "");
+      assert.deepEqual(await verify.json(), { error: "invalid_transaction" });
+      const exchange = await call(
+        "exchange",
+        { code: "late", codeVerifier: "a".repeat(43) },
+        "",
+        "",
+      );
+      assert.deepEqual(await exchange.json(), { error: "invalid_transaction" });
+      const callback = await call("callback", undefined, tx.query, "");
+      assert.equal(callback.headers.get("location"), `${origin}/auth/error?reason=invalid_state`);
+      assert.equal(upstream, 0);
+      const wrongEmail = await call("verify", verifyBody("other@example.net"), "", cookies(start));
+      assert.equal(wrongEmail.status, 401);
+      assert.equal(upstream, 0);
+    },
+    async () => {
+      upstream++;
+      return Response.json({ ok: true });
     },
   );
 });

@@ -1,7 +1,16 @@
 import { Either, Schema } from "effect";
 
 import { Nonempty } from "./contracts.js";
-import { challenge, cookie, randomToken, seal, setCookie, unseal } from "./cookies.server.js";
+import {
+  beginTransaction,
+  challenge,
+  cookie,
+  hasTransaction,
+  randomToken,
+  seal,
+  setCookie,
+  unseal,
+} from "./cookies.server.js";
 import { boundary, input, json, sessionResponse } from "./handlers.server.js";
 import { authenticate, workosConfig } from "./workos.server.js";
 
@@ -96,11 +105,21 @@ export function oauthExchange(request: Request) {
     const body = await input(
       request,
       Schema.Struct({
-        code: Nonempty,
+        code: Schema.optional(Nonempty),
         codeVerifier: Schema.String.pipe(Schema.pattern(/^[A-Za-z0-9._~-]{43,128}$/)),
       }),
     );
-    return sessionResponse(
+    if (!body.code)
+      return json(
+        { ok: true },
+        200,
+        new Headers({
+          "Set-Cookie": await beginTransaction("q9_phone", await challenge(body.codeVerifier)),
+        }),
+      );
+    if (!(await hasTransaction(request, "q9_phone", await challenge(body.codeVerifier))))
+      return json({ error: "invalid_transaction" }, 401);
+    const response = await sessionResponse(
       await authenticate({
         grant_type: "authorization_code",
         code: body.code,
@@ -109,6 +128,8 @@ export function oauthExchange(request: Request) {
       }),
       "phone",
     );
+    response.headers.append("Set-Cookie", setCookie("q9_phone", "", 0));
+    return response;
   });
 }
 export function phoneCallback(request: Request) {

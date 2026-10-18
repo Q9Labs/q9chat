@@ -76,3 +76,15 @@ export async function unseal<A, I>(
     return null;
   }
 }
+
+export const transactionCookies = ["q9_email", "q9_oauth", "q9_phone"];
+const SignInTransaction = Schema.Struct({ subject: Schema.String, expiresAt: Schema.Number });
+export async function beginTransaction(name: string, subject: string) {
+  return setCookie(name, await seal({ subject, expiresAt: Date.now() + 600_000 }), 600);
+}
+export async function hasTransaction(request: Request, name: string, subject: string) {
+  const transaction = await unseal(cookie(request, name), SignInTransaction);
+  return (
+    transaction !== null && transaction.expiresAt > Date.now() && transaction.subject === subject
+  );
+}
