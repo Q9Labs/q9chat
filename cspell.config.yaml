@@ -59,6 +59,8 @@ words:
   - worktrees
   - Wrangler
   - ratelimits
+  # React Native's accessibility action name for a long press.
+  - longpress
   # The people in the mock's seed data, used by the web gallery fixtures.
   - Bilal
   - Hasan
@@ -71,6 +73,12 @@ words:
   - CollabEZ
   - Figtree
   - wordmark
+  # React Native and mock words in the phone app: the Pressable component, the react-doctor rule name rn-no-scrollview-mapped-list, the mock's "typers" and "chev" names, and a seed message.
+  - Pressable
+  - scrollview
+  - typers
+  - chev
+  - Biryani
   # The mock's screen name for the New group dialog, kept as the gallery state id.
   - newgroup
   - ratelimits
