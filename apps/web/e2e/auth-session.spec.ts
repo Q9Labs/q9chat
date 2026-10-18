@@ -243,3 +243,22 @@ test("cancelled email transaction shows request-new-code copy rather than retryi
     await expect(page.getByRole("alert")).toHaveText("That code has expired. Send a new one.");
   }
 });
+
+test("phone OAuth cancellation keeps the phone return page; web errors return to sign in", async ({
+  page,
+  request,
+}) => {
+  const phone = await request.get("/auth/error?reason=phone_failed", { maxRedirects: 0 });
+  expect(phone.status()).toBe(200);
+  expect(phone.headers()["cache-control"]).toBe("no-store");
+  expect(phone.headers()["referrer-policy"]).toBe("no-referrer");
+  await page.goto("/auth/error?reason=phone_failed");
+  await expect(page.getByRole("heading")).toHaveText("Sign-in wasn’t completed");
+  await expect(page.locator("p")).toHaveText(
+    "Close this page to return to your phone, or try signing in again on the web.",
+  );
+  const web = await request.get("/auth/error?reason=cancelled", { maxRedirects: 0 });
+  expect(web.status()).toBe(302);
+  expect(web.headers()["location"]).toBe("/?authError=1");
+  expect(web.headers()["cache-control"]).toBe("no-store");
+});

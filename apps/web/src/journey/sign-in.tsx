@@ -3,18 +3,17 @@ import { useRef, useState } from "react";
 import { EmailVerificationError, useSession } from "../lib/session.js";
 import { EmailCode, SignIn } from "../screens/auth.js";
 import { Toast } from "../ui/overlay.js";
+import { startOAuth } from "./oauth.js";
 
 const emptyDigits = () => Array.from({ length: 6 }, () => "");
 
 export function SignInJourney({
   authError,
   signOutStatus,
-  onRetrySignOut,
   onSignInAttempt,
 }: {
   readonly authError: boolean;
   readonly signOutStatus: "idle" | "pending" | "complete" | "failed";
-  readonly onRetrySignOut: () => void;
   readonly onSignInAttempt: () => void;
 }) {
   const { startEmail, verifyEmail } = useSession();
@@ -75,8 +74,8 @@ export function SignInJourney({
             setEmail(value);
             setNotice("");
           }}
-          onGoogle={() => window.location.assign("/api/auth/oauth/google?client=web")}
-          onApple={() => window.location.assign("/api/auth/oauth/apple?client=web")}
+          onGoogle={() => startOAuth("google")}
+          onApple={() => startOAuth("apple")}
           onEmailCode={() => void sendCode()}
         />
       ) : (
@@ -95,12 +94,7 @@ export function SignInJourney({
           }}
         />
       )}
-      {signOutStatus === "failed" ? (
-        <Toast
-          message="Couldn't sign out. Try again."
-          action={{ label: "Try again", onClick: onRetrySignOut }}
-        />
-      ) : signOutStatus === "complete" ? (
+      {signOutStatus === "failed" ? null : signOutStatus === "complete" ? (
         <Toast message="Signed out" />
       ) : notice ? (
         <Toast message={notice} />

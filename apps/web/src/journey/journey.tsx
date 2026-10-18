@@ -2,6 +2,7 @@ import { api } from "@q9chat/convex";
 import { firstName, initials } from "@q9chat/domain";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
+import { Schema } from "effect";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 
 import type { GroupListRow, Me } from "../chat/types.js";
@@ -23,27 +24,59 @@ function useSignOutAction() {
   return action;
 }
 
-export function Journey({
-  authError,
-  oauthArrival,
-}: {
-  readonly authError: boolean;
-  readonly oauthArrival: boolean;
-}) {
-  const session = useSession();
-  const [now, setNow] = useState(Date.now);
+function useJourneySignOut() {
   const [signOutStatus, setSignOutStatus] = useState<"idle" | "pending" | "complete" | "failed">(
     "idle",
   );
-  const { signOut } = session;
+  const generation = useRef(0);
+  const signOutSession = useRef<string | null>(null);
+  const currentSession = useRef<string | null>(null);
+  const { signOut, fetchAccessToken, user } = useSession();
+  useEffect(() => {
+    let active = true;
+    if (user)
+      void fetchAccessToken({ forceRefreshToken: false })
+        .then((token) => {
+          if (!active || !token) return;
+          const payload = token.split(".")[1];
+          if (!payload) return;
+          const { sid } = Schema.decodeUnknownSync(
+            Schema.parseJson(Schema.Struct({ sid: Schema.String })),
+          )(atob(payload.replaceAll("-", "+").replaceAll("_", "/")));
+          currentSession.current = sid;
+          if (signOutSession.current !== null && signOutSession.current !== sid) {
+            generation.current += 1;
+            signOutSession.current = null;
+            setSignOutStatus("idle");
+          }
+        })
+        .catch(() => null);
+    return () => {
+      active = false;
+    };
+  }, [fetchAccessToken, user]);
   const leave = useCallback(() => {
     if (signOutStatus === "pending") return;
+    const started = ++generation.current;
+    signOutSession.current = currentSession.current;
     setSignOutStatus("pending");
     void signOut().then(
-      () => setSignOutStatus("complete"),
-      () => setSignOutStatus("failed"),
+      () => {
+        if (started === generation.current) setSignOutStatus("complete");
+      },
+      () => {
+        if (started === generation.current) setSignOutStatus("failed");
+      },
     );
   }, [signOut, signOutStatus]);
+  return { signOutStatus, leave, clearSignOutStatus: () => setSignOutStatus("idle") };
+}
+
+export function Journey({ authError }: { readonly authError: boolean }) {
+  const session = useSession();
+  const [now, setNow] = useState(Date.now);
+  const { signOutStatus, leave, clearSignOutStatus } = useJourneySignOut();
+  const arrivalMethod = authError ? null : session.method;
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 30_000);
     return () => window.clearInterval(timer);
@@ -57,13 +90,20 @@ export function Journey({
           <SignInJourney
             authError={authError}
             signOutStatus={signOutStatus}
-            onRetrySignOut={leave}
-            onSignInAttempt={() => setSignOutStatus("idle")}
+            onSignInAttempt={clearSignOutStatus}
           />
         ) : (
           <ProfileGate key={session.user.id} />
         )}
-        {session.user ? <OAuthArrival method={session.method} arrival={oauthArrival} /> : null}
+        {signOutStatus === "failed" ? (
+          <Toast
+            message="Couldn't sign out. Try again."
+            action={{ label: "Try again", onClick: leave }}
+          />
+        ) : null}
+        {session.status !== "loading" ? (
+          <OAuthArrival key={arrivalMethod ?? "signed-out"} method={arrivalMethod} />
+        ) : null}
       </AppRoot>
     </SignOutAction.Provider>
   );
