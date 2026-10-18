@@ -1,1 +1,1 @@
-export { api, components, internal } from "../../../convex/_generated/api.js";
+export { api, internal } from "../../../convex/_generated/api.js";

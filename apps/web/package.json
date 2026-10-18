@@ -40,8 +40,7 @@
     "test:staging": "node --test tests/auth.test.ts"
   },
   "dependencies": {
-    "@fontsource-variable/geist": "catalog:",
-    "@fontsource-variable/geist-mono": "catalog:",
+    "@fontsource-variable/figtree": "catalog:",
     "@q9labsai/ui": "catalog:",
     "@tanstack/react-router": "catalog:",
     "@tanstack/react-start": "catalog:",

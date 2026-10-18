@@ -8,5 +8,5 @@ import { api } from "@q9chat/convex";
 import type { Doc, Id } from "@q9chat/convex";
 ```
 
-The generated `convex/_generated` directory is ignored. Run `codegen` before
-`build`; the root commands do this automatically.
+The generated `convex/_generated` directory is committed. The gate regenerates
+it offline and checks for drift; the package build consumes those committed types.

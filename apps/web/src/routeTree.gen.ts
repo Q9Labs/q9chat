@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as GalleryRouteImport } from './routes/gallery'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as AuthErrorRouteImport } from './routes/auth/error'
 import { Route as AuthPhoneCallbackRouteImport } from './routes/auth/phone-callback'
@@ -24,6 +25,11 @@ import { Route as ApiAuthOauthExchangeRouteImport } from './routes/api/auth/oaut
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GalleryRoute = GalleryRouteImport.update({
+  id: '/gallery',
+  path: '/gallery',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiHealthRoute = ApiHealthRouteImport.update({
@@ -79,6 +85,7 @@ const ApiAuthOauthExchangeRoute = ApiAuthOauthExchangeRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/gallery': typeof GalleryRoute
   '/api/health': typeof ApiHealthRoute
   '/auth/error': typeof AuthErrorRoute
   '/auth/phone-callback': typeof AuthPhoneCallbackRoute
@@ -92,6 +99,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/gallery': typeof GalleryRoute
   '/api/health': typeof ApiHealthRoute
   '/auth/error': typeof AuthErrorRoute
   '/auth/phone-callback': typeof AuthPhoneCallbackRoute
@@ -106,6 +114,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/gallery': typeof GalleryRoute
   '/api/health': typeof ApiHealthRoute
   '/auth/error': typeof AuthErrorRoute
   '/auth/phone-callback': typeof AuthPhoneCallbackRoute
@@ -121,6 +130,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/gallery'
     | '/api/health'
     | '/auth/error'
     | '/auth/phone-callback'
@@ -134,6 +144,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/gallery'
     | '/api/health'
     | '/auth/error'
     | '/auth/phone-callback'
@@ -147,6 +158,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/gallery'
     | '/api/health'
     | '/auth/error'
     | '/auth/phone-callback'
@@ -161,6 +173,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  GalleryRoute: typeof GalleryRoute
   ApiHealthRoute: typeof ApiHealthRoute
   AuthErrorRoute: typeof AuthErrorRoute
   AuthPhoneCallbackRoute: typeof AuthPhoneCallbackRoute
@@ -180,6 +193,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/gallery': {
+      id: '/gallery'
+      path: '/gallery'
+      fullPath: '/gallery'
+      preLoaderRoute: typeof GalleryRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/health': {
@@ -257,6 +277,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  GalleryRoute: GalleryRoute,
   ApiHealthRoute: ApiHealthRoute,
   AuthErrorRoute: AuthErrorRoute,
   AuthPhoneCallbackRoute: AuthPhoneCallbackRoute,

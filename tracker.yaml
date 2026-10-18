@@ -6,21 +6,21 @@ outcomes:
     title: Groups, members and messages exist in Convex
     area: foundation
     state: in_progress
-    summary: The schema models profiles, groups and pairs, memberships, read state, messages with quote replies and attachments, invite links, push devices and reports. No function uses it yet.
+    summary: The schema models profiles with account deletion, groups and pairs, memberships, removals, private read state and unread rows, posts, deleted placeholders and member events, single-use uploads, reactions with counts, typing, push devices and reports. It passed three design reviews against the mock and is deployed to the dev deployment. No function uses it yet.
     theory: theory.md#groups
     code:
       - convex/schema.ts
     priority: P0
     size: S
-    size_reason: One membership helper that every chat query and mutation uses.
+    size_reason: The access helpers that every public function goes through.
     remaining:
-      - Add the membership check every chat query and mutation goes through.
+      - Add the four access classes (anyone, identity, active, member) that every public function goes through.
 
   - id: chat.sign_in_groups
     title: Sign in and land in your groups
     area: groups
     state: planned
-    summary: The web app signs in through WorkOS AuthKit and Convex verifies its tokens, but no WorkOS environment is connected yet and there is no groups list to land in.
+    summary: A Convex-managed WorkOS team and dev environment are connected to the dev deployment, and Convex trusts their tokens. The sign-in endpoints, the profile setup and the groups list are not built yet.
     theory: theory.md#version-1-journeys
     code:
       - convex/auth.config.ts
@@ -29,7 +29,7 @@ outcomes:
     size: M
     size_reason: WorkOS setup, profile creation on first sign-in, phone sign-in and the groups list on both apps.
     remaining:
-      - Connect a Convex-managed WorkOS environment and enable email code, Google and Apple sign-in.
+      - Enable email code, Google and Apple sign-in in the dev WorkOS environment and build the sign-in endpoints on the web Worker.
       - Create a person's profile on first sign-in.
       - Sign in on the phone.
       - Show the person's groups sorted by latest activity with unread counts.

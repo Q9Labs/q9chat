@@ -1,6 +1,5 @@
 /// <reference types="vite/client" />
-import "@fontsource-variable/geist/index.css";
-import "@fontsource-variable/geist-mono/index.css";
+import "@fontsource-variable/figtree/index.css";
 import "@q9labsai/ui/tokens.css";
 import { ThemeProvider } from "@q9labsai/ui";
 import { createRootRoute, Outlet } from "@tanstack/react-router";
