@@ -230,6 +230,13 @@ test(
         return unread;
       }
       const unread = await seedHistory();
+      const deletedFirst = unread[0];
+      if (!deletedFirst) throw new Error("Missing first unread post");
+      await b.client.mutation(api.messages.remove, { messageId: deletedFirst.messageId });
+      const afterDeletion = await a.client.query(api.groups.get, { groupId });
+      expect(afterDeletion?.status === "member" && afterDeletion.firstUnreadSequence).toBe(
+        deletedFirst.sequence,
+      );
       async function verifyReading() {
         await app.open("/");
         await expect(browser.locator(".list .row .badge:not(.at)")).toContainText("30");
@@ -248,8 +255,10 @@ test(
           };
         }, first.messageId);
         expect(placement.before).toBe(true);
-        expect(placement.body).toBe("Unread 1 @Amira");
+        expect(placement.body).toBe("Message deleted");
         expect(Math.abs(placement.gap - 90) < 3).toBe(true);
+        await expect(browser.locator(`#m-${first.messageId} .bub`)).toHaveText("Message deleted");
+        await expect(browser.locator(".arrival-announcement")).toHaveText("");
         await shot("01-unread");
         await bottom();
         await page.waitForFunction(
@@ -307,6 +316,20 @@ test(
         await page.locator(`#m-${live.messageId}`).waitFor({ state: "visible" });
         await expect(browser.locator(".arrival-announcement")).toHaveText("Bilal: A live arrival");
         await expect(browser.locator("[role=log]")).toHaveAttribute("aria-live", "off");
+        const arrivalId = await page
+          .locator(".arrival-announcement span")
+          .getAttribute("data-arrival");
+        const ownLive = await a.client.mutation(api.messages.send, {
+          groupId,
+          body: "A live own send",
+          clientKey: crypto.randomUUID(),
+          attachments: [],
+        });
+        await page.locator(`[data-sequence="${ownLive.sequence}"]`).waitFor();
+        await expect(browser.locator(".arrival-announcement")).toHaveText("Bilal: A live arrival");
+        expect(await page.locator(".arrival-announcement span").getAttribute("data-arrival")).toBe(
+          arrivalId,
+        );
         await page.waitForFunction(() => {
           const el = document.querySelector("[role=log]");
           return el && el.scrollHeight - el.scrollTop - el.clientHeight <= 1;
@@ -388,6 +411,28 @@ test(
       await expect(browser.locator(`#m-${edited.messageId} .txt`)).toHaveText("After editedited");
       await bottom();
       await shot("05-post-states");
+      const dinaPost = await d.client.mutation(api.messages.send, {
+        groupId,
+        body: "Before account deletion",
+        clientKey: crypto.randomUUID(),
+        attachments: [],
+      });
+      await page.locator(`#m-${dinaPost.messageId}`).waitFor();
+      await page.getByRole("button", { name: "About Dina", exact: true }).first().click();
+      await page.getByRole("dialog", { name: "Dina Journey", exact: true }).waitFor();
+      await d.client.mutation(api.profiles.deleteAccount, {});
+      clients.splice(
+        clients.findIndex(({ client }) => client === d.client),
+        1,
+      );
+      await page.getByRole("dialog", { name: "Deleted account", exact: true }).waitFor();
+      expect(
+        await page
+          .getByRole("dialog")
+          .getByRole("button", { name: "Message", exact: true })
+          .count(),
+      ).toBe(0);
+      await page.getByRole("dialog").getByRole("button", { name: "Close", exact: true }).click();
       const pair = await a.client.mutation(api.groups.openPair, { profileId: b.id });
       await app.open(`/?group=${pair}`);
       await expect(browser.locator(".chat-title b .tt")).toHaveText("Bilal Journey");
@@ -547,7 +592,12 @@ test(
         });
         const posts: { readonly messageId: string; readonly sequence: number }[] = [];
         // Public backend mutations, batched to avoid 450 sequential network round trips.
-        for (let from = 1; from <= 450; from += 5)
+        for (let from = 1; from <= 450; from += 5) {
+          if (from === 246)
+            await a.client.mutation(api.groups.addMembers, {
+              groupId: backlog,
+              profileIds: [c.id],
+            });
           posts.push(
             ...(await Promise.all(
               Array.from({ length: 5 }, (_, index) =>
@@ -564,6 +614,7 @@ test(
               ),
             )),
           );
+        }
         const first = posts.toSorted((left, right) => left.sequence - right.sequence)[0];
         if (!first) throw new Error("Missing backlog seed");
         await app.open(`/?group=${backlog}`);
@@ -629,7 +680,9 @@ test(
               const node = el.querySelector<HTMLElement>(`[data-sequence="${sequence}"]`);
               if (!node) throw new Error("Missing outgoing-page post");
               el.scrollTop +=
-                node.getBoundingClientRect().top - el.getBoundingClientRect().top - 70;
+                node.getBoundingClientRect().top -
+                el.getBoundingClientRect().top -
+                (sequence === 247 ? -1 : 70);
               const bounds = el.getBoundingClientRect();
               const visible = Array.from(el.querySelectorAll<HTMLElement>("[data-sequence]")).find(
                 (item) => item.getBoundingClientRect().bottom > bounds.top,
@@ -641,9 +694,13 @@ test(
                 sequence: Number(visible.dataset["sequence"]),
               };
             },
-            direction === "older" ? 450 : 250,
+            direction === "older" ? 450 : 247,
           );
-          expect(direction === "older" ? anchor.sequence > 400 : anchor.sequence <= 300).toBe(true);
+          expect(direction === "older" ? anchor.sequence > 400 : anchor.sequence === 247).toBe(
+            true,
+          );
+          if (direction === "newer")
+            expect(await page.locator(`[id="${anchor.id}"].sys`).count()).toBe(1);
           // Let the browser dispatch the reversal scroll before releasing server delivery.
           await page.evaluate(
             () =>

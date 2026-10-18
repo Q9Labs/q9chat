@@ -420,7 +420,7 @@ export function History({
     navigation,
     sequence: newFromSequence,
   } = useHistory(group, opened);
-  const [selectedAuthor, setAuthor] = useState<Person | null>(null);
+  const [selectedAuthor, setAuthor] = useState<string | null>(null);
   const [error, setError] = useState("");
   const { photos } = usePhotos(historyPhotoPaths(rows), setError);
   const typing = useTyping(group);
@@ -436,7 +436,7 @@ export function History({
           newFromSequence={newFromSequence}
           typing={typing}
           handlers={handlers}
-          onOpenAuthor={(person) => setAuthor(findAuthor(rows, person.id))}
+          onOpenAuthor={(person) => setAuthor(person.id)}
           menuMessageId={null}
           highlightId={null}
           playing={null}
@@ -456,7 +456,7 @@ export function History({
       ) : null}
       <HistoryComposer title={group.title} />
       <HistoryAuthor
-        person={selectedAuthor}
+        person={selectedAuthor === null ? null : findAuthor(rows, selectedAuthor)}
         onClose={() => setAuthor(null)}
         onMessage={onMessage}
       />
