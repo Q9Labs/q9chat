@@ -1,26 +1,16 @@
 import { api, type Id } from "@q9chat/convex";
-import { eventSentence } from "@q9chat/domain";
 import { useNavigate } from "@tanstack/react-router";
 import { useConvex, useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import {
-  Component,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  useTransition,
-  type ReactNode,
-} from "react";
+import { Component, useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 
 import { ChatHeader } from "../chat/chat-view.js";
 import type { Avatar as AvatarView, GroupDetail, PersonMatch } from "../chat/types.js";
 import { NewGroupDialog } from "../screens/dialogs.js";
 import { GroupInfo } from "../screens/group-info.js";
-import { Avatar } from "../ui/avatar.js";
 import { Button } from "../ui/controls.js";
-import { Dialog, DialogActions } from "../ui/overlay.js";
 import { invalidInviteCopy, journeyError, removedInviteCopy } from "./group-errors.js";
+import { History } from "./history.js";
 import { clearSavedJoin } from "./oauth.js";
 import { usePhotos } from "./photos.js";
 import { pickerLimit } from "./picker-limit.js";
@@ -373,93 +363,6 @@ function InviteState({
   );
 }
 
-function canMessage(person: ActiveGroup["members"][number]) {
-  return !person.isYou && !person.deleted;
-}
-
-function History({
-  group,
-  onMessage,
-  photos,
-}: {
-  readonly group: ActiveGroup;
-  readonly onMessage: (id: Id<"profiles">) => void;
-  readonly photos: ReadonlyMap<string, string>;
-}) {
-  const messages = useQuery(
-    api.messages.range,
-    group.lastSequence > 0
-      ? {
-          groupId: group.groupId,
-          fromSequence: Math.max(1, group.lastSequence - 99),
-          toSequence: group.lastSequence,
-        }
-      : "skip",
-  );
-  const [author, setAuthor] = useState<ActiveGroup["members"][number] | null>(null);
-  const log = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => {
-    if (messages && log.current) log.current.scrollTop = log.current.scrollHeight;
-  }, [messages]);
-  return (
-    <>
-      <div ref={log} className="tl" role="log" aria-label="Messages">
-        {group.kind === "pair" ? (
-          <div className="sys">
-            This is the start of your group with <b>{group.partner?.name}</b>
-          </div>
-        ) : null}
-        {(messages ?? []).map((message) =>
-          message.kind === "event" ? (
-            <div className="sys" key={message.id}>
-              {message.event.type === "joined"
-                ? `${message.event.person.name} joined`
-                : eventSentence(message.event)}
-            </div>
-          ) : (
-            <div className="mrow" key={message.id}>
-              <button
-                type="button"
-                className="member-button"
-                aria-label={`About ${message.author.name}`}
-                onClick={() => setAuthor(message.author)}
-              >
-                <Avatar avatar={avatar(message.author, photos)} size="sm" />
-                {message.author.name}
-              </button>
-              <p>{message.kind === "deleted" ? "This message was deleted" : message.body}</p>
-            </div>
-          ),
-        )}
-      </div>
-      <div className="composer">
-        <div className="field">
-          <textarea aria-label="Message" rows={1} placeholder={`Message ${group.title}`} disabled />
-        </div>
-      </div>
-      {author ? (
-        <Dialog label={author.fullName} onClose={() => setAuthor(null)}>
-          <h3>{author.fullName}</h3>
-          <DialogActions>
-            <Button onClick={() => setAuthor(null)}>Close</Button>
-            {!canMessage(author) ? null : (
-              <Button
-                variant="solid"
-                onClick={() => {
-                  onMessage(author.id);
-                  setAuthor(null);
-                }}
-              >
-                Message
-              </Button>
-            )}
-          </DialogActions>
-        </Dialog>
-      ) : null}
-    </>
-  );
-}
-
 function useInvite(token: string | undefined) {
   const valid = token !== undefined && /^[A-Za-z0-9]{16,32}$/u.test(token);
   const info = useQuery(api.groups.inviteInfo, valid ? { token } : "skip");
@@ -533,6 +436,7 @@ function LiveGroupInfo({
 
 function useInfoState(detail: Detail | undefined) {
   const [open, setOpen] = useState(false);
+  if (detail?.status === "removed" && open) setOpen(false);
   return { infoOpen: open && detail?.status === "member", setInfoOpen: setOpen };
 }
 
@@ -672,7 +576,7 @@ function LoadedGroup({
   return (
     <>
       <ChatHeader group={group} onOpenInfo={onInfo} onSearchGroup={onUnavailable} />
-      <History key={detail.groupId} group={detail} onMessage={onMessage} photos={photos} />
+      <History key={detail.groupId} group={detail} onMessage={onMessage} />
     </>
   );
 }

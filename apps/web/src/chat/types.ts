@@ -130,7 +130,12 @@ export type ReplyTo =
 
 export type MemberEvent =
   | { readonly type: "created"; readonly by: Author }
-  | { readonly type: "added"; readonly by: Author; readonly people: readonly Author[] }
+  | {
+      readonly type: "added";
+      readonly by: Author;
+      readonly people: readonly Author[];
+      readonly othersCount?: number;
+    }
   | { readonly type: "removed"; readonly by: Author; readonly people: readonly Author[] }
   | { readonly type: "joined"; readonly people: readonly Author[] }
   | { readonly type: "left"; readonly people: readonly Author[] }
@@ -150,6 +155,7 @@ export interface PostView extends MessageBase {
   readonly kind: "post";
   readonly author: Author;
   readonly body: string;
+  readonly attachmentLabels?: readonly string[];
   /** First names that `@Name` highlights in the body. */
   readonly mentions: readonly string[];
   readonly attachments: readonly Attachment[];

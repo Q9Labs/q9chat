@@ -1,9 +1,10 @@
-import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useState, type ReactNode } from "react";
 
 import { Icon } from "../ui/icons.js";
 import { useRoot } from "../ui/root.js";
 import { authorLabel } from "./format.js";
 import { Message, MessageRun, type MessageHandlers } from "./message.js";
+import { useTimelineViewport } from "./timeline-viewport.js";
 import { buildTimeline } from "./timeline.js";
 import type { Author, EventView, MemberEvent, MessageView } from "./types.js";
 
@@ -20,6 +21,11 @@ function Names({ people }: { readonly people: readonly Author[] }) {
   );
 }
 
+function OtherMembers({ event }: { readonly event: MemberEvent }) {
+  if (event.type !== "added") return null;
+  return event.othersCount ? ` and ${event.othersCount} others` : null;
+}
+
 function eventNodes(event: MemberEvent): ReactNode {
   if (event.type === "created") {
     return (
@@ -32,6 +38,7 @@ function eventNodes(event: MemberEvent): ReactNode {
     return (
       <>
         <b>{authorLabel(event.by)}</b> {event.type} <Names people={event.people} />
+        <OtherMembers event={event} />
       </>
     );
   }
@@ -77,6 +84,9 @@ function TypingLine({ names: people }: { readonly names: readonly string[] }) {
 }
 
 export interface TimelineProps {
+  readonly readOnly?: boolean;
+  readonly onVisible?: (sequence: number) => void;
+  readonly onOlder?: (() => void) | undefined;
   readonly messages: readonly MessageView[];
   /** First unread sequence, captured when the group opened; null for no divider. */
   readonly newFromSequence: number | null;
@@ -107,19 +117,16 @@ export function Timeline({
   menuMessageId,
   highlightId,
   playing,
+  readOnly = false,
+  onVisible,
+  onOlder,
 }: TimelineProps) {
   const { clock } = useRoot();
-  const log = useRef<HTMLDivElement>(null);
   const [far, setFar] = useState(false);
   const [compact, setCompact] = useState(false);
   const items = buildTimeline(messages, clock, newFromSequence);
 
-  useLayoutEffect(() => {
-    const el = log.current;
-    if (el === null) return;
-    const divider = el.querySelector<HTMLElement>("[data-new]");
-    el.scrollTop = divider === null ? el.scrollHeight : divider.offsetTop - 90;
-  }, []);
+  const log = useTimelineViewport(messages, setFar, onVisible);
 
   useEffect(() => {
     const measure = new ResizeObserver(([entry]) => {
@@ -127,7 +134,7 @@ export function Timeline({
     });
     if (log.current !== null) measure.observe(log.current);
     return () => measure.disconnect();
-  }, []);
+  }, [log]);
 
   const toBottom = () => {
     const el = log.current;
@@ -148,6 +155,7 @@ export function Timeline({
         onScroll={(event) => {
           const el = event.currentTarget;
           setFar(el.scrollHeight - el.scrollTop - el.clientHeight > FAR_FROM_BOTTOM);
+          if (el.scrollTop < 40) onOlder?.();
         }}
       >
         {items.map((item) => {
@@ -181,6 +189,7 @@ export function Timeline({
                   menuOpen={menuMessageId === message.id}
                   playProgress={playing?.messageId === message.id ? playing.progress : null}
                   handlers={handlers}
+                  readOnly={readOnly}
                 />
               ))}
             </MessageRun>
