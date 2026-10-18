@@ -4,8 +4,8 @@ import type { ConvexHttpClient } from "convex/browser";
 import { expect } from "e2e";
 import { Schema } from "effect";
 
-import { browserEngine, devClient } from "./support/browser.js";
-import { magicCode, removeTestUser } from "./support/workos.js";
+import { browserEngine, devClient, signInDevAccount } from "./support/browser.js";
+import { removeTestUser } from "./support/workos.js";
 
 type BrowserContext = ReturnType<NonNullable<ReturnType<typeof surfaceOf>>["context"]>;
 const QueryChanges = Schema.Struct({
@@ -28,7 +28,6 @@ const RangeRequest = Schema.Struct({
   toSequence: Schema.Number,
 });
 const ServerPing = Schema.Struct({ type: Schema.Literal("Ping") });
-const origin = "http://localhost:3000";
 
 test(
   "journey 3: unread, history, live activity, typing and post states",
@@ -87,24 +86,9 @@ test(
     async function account(person: string, context: BrowserContext) {
       const email = `q9-j3-${person.toLowerCase()}-${stamp}@example.net`;
       addresses.push(email);
-      const headers = { Origin: origin };
-      expect(
-        (
-          await context.request.post(`${origin}/api/auth/email/start`, { headers, data: { email } })
-        ).status(),
-      ).toBe(200);
-      expect(
-        (
-          await context.request.post(`${origin}/api/auth/email/verify`, {
-            headers,
-            data: { email, code: await magicCode(email), client: "web" },
-          })
-        ).status(),
-      ).toBe(200);
-      const client = await devClient(context);
-      clients.push({ client, context });
-      const id = await client.action(api.profiles.setUp, { displayName: `${person} Journey` });
-      return { client, id };
+      const result = await signInDevAccount(context, email, `${person} Journey`);
+      clients.push({ client: result.client, context });
+      return result;
     }
     async function shot(name: string) {
       await page.screenshot({ path: `artifacts/j3-round3/${name}.png` });
@@ -523,6 +507,15 @@ test(
         process.stdout.write(
           "J3 announcer: live page boundary and repeated text update distinct arrival nodes; 100-character limit verified\n",
         );
+        const coraPost = await c.client.mutation(api.messages.send, {
+          groupId: backlog,
+          body: "Cora before the history slide",
+          clientKey: crypto.randomUUID(),
+          attachments: [],
+        });
+        await page.locator(`#m-${coraPost.messageId}`).waitFor();
+        await page.getByRole("button", { name: "About Cora", exact: true }).first().click();
+        await page.getByRole("dialog", { name: "Cora Journey", exact: true }).waitFor();
         const deliveryConnection = connectionCount;
         holdResponses = true;
         for (let index = 0; index < 305; index += 5)
@@ -579,6 +572,14 @@ test(
           { timeout: 10000 },
         );
         expect(currentSubscriptions <= 3).toBe(true);
+        await page.getByRole("dialog").waitFor({ state: "detached" });
+        await expect
+          .poll(async () => {
+            const detail = await a.client.query(api.groups.get, { groupId: backlog });
+            return detail?.status === "member" && detail.lastReadSequence >= catchUp.sequence;
+          })
+          .toBe(true);
+        process.stdout.write("J3 author eviction: dialog closes and live read tracking resumes\n");
         process.stdout.write(
           "J3 bottom-pinned catch-up: 306 held arrivals replaced the obsolete anchor; latest visible\n",
         );
@@ -590,14 +591,17 @@ test(
           memberIds: [b.id],
           inviteToken: crypto.randomUUID().replaceAll("-", ""),
         });
+        async function addCoraEvent() {
+          await a.client.mutation(api.groups.addMembers, { groupId: backlog, profileIds: [c.id] });
+          const snapshot = await a.client.query(api.groups.get, { groupId: backlog });
+          if (snapshot?.status !== "member") throw new Error("Missing seeded history");
+          return snapshot.lastSequence;
+        }
+        let eventSequence = 0;
         const posts: { readonly messageId: string; readonly sequence: number }[] = [];
         // Public backend mutations, batched to avoid 450 sequential network round trips.
         for (let from = 1; from <= 450; from += 5) {
-          if (from === 246)
-            await a.client.mutation(api.groups.addMembers, {
-              groupId: backlog,
-              profileIds: [c.id],
-            });
+          if (from === 246) eventSequence = await addCoraEvent();
           posts.push(
             ...(await Promise.all(
               Array.from({ length: 5 }, (_, index) =>
@@ -676,13 +680,11 @@ test(
           }, direction === "older");
           await page.locator('[role=log][aria-busy="true"]').waitFor();
           const anchor = await page.locator("[role=log]").evaluate(
-            (el, sequence) => {
+            (el, { sequence, offset }) => {
               const node = el.querySelector<HTMLElement>(`[data-sequence="${sequence}"]`);
               if (!node) throw new Error("Missing outgoing-page post");
               el.scrollTop +=
-                node.getBoundingClientRect().top -
-                el.getBoundingClientRect().top -
-                (sequence === 247 ? -1 : 70);
+                node.getBoundingClientRect().top - el.getBoundingClientRect().top - offset;
               const bounds = el.getBoundingClientRect();
               const visible = Array.from(el.querySelectorAll<HTMLElement>("[data-sequence]")).find(
                 (item) => item.getBoundingClientRect().bottom > bounds.top,
@@ -694,11 +696,14 @@ test(
                 sequence: Number(visible.dataset["sequence"]),
               };
             },
-            direction === "older" ? 450 : 247,
+            {
+              sequence: direction === "older" ? 450 : eventSequence,
+              offset: direction === "older" ? 70 : -1,
+            },
           );
-          expect(direction === "older" ? anchor.sequence > 400 : anchor.sequence === 247).toBe(
-            true,
-          );
+          expect(
+            direction === "older" ? anchor.sequence > 400 : anchor.sequence === eventSequence,
+          ).toBe(true);
           if (direction === "newer")
             expect(await page.locator(`[id="${anchor.id}"].sys`).count()).toBe(1);
           // Let the browser dispatch the reversal scroll before releasing server delivery.

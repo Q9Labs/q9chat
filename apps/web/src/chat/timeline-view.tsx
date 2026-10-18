@@ -103,6 +103,7 @@ interface TimelineReading {
   readonly onAnchor: ((sequence: number) => void) | undefined;
   readonly announcement: { readonly id: string; readonly text: string };
   readonly loading: boolean;
+  readonly latestRequest?: number;
 }
 const STATIC_READING: TimelineReading = {
   onVisible: undefined,
@@ -161,7 +162,7 @@ function TimelineEntry({
     <MessageRun author={item.author} time={item.time} onOpenAuthor={onOpenAuthor}>
       {item.messages.map((message) => (
         <Message
-          key={message.id}
+          key={message.renderKey ?? message.id}
           message={message}
           timeZone={timeZone}
           compact={compact}
@@ -245,6 +246,7 @@ export function Timeline({
     reading.loading,
     reading.onAtBottom,
     reading.onAnchor,
+    reading.latestRequest,
   );
 
   const compact = useCompactTimeline(log);

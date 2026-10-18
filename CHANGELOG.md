@@ -9,6 +9,7 @@
 - **Headless sign-in endpoints and web sessions**: Sign in through email codes, Google or Apple with shared web and phone auth endpoints and a cookie-backed web session.
 - **Sign in and find your groups on the web**: Sign in by email code, set up a profile, see live group previews and unread counts, and manage your account and sign out. Google and Apple start the shared sign-in flow.
 - **Web conversation history and unread position**: Open a group at its unread divider, load older history, follow live messages and see expiring typing indicators.
+- **Send text on the web**: Messages appear immediately, failed sends can be retried without duplicates, and each group keeps its own draft across reloads.
 
 ### Fixed
 

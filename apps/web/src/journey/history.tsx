@@ -11,6 +11,9 @@ import { Dialog, DialogActions } from "../ui/overlay.js";
 import { useArrivalAnnouncement } from "./arrival-announcement.js";
 import { journeyError } from "./group-errors.js";
 import { usePhotos } from "./photos.js";
+import { useSenderTyping } from "./sender-typing.js";
+import { TextComposer } from "./text-composer.js";
+import { useTextOutbox } from "./text-outbox.js";
 
 type Group = Extract<FunctionReturnType<typeof api.groups.get>, { status: "member" }>;
 type Row = FunctionReturnType<typeof api.messages.range>[number];
@@ -61,6 +64,7 @@ function messageView(row: Row, group: Group, photos: ReadonlyMap<string, string>
   return {
     ...row,
     author: person,
+    renderKey: row.author.isYou ? row.clientKey : row.id,
     mentions: group.members.filter((p) => mentionIds.has(p.id)).map((p) => p.name),
     attachments: [],
     attachmentLabels: row.attachments.map((file) => ({
@@ -157,7 +161,15 @@ function useHistoryRange(group: Group, window: HistoryWindow) {
   }, [pages]);
 }
 
-function useRead(group: Group, initial: number, setError: (error: string) => void) {
+function useRead(
+  group: Group,
+  initial: number,
+  options: {
+    readonly setError: (error: string) => void;
+    readonly covered: boolean;
+    readonly authorOpen: boolean;
+  },
+) {
   const markRead = useMutation(api.readStates.markRead);
   const read = useRef(initial);
   const pending = useRef(false);
@@ -173,12 +185,14 @@ function useRead(group: Group, initial: number, setError: (error: string) => voi
         read.current = next;
       }
     } catch (cause) {
-      setError(journeyError(cause));
+      options.setError(journeyError(cause));
     } finally {
       pending.current = false;
     }
   }
-  return seen;
+  return options.covered || options.authorOpen
+    ? undefined
+    : (sequence: number) => void seen(sequence);
 }
 
 function historyMessages(
@@ -369,6 +383,7 @@ function useHistory(group: Group, opened: Opening) {
     rows,
     loading: range.loading,
     start,
+    atLatest: window.last >= latestPage,
     sequence: sequenceInWindow(rows, opened.firstUnread),
     ...historyControls({
       window,
@@ -393,6 +408,13 @@ function historyPhotoPaths(rows: readonly Row[]) {
   });
 }
 
+function useAuthorSelection(rows: readonly Row[], loading: boolean) {
+  const [id, select] = useState<string | null>(null);
+  const person = id === null ? null : findAuthor(rows, id);
+  if (id !== null && person === null && !loading) select(null);
+  return { person, select };
+}
+
 export function History({
   group,
   onMessage,
@@ -412,6 +434,7 @@ export function History({
     rows,
     loading,
     start,
+    atLatest,
     older,
     newer,
     latest,
@@ -420,30 +443,60 @@ export function History({
     navigation,
     sequence: newFromSequence,
   } = useHistory(group, opened);
-  const [selectedAuthor, setAuthor] = useState<string | null>(null);
+  const { person: selectedPerson, select: setAuthor } = useAuthorSelection(rows, loading);
   const [error, setError] = useState("");
   const { photos } = usePhotos(historyPhotoPaths(rows), setError);
   const typing = useTyping(group);
-  const seen = useRead(group, opened.read, setError);
+  const onVisible = useRead(group, opened.read, {
+    setError,
+    covered,
+    authorOpen: selectedPerson !== null,
+  });
   const announcement = useArrivalAnnouncement(rows, group.lastSequence, opened.latest, navigation);
-  const messages = historyMessages(rows, group, photos, start, opened.at);
+  const outbox = useTextOutbox(group, rows);
+  const senderTyping = useSenderTyping(group.groupId);
+  const [latestRequest, requestLatest] = useState(0);
+  const messages = [
+    ...historyMessages(rows, group, photos, start, opened.at),
+    ...(atLatest ? outbox.messages : []),
+  ];
+  function toLatest() {
+    latest();
+    requestLatest((value) => value + 1);
+  }
+  function sendText() {
+    if (!outbox.submit()) return;
+    senderTyping.clear();
+    toLatest();
+  }
+  const issue = [error, outbox.error, senderTyping.error].find(Boolean);
+  function changeDraft(value: string) {
+    outbox.change(value);
+    senderTyping.change(value);
+  }
+  function retry(message: MessageView) {
+    outbox.retry(message.id);
+    toLatest();
+  }
   return (
     <>
-      {error ? <p role="alert">{error}</p> : null}
+      {issue ? <p role="alert">{issue}</p> : null}
       {rows.length || !loading ? (
         <Timeline
           messages={messages}
           newFromSequence={newFromSequence}
           typing={typing}
-          handlers={handlers}
+          handlers={{
+            ...handlers,
+            onRetry: retry,
+          }}
           onOpenAuthor={(person) => setAuthor(person.id)}
           menuMessageId={null}
           highlightId={null}
           playing={null}
           readOnly
           reading={{
-            onVisible:
-              covered || selectedAuthor !== null ? undefined : (sequence) => void seen(sequence),
+            onVisible,
             onAnchor: setAnchor,
             announcement,
             onOlder: older,
@@ -451,26 +504,24 @@ export function History({
             onLatest: latest,
             onAtBottom: setAtBottom,
             loading,
+            latestRequest,
           }}
         />
-      ) : null}
-      <HistoryComposer title={group.title} />
+      ) : (
+        <output className="tl" aria-label="Loading messages" />
+      )}
+      <TextComposer
+        title={group.title}
+        value={outbox.draft}
+        onChange={changeDraft}
+        onSend={sendText}
+        onBlur={senderTyping.clear}
+      />
       <HistoryAuthor
-        person={selectedAuthor === null ? null : findAuthor(rows, selectedAuthor)}
+        person={selectedPerson}
         onClose={() => setAuthor(null)}
         onMessage={onMessage}
       />
     </>
-  );
-}
-
-function HistoryComposer({ title }: { readonly title: string }) {
-  const name = title.length > 28 ? `${title.slice(0, 27)}…` : title;
-  return (
-    <div className="composer">
-      <div className="field">
-        <textarea aria-label="Message" rows={1} placeholder={`Message ${name}`} disabled />
-      </div>
-    </div>
   );
 }

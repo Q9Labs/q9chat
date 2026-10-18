@@ -16,6 +16,9 @@ export interface Recording {
 }
 
 export interface ComposerProps {
+  readonly textOnly?: boolean;
+  readonly onBlur?: () => void;
+  readonly sendDisabled?: boolean;
   readonly title: string;
   readonly value: string;
   readonly onChange: (value: string) => void;
@@ -106,7 +109,9 @@ function ModeBar({
 function SendButton({
   editing,
   onSend,
+  disabled,
 }: {
+  readonly disabled: boolean | undefined;
   readonly editing: boolean;
   readonly onSend: () => void;
 }) {
@@ -114,6 +119,7 @@ function SendButton({
     <button
       type="button"
       className={`send${editing ? " keep" : ""}`}
+      disabled={disabled}
       aria-label={editing ? "Save edit" : "Send"}
       onClick={onSend}
     >
@@ -180,6 +186,7 @@ function ComposerField(props: ComposerFieldProps) {
             ref={setAttach}
             type="button"
             className="ib"
+            disabled={props.textOnly}
             aria-label="Attach a photo or file"
             aria-haspopup="menu"
             aria-expanded={attachOpen}
@@ -196,18 +203,21 @@ function ComposerField(props: ComposerFieldProps) {
           value={value}
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={onKeyDown}
+          onBlur={props.onBlur}
+          aria-invalid={value.length > 4000 || undefined}
         />
         {editing ? null : (
           <button
             type="button"
             className="ib rec"
+            disabled={props.textOnly}
             aria-label="Record a voice note"
             onClick={onRecord}
           >
             <Icon name="mic" />
           </button>
         )}
-        <SendButton editing={editing} onSend={onSend} />
+        <SendButton editing={editing} onSend={onSend} disabled={props.sendDisabled} />
       </div>
       {attachOpen ? (
         <Menu
