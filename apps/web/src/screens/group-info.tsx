@@ -191,9 +191,11 @@ function MemberRow({
       </span>
       {member.isYou ? null : (
         <span className="ma">
-          <button type="button" className="member-button" onClick={() => onMessage(member)}>
-            Message
-          </button>
+          {member.deleted ? null : (
+            <button type="button" className="member-button" onClick={() => onMessage(member)}>
+              Message
+            </button>
+          )}
           <button type="button" className="member-button danger" onClick={() => onRemove(member)}>
             Remove
           </button>

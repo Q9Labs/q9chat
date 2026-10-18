@@ -240,6 +240,7 @@ function Groups({
   };
   const rows = (groups ?? []).map((row) => groupRow(row, photos));
   const workspace = useGroupJourney({
+    covered: accountOpen,
     selectedGroup: useSelectedGroup(groups),
     token: useContext(InviteToken),
     onNotice: setNotice,

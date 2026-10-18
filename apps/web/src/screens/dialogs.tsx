@@ -261,7 +261,13 @@ export function NewGroupDialog(props: NewGroupDialogProps) {
   const title = add ? `Add people to ${groupTitle ?? ""}` : "New group";
 
   return (
-    <Dialog label={title} size="wide" onClose={props.onClose}>
+    <Dialog
+      label={title}
+      size="wide"
+      onClose={() => {
+        if (!props.pending) props.onClose();
+      }}
+    >
       <h3>{title}</h3>
       <p className="sub">
         {add
@@ -283,7 +289,9 @@ export function NewGroupDialog(props: NewGroupDialogProps) {
       <GroupInvite {...props} />
       {props.error ? <p role="alert">{props.error}</p> : null}
       <DialogActions>
-        <Button onClick={props.onClose}>Cancel</Button>
+        <Button disabled={props.pending} onClick={props.onClose}>
+          Cancel
+        </Button>
         <Button
           variant="solid"
           disabled={props.pending === true || !canSubmit(props)}

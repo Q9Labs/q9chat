@@ -63,12 +63,21 @@ function Body({ text, mentions }: { readonly text: string; readonly mentions: re
 }
 
 /** A thin accent bar with the original sender and a one-line summary. No box. */
-function QuoteBar({ reply, onOpen }: { readonly reply: ReplyTo; readonly onOpen: () => void }) {
+function QuoteBar({
+  reply,
+  onOpen,
+  readOnly,
+}: {
+  readonly reply: ReplyTo;
+  readonly onOpen: () => void;
+  readonly readOnly: boolean;
+}) {
   if (reply.deleted === true) {
     return (
       <button
         type="button"
         className="quote"
+        disabled={readOnly}
         aria-label="Quoted message was deleted. Go to it."
         onClick={onOpen}
       >
@@ -81,6 +90,7 @@ function QuoteBar({ reply, onOpen }: { readonly reply: ReplyTo; readonly onOpen:
     <button
       type="button"
       className="quote"
+      disabled={readOnly}
       aria-label={`Quoted message from ${who}. Go to it.`}
       onClick={onOpen}
     >
@@ -95,10 +105,12 @@ function ReactionPills({
   reactions,
   mine,
   onToggle,
+  readOnly,
 }: {
   readonly reactions: readonly Reaction[];
   readonly mine: boolean;
   readonly onToggle: (emoji: Emoji) => void;
+  readonly readOnly: boolean;
 }) {
   const shown = EMOJIS.flatMap((emoji) =>
     reactions.filter((reaction) => reaction.emoji === emoji && reaction.count > 0),
@@ -113,9 +125,14 @@ function ReactionPills({
             key={reaction.emoji}
             type="button"
             className={`chip${reaction.mine ? " me" : ""}`}
+            disabled={readOnly}
             aria-pressed={reaction.mine}
-            aria-label={`${reaction.emoji} ${reaction.count}: ${who}`}
-            data-tip={`${who} reacted with ${reaction.emoji}`}
+            aria-label={
+              readOnly
+                ? `${reaction.emoji} ${reaction.count} reactions`
+                : `${reaction.emoji} ${reaction.count}: ${who}`
+            }
+            data-tip={readOnly ? undefined : `${who} reacted with ${reaction.emoji}`}
             data-tip-side={mine ? "start" : "end"}
             onClick={() => onToggle(reaction.emoji)}
           >
@@ -142,6 +159,7 @@ export interface MessageHandlers {
 }
 
 interface MessageProps {
+  readonly readOnly?: boolean;
   readonly message: RunMessage;
   readonly timeZone: string | undefined;
   /** The timeline is narrow: the five reactions move into the More menu. */
@@ -167,7 +185,11 @@ function DeletedMessage({
   readonly highlighted: boolean;
 }) {
   return (
-    <div className={messageClass(undefined, highlighted, false)} id={`m-${message.id}`}>
+    <div
+      className={messageClass(undefined, highlighted, false)}
+      id={`m-${message.id}`}
+      data-sequence={message.sequence}
+    >
       <div className="bub gone">
         <span className="del">
           <Icon name="ban" />
@@ -182,16 +204,20 @@ function DeletedMessage({
 function Bubble({
   message,
   onOpenQuote,
+  readOnly,
 }: {
   readonly message: PostView;
   readonly onOpenQuote: (reply: ReplyTo) => void;
+  readonly readOnly: boolean;
 }) {
   const reply = message.replyTo;
   const hasText = message.body !== "";
   if (reply === null && !hasText) return null;
   return (
     <div className="bub">
-      {reply === null ? null : <QuoteBar reply={reply} onOpen={() => onOpenQuote(reply)} />}
+      {reply === null ? null : (
+        <QuoteBar reply={reply} onOpen={() => onOpenQuote(reply)} readOnly={readOnly} />
+      )}
       {hasText ? (
         <div className="txt">
           <Body text={message.body} mentions={message.mentions} />
@@ -439,26 +465,37 @@ export function Message({
   menuOpen,
   playProgress,
   handlers,
+  readOnly = false,
 }: MessageProps) {
   if (message.kind === "deleted") {
     return <DeletedMessage message={message} highlighted={highlighted} />;
   }
   const sendState = message.sendState;
   return (
-    <div className={messageClass(sendState, highlighted, menuOpen)} id={`m-${message.id}`}>
-      <Bubble message={message} onOpenQuote={handlers.onOpenQuote} />
+    <div
+      className={messageClass(sendState, highlighted, menuOpen)}
+      id={`m-${message.id}`}
+      data-sequence={message.sequence}
+    >
+      <Bubble message={message} onOpenQuote={handlers.onOpenQuote} readOnly={readOnly} />
+      {message.attachmentLabels?.map(({ id, label }) => (
+        <div className="file" key={id}>
+          {label}
+        </div>
+      ))}
       <Attachments
         message={message}
         playProgress={playProgress}
         onTogglePlay={handlers.onTogglePlay}
       />
       <ReactionPills
+        readOnly={readOnly}
         reactions={message.reactions}
         mine={message.author.isYou}
         onToggle={(emoji) => handlers.onReact(message, emoji)}
       />
       <SendStatus sendState={sendState} onRetry={() => handlers.onRetry(message)} />
-      {sendState === undefined ? (
+      {sendState === undefined && !readOnly ? (
         <MessageActions
           message={message}
           time={clockTime(message.createdAt, timeZone)}
@@ -500,7 +537,7 @@ export function MessageRun({
       <button
         type="button"
         className="avb"
-        aria-label={`Open your group with ${author.name}`}
+        aria-label={`About ${author.name}`}
         onClick={() => onOpenAuthor(author)}
       >
         <Avatar avatar={author.avatar} />

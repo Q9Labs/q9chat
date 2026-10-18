@@ -209,10 +209,35 @@ are deliberately omitted; see [group member privacy](../../docs/group-member-pri
 OAuth passes it through the existing same-origin `returnTo` parameter. Members
 open the group directly; removed people and invalid links show plain copy.
 
-The chat reads the newest 100 sequences without marking them read. Sending,
-older pages, search, notifications, removal, leaving and account deletion are
-outside this journey. Their controls remain unavailable.
+Journey 3 extends the chat history; sending, search, notification settings,
+removal and leaving remain outside these web journeys.
 
 `tests/j2-web.e2e.ts` uses fresh staging email-code accounts and independent
 browser contexts to verify live lists, member history, pair reuse and invite
 joining. Run it with journey 1 using `pnpm test:e2e` on the disposable cloud test box.
+
+## Journey 3
+
+Conversation history keeps at most three live `messages.range` pages of 100 sequences.
+The window opens around the captured read boundary, pages in either direction,
+and drops off-screen pages. Jump to latest replaces it with the newest page and preceding context.
+Opening captures the private read boundary once, places the unread divider before
+an incoming post, and positions it 90px below the list top (clamped). Without a
+divider, the list opens at the bottom. Paging preserves a visible message’s offset;
+Jump to latest appears over 240px from the bottom. Live arrivals follow only when
+already at the bottom and the window reaches the latest page. Otherwise the jump
+control also indicates history outside the window. Keyboard activation focuses the
+message log; typing status is a separate live region.
+
+Visible posts advance `readStates.markRead` only in a focused, visible window.
+Typing subscriptions expire locally as well as on the backend. Pair headers omit
+the member count, and Group info never shows member email addresses. Quotes and
+reaction counts are display-only. Attachment metadata is shown without fetching
+protected files; rendering and playback belong to journey 4.
+
+`tests/j3-web.e2e.ts` seeds fresh staging accounts and genuine dev history via the
+public APIs. Run it with J1 and J2 using `pnpm test:e2e` on test box. It writes its
+live flow screenshots to `artifacts/j3-round3/` and deletes its profiles and WorkOS users
+in a cleanup, including on assertion failure.
+
+History captures `groups.get.firstUnreadSequence` at open: null starts at latest, otherwise the indexed unread sequence selects the initial page and divider. It does not scan history to discover incoming posts. Automatic page slides are canceled if the visible post/event anchor moves into the outgoing page; explicit Jump to latest replaces the window and focuses the log once. Modal coverage is passed from the journey and pauses visible-post read marking. The history log has live announcements off; a separate hidden polite region announces incoming posts, not history navigation. Speech output is not verified by the DOM e2e.
