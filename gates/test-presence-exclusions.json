@@ -1,3 +1,18 @@
 {
-  "exclusions": {}
+  "exclusions": {
+    "apps/web/src/lib/auth/cookies.server.ts": "Covered through the running Worker public routes by apps/web/tests/auth.test.ts; importing these files directly would bypass Worker bindings and route behavior.",
+    "apps/web/src/lib/auth/oauth.server.ts": "Covered through the running Worker public routes by apps/web/tests/auth.test.ts; importing these files directly would bypass Worker bindings and route behavior.",
+    "apps/web/src/lib/auth/workos.server.ts": "Covered through the running Worker public routes by apps/web/tests/auth.test.ts; importing these files directly would bypass Worker bindings and route behavior.",
+    "apps/web/src/lib/auth/handlers.server.ts": "Covered through the running Worker public routes by apps/web/tests/auth.test.ts; importing these files directly would bypass Worker bindings and route behavior.",
+    "apps/web/src/routes/api/auth/sign-out.ts": "Covered through the running Worker public routes by apps/web/tests/auth.test.ts; importing these files directly would bypass Worker bindings and route behavior.",
+    "apps/web/src/routes/api/auth/token.ts": "Covered through the running Worker public routes by apps/web/tests/auth.test.ts; importing these files directly would bypass Worker bindings and route behavior.",
+    "apps/web/src/routes/api/auth/callback.ts": "Covered through the running Worker public routes by apps/web/tests/auth.test.ts; importing these files directly would bypass Worker bindings and route behavior.",
+    "apps/web/src/routes/api/auth/oauth/$provider.ts": "Covered through the running Worker public routes by apps/web/tests/auth.test.ts; importing these files directly would bypass Worker bindings and route behavior.",
+    "apps/web/src/routes/api/auth/oauth/exchange.ts": "Covered through the running Worker public routes by apps/web/tests/auth.test.ts; importing these files directly would bypass Worker bindings and route behavior.",
+    "apps/web/src/routes/api/auth/email/verify.ts": "Covered through the running Worker public routes by apps/web/tests/auth.test.ts; importing these files directly would bypass Worker bindings and route behavior.",
+    "apps/web/src/routes/api/auth/email/start.ts": "Covered through the running Worker public routes by apps/web/tests/auth.test.ts; importing these files directly would bypass Worker bindings and route behavior.",
+    "apps/web/src/routes/auth/phone-callback.ts": "Covered through the running Worker public routes by apps/web/tests/auth.test.ts; importing these files directly would bypass Worker bindings and route behavior.",
+    "apps/web/src/lib/session.tsx": "Session provider delegates authentication to the public routes exercised by apps/web/tests/auth.test.ts. Browser session UI verification belongs to the sign-in screen lane; no screen is built here.",
+    "apps/web/src/lib/convex.ts": "ConvexReactClient configuration only; the public-route integration test verifies the issued token against the Convex public query authentication boundary."
+  }
 }

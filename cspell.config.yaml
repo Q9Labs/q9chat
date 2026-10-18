@@ -35,6 +35,8 @@ words:
   - oxfmt
   - oxlint
   - pnpm
+  - PKCE
+  - HMAC
   - q9gate
   - q9labs
   - regclass

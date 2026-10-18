@@ -1,13 +1,14 @@
 import { Button } from "@q9labsai/ui";
 import { createFileRoute } from "@tanstack/react-router";
-import { useAuth } from "@workos-inc/authkit-react";
 import { useConvexAuth } from "convex/react";
+
+import { useSession } from "../lib/session.js";
 
 export const Route = createFileRoute("/")({ component: HomePage });
 
 // Placeholder until the groups list exists: proves sign-in reaches Convex.
 function HomePage() {
-  const { user, signIn, signOut } = useAuth();
+  const { user, signOut } = useSession();
   const { isLoading, isAuthenticated } = useConvexAuth();
 
   return (
@@ -16,12 +17,15 @@ function HomePage() {
       {isLoading ? null : isAuthenticated && user !== null ? (
         <>
           <p className="text-muted-foreground">Signed in as {user.email}</p>
-          <Button type="button" variant="outline" onClick={() => signOut()}>
+          <Button type="button" variant="outline" onClick={() => void signOut()}>
             Sign out
           </Button>
         </>
       ) : (
-        <Button type="button" onClick={() => void signIn()}>
+        <Button
+          type="button"
+          onClick={() => window.location.assign("/api/auth/oauth/google?client=web")}
+        >
           Sign in
         </Button>
       )}

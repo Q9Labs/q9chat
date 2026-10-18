@@ -35,6 +35,7 @@
     "preview": "vite preview",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
+    "test": "node --test tests/auth-policy.test.ts",
     "e2e": "playwright test"
   },
   "dependencies": {
@@ -43,8 +44,8 @@
     "@q9labsai/ui": "catalog:",
     "@tanstack/react-router": "catalog:",
     "@tanstack/react-start": "catalog:",
-    "@workos-inc/authkit-react": "catalog:",
     "convex": "catalog:",
+    "effect": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:"
   },
