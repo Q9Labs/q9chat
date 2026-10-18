@@ -198,6 +198,21 @@ into source or command arguments. Screenshots are written to `.e2e/results/` and
 All interactions and assertions are exact, so no model provider or replay-cache
 entries are needed; `.e2e/cache/` is committed for future recorded steps.
 
-Group creation, opening a chat, search, notifications and account deletion are
-outside this web journey. Their existing controls currently show a coming-next
-notice. Name and photo updates and sign-out are live.
+## Journey 2
+
+New group searches the real people API, creates named groups, and opens an
+existing or new pair for one selected person with no name. Group info adds
+members and copies an invite URL using the current page origin. Member emails
+are deliberately omitted; see [group member privacy](../../docs/group-member-privacy.md).
+
+`/join/$token` keeps the invite URL through email sign-in and profile setup.
+OAuth passes it through the existing same-origin `returnTo` parameter. Members
+open the group directly; removed people and invalid links show plain copy.
+
+The chat reads the newest 100 sequences without marking them read. Sending,
+older pages, search, notifications, removal, leaving and account deletion are
+outside this journey. Their controls remain unavailable.
+
+`tests/j2-web.e2e.ts` uses fresh staging email-code accounts and independent
+browser contexts to verify live lists, member history, pair reuse and invite
+joining. Run it with journey 1 using `pnpm test:e2e` on the disposable cloud test box.
