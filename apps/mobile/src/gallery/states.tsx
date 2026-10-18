@@ -22,6 +22,7 @@ import { noop } from "../kit/noop";
 import { AccountScreen } from "../screens/AccountScreen";
 import { CodeScreen, ProfileScreen, SignInScreen } from "../screens/AuthScreens";
 import { ChatScreen, type ChatScreenProps } from "../screens/ChatScreen";
+import { emptyDigits } from "../screens/codeInput";
 import { GroupsScreen } from "../screens/GroupsScreen";
 import { InfoScreen, type InfoScreenProps } from "../screens/InfoScreen";
 import { NewGroupScreen, type NewGroupScreenProps } from "../screens/NewGroupScreen";
@@ -200,9 +201,9 @@ export const STATES: GalleryState[] = [
     render: () => (
       <CodeScreen
         email="hasan@q9labs.ai"
-        code="481"
-        onCodeChange={noop}
-        bad={false}
+        digits={["4", "8", "1", "", "", ""]}
+        onDigitsChange={noop}
+        error=""
         onResend={noop}
         onChangeEmail={noop}
       />
@@ -215,9 +216,9 @@ export const STATES: GalleryState[] = [
     render: () => (
       <CodeScreen
         email="hasan@q9labs.ai"
-        code=""
-        onCodeChange={noop}
-        bad
+        digits={emptyDigits()}
+        onDigitsChange={noop}
+        error="That code didn't work. Check it and try again."
         onResend={noop}
         onChangeEmail={noop}
       />

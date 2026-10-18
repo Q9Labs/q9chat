@@ -2,20 +2,21 @@ import { useRouter } from "expo-router";
 import { useState } from "react";
 
 import { CodeScreen } from "../src/screens/AuthScreens";
+import { type CodeDigits, emptyDigits, isComplete } from "../src/screens/codeInput";
 
 export default function CodeRoute() {
   const router = useRouter();
-  const [code, setCode] = useState("");
+  const [digits, setDigits] = useState<CodeDigits>(emptyDigits);
   return (
     <CodeScreen
       email="hasan@q9labs.ai"
-      code={code}
-      onCodeChange={(next) => {
-        setCode(next);
-        if (next.length === 6) router.replace("/");
+      digits={digits}
+      onDigitsChange={(next) => {
+        setDigits(next);
+        if (isComplete(next)) router.replace("/");
       }}
-      bad={false}
-      onResend={() => setCode("")}
+      error=""
+      onResend={() => setDigits(emptyDigits())}
       onChangeEmail={() => router.replace("/sign-in")}
     />
   );

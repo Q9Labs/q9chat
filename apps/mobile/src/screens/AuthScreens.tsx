@@ -18,7 +18,7 @@ import { useTheme } from "../theme";
 import { T } from "../theme/Text";
 import { fonts, radius } from "../theme/tokens";
 import type { Avatar as AvatarData } from "../types";
-import { CODE_LENGTH, typeIntoCode } from "./codeInput";
+import { backspaceInCode, CELL_IDS, CODE_LENGTH, type CodeDigits, typeIntoCode } from "./codeInput";
 
 /**
  * Centered column on the surface; the card is 100% wide with 24px sides, children 10px apart.
@@ -150,41 +150,30 @@ function LinkText({ children, onPress }: { children: string; onPress: () => void
   );
 }
 
-/** Six labeled digit cells over one string: typing advances, a paste fills forward, backspace steps back. */
+/** Six labeled digit cells: typing advances, a paste fills forward, backspace clears its own cell. */
 export function CodeScreen({
   email,
-  code,
-  onCodeChange,
-  bad,
+  digits,
+  onDigitsChange,
+  error,
   onResend,
   onChangeEmail,
 }: {
   email: string;
-  code: string;
-  onCodeChange: (code: string) => void;
-  bad: boolean;
+  digits: CodeDigits;
+  onDigitsChange: (digits: CodeDigits) => void;
+  /** The alert under the cells; empty when there is nothing to say. */
+  error: string;
   onResend: () => void;
   onChangeEmail: () => void;
 }) {
   const { c } = useTheme();
   const refs = useRef<(TextInputInstance | null)[]>([]);
-  const digits = Array.from({ length: CODE_LENGTH }, (_, index) => code[index] ?? "");
   const nextIndex = digits.findIndex((digit) => !digit);
-
-  const write = (index: number, text: string) => {
-    const result = typeIntoCode(code, index, text);
-    if (!result) return;
-    onCodeChange(result.code);
-    refs.current[result.focus]?.focus();
-  };
-  const back = (index: number) => {
-    if (digits[index]) {
-      onCodeChange(code.slice(0, index) + code.slice(index + 1));
-      return;
-    }
-    if (index === 0) return;
-    onCodeChange(code.slice(0, index - 1) + code.slice(index));
-    refs.current[index - 1]?.focus();
+  const apply = (edit: { digits: CodeDigits; focus: number } | null) => {
+    if (!edit) return;
+    onDigitsChange(edit.digits);
+    refs.current[edit.focus]?.focus();
   };
 
   return (
@@ -221,18 +210,18 @@ export function CodeScreen({
         accessibilityLabel="6-digit code"
         style={{ flexDirection: "row", justifyContent: "center", gap: 8, marginVertical: 4 }}
       >
-        {digits.map((digit, index) => (
+        {CELL_IDS.map((id, index) => (
           <CodeCell
-            key={index}
+            key={id}
             index={index}
-            digit={digit}
-            bad={bad}
+            digit={digits[index] ?? ""}
+            bad={error !== ""}
             next={index === nextIndex}
             setRef={(node) => {
               refs.current[index] = node;
             }}
-            onType={(text) => write(index, text)}
-            onBackspace={() => back(index)}
+            onType={(text) => apply(typeIntoCode(digits, index, text))}
+            onBackspace={() => apply(backspaceInCode(digits, index))}
           />
         ))}
       </View>
@@ -242,7 +231,7 @@ export function CodeScreen({
         accessibilityRole="alert"
         style={{ textAlign: "center", minHeight: 18, marginTop: 4 }}
       >
-        {bad ? "That code didn't work. Check it and try again." : ""}
+        {error}
       </T>
       <View style={{ alignItems: "center", marginTop: 12 }}>
         <T size={12} color="mu" lineHeight={19.2} style={{ textAlign: "center" }}>
