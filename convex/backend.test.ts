@@ -134,8 +134,6 @@ describe("identity and access classes", () => {
     const client = t.withIdentity({ subject: "new", email: "new@example.com", name: "New" });
     expect(await client.query(api.profiles.me, {})).toEqual({
       status: "needsSetup",
-      email: "new@example.com",
-      suggestedName: "New",
     });
     await expect(client.query(api.groups.list, {})).rejects.toThrow("account_unavailable");
   });

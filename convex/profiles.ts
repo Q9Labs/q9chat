@@ -20,7 +20,7 @@ export const me = query({
   args: {},
   returns: v.union(
     v.null(),
-    v.object({ status: v.literal("needsSetup"), email: v.string(), suggestedName: v.string() }),
+    v.object({ status: v.literal("needsSetup") }),
     v.object({ status: v.literal("unavailable") }),
     v.object({
       status: v.literal("ready"),
@@ -41,12 +41,7 @@ export const me = query({
       .query("profiles")
       .withIndex("by_auth_user", (q) => q.eq("authUserId", user.subject))
       .unique();
-    if (!profile)
-      return {
-        status: "needsSetup" as const,
-        email: user.email ?? "",
-        suggestedName: user.name ?? [user.givenName, user.familyName].filter(Boolean).join(" "),
-      };
+    if (!profile) return { status: "needsSetup" as const };
     if (profile.status !== "active") return { status: "unavailable" as const };
     return {
       status: "ready" as const,
