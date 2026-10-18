@@ -14,18 +14,29 @@ export function sniff(bytes: Uint8Array): Sniffed {
     const brands = text(8, Math.min(bytes.length - 8, 64));
     if (/heic|heix|hevc|hevx|mif1|msf1/u.test(brands))
       return { kind: "image", contentType: "image/heic" };
-    if (/M4A |M4B /u.test(brands) && prefix.includes("mp4a") && !prefix.includes("vide"))
-      return { kind: "voice", contentType: "audio/mp4" };
   }
-  if (text(0, 4) === "OggS" && prefix.includes("OpusHead") && !prefix.includes("theora"))
+  const voice = voiceType(prefix, starts);
+  if (voice) return voice;
+  if (text(0, 5) === "%PDF-") return { kind: "file", contentType: "application/pdf" };
+  return { kind: "file", contentType: "application/octet-stream" };
+}
+
+const audioTrack = (prefix: string, audio: string, video: string) =>
+  prefix.includes(audio) && !prefix.includes(video);
+function voiceType(prefix: string, starts: (...signature: number[]) => boolean): Sniffed | null {
+  if (
+    prefix.slice(4, 8) === "ftyp" &&
+    /M4A |M4B /u.test(prefix.slice(8, 72)) &&
+    audioTrack(prefix, "mp4a", "vide")
+  )
+    return { kind: "voice", contentType: "audio/mp4" };
+  if (prefix.startsWith("OggS") && audioTrack(prefix, "OpusHead", "theora"))
     return { kind: "voice", contentType: "audio/ogg" };
   if (
     starts(0x1a, 0x45, 0xdf, 0xa3) &&
     prefix.includes("webm") &&
-    prefix.includes("A_OPUS") &&
-    !prefix.includes("V_")
+    audioTrack(prefix, "A_OPUS", "V_")
   )
     return { kind: "voice", contentType: "audio/webm" };
-  if (text(0, 5) === "%PDF-") return { kind: "file", contentType: "application/pdf" };
-  return { kind: "file", contentType: "application/octet-stream" };
+  return null;
 }

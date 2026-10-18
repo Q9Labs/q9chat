@@ -2,6 +2,8 @@ import { messageSummary, parseMentions } from "@q9chat/domain";
 import { v, type Infer } from "convex/values";
 
 import { internal } from "./_generated/api";
+import type { Doc, Id } from "./_generated/dataModel";
+import type { MutationCtx } from "./_generated/server";
 import { action, mutation, query } from "./_generated/server";
 import { active, member, fail } from "./lib/access";
 import * as g from "./lib/groups";
@@ -9,6 +11,37 @@ import * as p from "./lib/presentation";
 import { attachments as consumeAttachments } from "./lib/uploads";
 import * as validators from "./lib/validators";
 import { reactionEmojiValidator } from "./schema";
+async function readReply(
+  ctx: MutationCtx,
+  replyToId: Id<"messages"> | undefined,
+  groupId: Id<"groups">,
+) {
+  const reply = replyToId ? await ctx.db.get(replyToId) : null;
+  if (replyToId && (!reply || reply.kind === "event" || reply.groupId !== groupId))
+    return fail("bad_attachment");
+  return reply;
+}
+async function recordUnread(
+  ctx: MutationCtx,
+  groupId: Id<"groups">,
+  sequence: number,
+  authorId: Id<"profiles">,
+  people: Doc<"memberships">[],
+  needsYouIds: Id<"profiles">[],
+) {
+  for (const row of people) {
+    if (row.profileId === authorId) continue;
+    await ctx.db.insert("unreadPosts", {
+      profileId: row.profileId,
+      groupId: groupId,
+      sequence,
+    });
+    if (needsYouIds.includes(row.profileId)) {
+      const state = await g.readState(ctx, groupId, row.profileId);
+      if (state) await ctx.db.patch(state._id, { lastNeedsYouSequence: sequence });
+    }
+  }
+}
 export const send = mutation({
   args: {
     groupId: v.id("groups"),
@@ -33,9 +66,7 @@ export const send = mutation({
     if (!args.clientKey || args.clientKey.length > 64) throw new Error("Invalid client key");
     if (args.body.length > 4000) return fail("message_too_long");
     const attachments = await consumeAttachments(ctx, profile._id, args.body, args.attachments);
-    const reply = args.replyToId ? await ctx.db.get(args.replyToId) : null;
-    if (args.replyToId && (!reply || reply.kind === "event" || reply.groupId !== args.groupId))
-      return fail("bad_attachment");
+    const reply = await readReply(ctx, args.replyToId, args.groupId);
     const people = await g.memberships(ctx, args.groupId);
     const resolved = await Promise.all(
       people.map((row) => p.person(ctx, row.profileId, profile._id)),
@@ -66,33 +97,16 @@ export const send = mutation({
       attachments,
       reactionCounts: [],
     });
-    for (const row of people) {
-      if (row.profileId === profile._id) continue;
-      await ctx.db.insert("unreadPosts", {
-        profileId: row.profileId,
-        groupId: group._id,
-        sequence,
-      });
-      if (
-        mentions.includes(row.profileId) ||
-        (reply && reply.kind !== "event" && reply.authorId === row.profileId)
-      ) {
-        const state = await g.readState(ctx, group._id, row.profileId);
-        if (state) await ctx.db.patch(state._id, { lastNeedsYouSequence: sequence });
-      }
-    }
+    const needsYouIds = [
+      ...new Set([...mentions, ...(reply && reply.kind !== "event" ? [reply.authorId] : [])]),
+    ];
+    await recordUnread(ctx, group._id, sequence, profile._id, people, needsYouIds);
     await ctx.scheduler.runAfter(0, internal.notifications.deliver, {
       messageId,
       recipientIds: people
         .filter((row) => row.profileId !== profile._id)
         .map((row) => row.profileId),
-      needsYouIds: people
-        .filter(
-          (row) =>
-            mentions.includes(row.profileId) ||
-            (reply && reply.kind !== "event" && reply.authorId === row.profileId),
-        )
-        .map((row) => row.profileId),
+      needsYouIds,
     });
     return { messageId, sequence };
   },

@@ -1,10 +1,34 @@
 import { v } from "convex/values";
 
+import type { Id } from "./_generated/dataModel";
+import type { QueryCtx } from "./_generated/server";
 import { query } from "./_generated/server";
 import { active } from "./lib/access";
 import { memberships } from "./lib/groups";
 import { person } from "./lib/presentation";
 import { avatar } from "./lib/validators";
+async function nameCandidates(
+  ctx: QueryCtx,
+  profileId: Id<"profiles">,
+  term: string,
+  ids: Set<Id<"profiles">>,
+) {
+  const own = await ctx.db
+    .query("memberships")
+    .withIndex("by_profile", (q) => q.eq("profileId", profileId))
+    .collect();
+  for (const row of own) {
+    if (ids.size >= 4) break;
+    for (const candidate of await memberships(ctx, row.groupId)) {
+      if (
+        candidate.profileId !== profileId &&
+        candidate.searchName.split(/\s+/u).some((word) => word.startsWith(term))
+      )
+        ids.add(candidate.profileId);
+      if (ids.size >= 4) break;
+    }
+  }
+}
 export const find = query({
   args: { query: v.string() },
   returns: v.array(
@@ -30,21 +54,7 @@ export const find = query({
         .filter((value) => value.status === "active" && value._id !== profile._id)
         .map((value) => value._id),
     );
-    const own = await ctx.db
-      .query("memberships")
-      .withIndex("by_profile", (q) => q.eq("profileId", profile._id))
-      .collect();
-    for (const row of own) {
-      if (ids.size >= 4) break;
-      for (const candidate of await memberships(ctx, row.groupId)) {
-        if (
-          candidate.profileId !== profile._id &&
-          candidate.searchName.split(/\s+/u).some((word) => word.startsWith(term))
-        )
-          ids.add(candidate.profileId);
-        if (ids.size >= 4) break;
-      }
-    }
+    await nameCandidates(ctx, profile._id, term, ids);
     const result = [];
     for (const id of ids) {
       const target = exact.find((value) => value._id === id) ?? (await ctx.db.get(id));

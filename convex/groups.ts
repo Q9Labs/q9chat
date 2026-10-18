@@ -54,7 +54,7 @@ export const list = query({
       .query("removals")
       .withIndex("by_profile_dismissed", (q) =>
         // Convex indexes absent optional fields as undefined, not null.
-        // eslint-disable-next-line unicorn/no-useless-undefined
+        // eslint-disable-next-line unicorn/no-useless-undefined -- because absent index fields must match undefined
         q.eq("profileId", profile._id).eq("dismissedAt", undefined),
       )
       .collect();
@@ -245,7 +245,7 @@ export const removeMember = mutation({
       .query("removals")
       .withIndex("by_profile_dismissed", (q) =>
         // Convex indexes absent optional fields as undefined, not null.
-        // eslint-disable-next-line unicorn/no-useless-undefined
+        // eslint-disable-next-line unicorn/no-useless-undefined -- because absent index fields must match undefined
         q.eq("profileId", args.profileId).eq("dismissedAt", undefined),
       )
       .collect();

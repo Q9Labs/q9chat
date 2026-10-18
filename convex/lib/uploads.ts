@@ -38,6 +38,37 @@ export async function consume(
   await ctx.db.delete(upload._id);
   return upload;
 }
+type UploadInput = Infer<typeof uploadAttachment>;
+function validateImage(item: Extract<UploadInput, { kind: "image" }>, contentType: string) {
+  if (
+    !imageTypes.has(contentType) ||
+    !Number.isInteger(item.width) ||
+    !Number.isInteger(item.height) ||
+    item.width <= 0 ||
+    item.height <= 0 ||
+    item.width > 8000 ||
+    item.height > 8000
+  )
+    fail("bad_attachment");
+}
+function validateVoice(
+  item: Extract<UploadInput, { kind: "voice" }>,
+  contentType: string,
+  body: string,
+  count: number,
+) {
+  if (
+    body !== "" ||
+    count !== 1 ||
+    !voiceTypes.has(contentType) ||
+    !Number.isFinite(item.durationMs) ||
+    item.durationMs <= 0 ||
+    item.durationMs > 600000 ||
+    item.waveform.length > 64 ||
+    item.waveform.some((sample) => !Number.isFinite(sample) || sample < 0 || sample > 1)
+  )
+    fail("bad_attachment");
+}
 export async function attachments(
   ctx: MutationCtx,
   ownerId: Id<"profiles">,
@@ -55,16 +86,7 @@ export async function attachments(
     };
     switch (item.kind) {
       case "image":
-        if (
-          !imageTypes.has(upload.contentType) ||
-          !Number.isInteger(item.width) ||
-          !Number.isInteger(item.height) ||
-          item.width <= 0 ||
-          item.height <= 0 ||
-          item.width > 8000 ||
-          item.height > 8000
-        )
-          return fail("bad_attachment");
+        validateImage(item, upload.contentType);
         result.push({ ...base, kind: "image", width: item.width, height: item.height });
         break;
       case "file":
@@ -72,17 +94,7 @@ export async function attachments(
         result.push({ ...base, kind: "file", name: item.name });
         break;
       case "voice":
-        if (
-          body !== "" ||
-          input.length !== 1 ||
-          !voiceTypes.has(upload.contentType) ||
-          !Number.isFinite(item.durationMs) ||
-          item.durationMs <= 0 ||
-          item.durationMs > 600000 ||
-          item.waveform.length > 64 ||
-          item.waveform.some((sample) => !Number.isFinite(sample) || sample < 0 || sample > 1)
-        )
-          return fail("bad_attachment");
+        validateVoice(item, upload.contentType, body, input.length);
         result.push({
           ...base,
           kind: "voice",

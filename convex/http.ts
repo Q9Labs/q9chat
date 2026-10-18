@@ -2,6 +2,7 @@ import { httpRouter } from "convex/server";
 import { ConvexError } from "convex/values";
 
 import { internal } from "./_generated/api";
+import type { ActionCtx } from "./_generated/server";
 import { httpAction } from "./_generated/server";
 import { sniff } from "./lib/sniff";
 import { MAX_BYTES } from "./lib/uploads";
@@ -73,43 +74,39 @@ const upload = httpAction(async (ctx, request) => {
     return errorResponse(error, headers);
   }
 });
-const files = httpAction(async (ctx, request) => {
-  const headers = cors(request);
-  if (!request.headers.get("Authorization")?.startsWith("Bearer "))
-    return new Response(null, { status: 401, headers });
-  const path = new URL(request.url).pathname.split("/");
-  try {
-    const messageId = path[2],
-      index = Number(path[3]);
-    if (!messageId || path.length !== 4) return new Response(null, { status: 404, headers });
-    const file = await ctx.runQuery(internal.files.messageFile, { messageId, index });
-    if (!file) return new Response(null, { status: 404, headers });
-    const blob = await ctx.storage.get(file.storageId);
-    if (!blob) return new Response(null, { status: 404, headers });
-    headers.set("Content-Type", file.contentType);
-    headers.set("X-Content-Type-Options", "nosniff");
-    return new Response(blob.stream(), { headers });
-  } catch (error) {
-    return errorResponse(error, headers);
-  }
+function stream(blob: Blob | null, headers: Headers, contentType = blob?.type) {
+  if (!blob) return new Response(null, { status: 404, headers });
+  headers.set("Content-Type", contentType ?? "application/octet-stream");
+  headers.set("X-Content-Type-Options", "nosniff");
+  return new Response(blob.stream(), { headers });
+}
+function authenticatedGet(
+  resolve: (ctx: ActionCtx, path: string[], headers: Headers) => Promise<Response>,
+) {
+  return httpAction(async (ctx, request) => {
+    const headers = cors(request);
+    if (!request.headers.get("Authorization")?.startsWith("Bearer "))
+      return new Response(null, { status: 401, headers });
+    try {
+      return await resolve(ctx, new URL(request.url).pathname.split("/"), headers);
+    } catch (error) {
+      return errorResponse(error, headers);
+    }
+  });
+}
+const files = authenticatedGet(async (ctx, path, headers) => {
+  const messageId = path[2],
+    index = Number(path[3]);
+  if (!messageId || path.length !== 4) return new Response(null, { status: 404, headers });
+  const file = await ctx.runQuery(internal.files.messageFile, { messageId, index });
+  if (!file) return new Response(null, { status: 404, headers });
+  return stream(await ctx.storage.get(file.storageId), headers, file.contentType);
 });
-const photos = httpAction(async (ctx, request) => {
-  const headers = cors(request);
-  if (!request.headers.get("Authorization")?.startsWith("Bearer "))
-    return new Response(null, { status: 401, headers });
-  const path = new URL(request.url).pathname.split("/");
-  try {
-    const profileId = path[2];
-    if (!profileId || path.length !== 3) return new Response(null, { status: 404, headers });
-    const storageId = await ctx.runQuery(internal.files.photo, { profileId });
-    const blob = storageId ? await ctx.storage.get(storageId) : null;
-    if (!blob) return new Response(null, { status: 404, headers });
-    headers.set("Content-Type", blob.type);
-    headers.set("X-Content-Type-Options", "nosniff");
-    return new Response(blob.stream(), { headers });
-  } catch (error) {
-    return errorResponse(error, headers);
-  }
+const photos = authenticatedGet(async (ctx, path, headers) => {
+  const profileId = path[2];
+  if (!profileId || path.length !== 3) return new Response(null, { status: 404, headers });
+  const storageId = await ctx.runQuery(internal.files.photo, { profileId });
+  return stream(storageId ? await ctx.storage.get(storageId) : null, headers);
 });
 const preflight = httpAction(
   async (_ctx, request) => new Response(null, { status: 204, headers: cors(request) }),
