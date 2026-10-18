@@ -12,6 +12,7 @@ export const list = query({
   returns: v.array(validators.groupRow),
   handler: async (ctx) => {
     const profile = await active(ctx);
+    const resolve = p.personCache(ctx, profile._id);
     const own = await ctx.db
       .query("memberships")
       .withIndex("by_profile", (q) => q.eq("profileId", profile._id))
@@ -20,7 +21,7 @@ export const list = query({
     for (const row of own) {
       const group = await ctx.db.get(row.groupId);
       if (!group) continue;
-      const display = await p.groupDisplay(ctx, group, profile._id);
+      const display = await p.groupDisplay(ctx, group, profile._id, resolve);
       const latest = await ctx.db
         .query("messages")
         .withIndex("by_group_sequence", (q) => q.eq("groupId", group._id))
@@ -43,7 +44,7 @@ export const list = query({
         title: display.title,
         avatar: display.avatar,
         lastActivityAt: latest?._creationTime ?? group._creationTime,
-        preview: await p.preview(ctx, latest, profile._id),
+        preview: await p.preview(ctx, latest, profile._id, resolve),
         unreadCount: unread.length,
         needsYou: (state?.lastNeedsYouSequence ?? 0) > (state?.lastReadSequence ?? 0),
         notify: row.notify,
@@ -62,14 +63,14 @@ export const list = query({
       if (row.dismissedAt !== undefined) continue;
       const group = await ctx.db.get(row.groupId);
       if (!group) continue;
-      const display = await p.groupDisplay(ctx, group, profile._id);
+      const display = await p.groupDisplay(ctx, group, profile._id, resolve);
       removedRows.push({
         status: "removed" as const,
         groupId: group._id,
         kind: group.kind,
         title: display.title,
         avatar: display.avatar,
-        removedBy: await p.person(ctx, row.removedBy, profile._id),
+        removedBy: await resolve(row.removedBy),
         removedAt: row.removedAt,
       });
     }

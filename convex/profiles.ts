@@ -130,6 +130,11 @@ export const deleteAccount = mutation({
   returns: v.null(),
   handler: async (ctx) => {
     const profile = await active(ctx);
+    const memberships = await ctx.db
+      .query("memberships")
+      .withIndex("by_profile", (q) => q.eq("profileId", profile._id))
+      .collect();
+    await Promise.all(memberships.map((row) => ctx.db.patch(row._id, { searchName: "" })));
     await ctx.db.replace(profile._id, {
       status: "deleting",
       authUserId: profile.authUserId,

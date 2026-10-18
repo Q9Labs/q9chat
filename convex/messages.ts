@@ -102,6 +102,7 @@ export const range = query({
   returns: v.array(validators.message),
   handler: async (ctx, args) => {
     const { profile } = await member(ctx, args);
+    const resolve = p.personCache(ctx, profile._id);
     if (
       !Number.isSafeInteger(args.fromSequence) ||
       !Number.isSafeInteger(args.toSequence) ||
@@ -130,9 +131,9 @@ export const range = query({
           return {
             ...base,
             kind: "event" as const,
-            event: await p.resolvedEvent(ctx, message.event, profile._id),
+            event: await p.resolvedEvent(ctx, message.event, profile._id, resolve),
           };
-        const author = await p.person(ctx, message.authorId, profile._id);
+        const author = await resolve(message.authorId);
         if (message.kind === "deleted") return { ...base, kind: "deleted" as const, author };
         const quote = message.replyToId ? await ctx.db.get(message.replyToId) : null;
         const replyTo =
@@ -142,13 +143,13 @@ export const range = query({
               ? {
                   id: quote._id,
                   sequence: quote.sequence,
-                  author: await p.person(ctx, quote.authorId, profile._id),
+                  author: await resolve(quote.authorId),
                   deleted: true as const,
                 }
               : {
                   id: quote._id,
                   sequence: quote.sequence,
-                  author: await p.person(ctx, quote.authorId, profile._id),
+                  author: await resolve(quote.authorId),
                   summary: messageSummary(quote),
                 };
         const mine = await ctx.db
@@ -171,7 +172,7 @@ export const range = query({
           clientKey: message.clientKey,
           author,
           body: message.body,
-          mentions: await Promise.all(message.mentions.map((id) => p.person(ctx, id, profile._id))),
+          mentions: message.mentions,
           attachments,
           replyTo,
           reactions,

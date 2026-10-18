@@ -64,6 +64,13 @@ export const registerWeb = mutation({
       !/^[A-Za-z0-9_-]+={0,2}$/u.test(args.auth)
     )
       throw new Error("Invalid push subscription");
+    const decode = (value: string) =>
+      Uint8Array.from(atob(value.replaceAll("-", "+").replaceAll("_", "/")), (char) =>
+        char.charCodeAt(0),
+      );
+    const publicKey = decode(args.p256dh);
+    if (publicKey.length !== 65 || publicKey[0] !== 4 || decode(args.auth).length !== 16)
+      throw new Error("Invalid push subscription");
     const row = await ctx.db
       .query("devices")
       .withIndex("by_endpoint", (q) => q.eq("endpoint", args.endpoint))

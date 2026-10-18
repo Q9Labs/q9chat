@@ -46,7 +46,7 @@ const upload = httpAction(async (ctx, request) => {
       chunk = await reader.read();
     }
     if (size === 0) return new Response(null, { status: 400, headers });
-    const prefix = new Uint8Array(Math.min(size, 4096));
+    const prefix = new Uint8Array(Math.min(size, 65536));
     let offset = 0;
     for (const part of chunks) {
       const count = Math.min(part.length, prefix.length - offset);

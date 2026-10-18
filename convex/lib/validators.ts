@@ -20,7 +20,12 @@ export const groupKind = v.union(v.literal("group"), v.literal("pair"));
 export const removed = { title: v.string(), avatar, removedBy: person, removedAt: v.number() };
 export const event = v.union(
   v.object({ type: v.literal("created"), by: person }),
-  v.object({ type: v.literal("added"), by: person, people: v.array(person) }),
+  v.object({
+    type: v.literal("added"),
+    by: person,
+    people: v.array(person),
+    othersCount: v.number(),
+  }),
   v.object({ type: v.literal("joined"), person }),
   v.object({ type: v.literal("left"), person }),
   v.object({ type: v.literal("removed"), by: person, person }),
@@ -61,7 +66,7 @@ export const message = v.union(
     clientKey: v.string(),
     author: person,
     body: v.string(),
-    mentions: v.array(person),
+    mentions: v.array(v.id("profiles")),
     attachments: v.array(attachment),
     replyTo: v.union(
       v.null(),

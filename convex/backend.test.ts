@@ -1,3 +1,5 @@
+import { createECDH, randomBytes } from "node:crypto";
+
 import {
   avatarColors,
   duration,
@@ -49,7 +51,13 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 function fixture() {
-  return convexTest(schema, modules);
+  return convexTest({ schema, modules, transactionLimits: true });
+}
+function pushKeys() {
+  return {
+    p256dh: createECDH("prime256v1").generateKeys().toString("base64url"),
+    auth: randomBytes(16).toString("base64url"),
+  };
 }
 type Test = ReturnType<ReturnType<typeof fixture>["withIdentity"]>;
 async function account(t: Test, subject: string, displayName = `${subject} Person`) {
@@ -86,7 +94,7 @@ async function upload(client: Test, body = "file bytes", type = "text/plain") {
       type === "image/png"
         ? new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, ...new TextEncoder().encode(body)])
         : type === "audio/mp4"
-          ? new Uint8Array([0, 0, 0, 12, ...new TextEncoder().encode("ftypM4A " + body)])
+          ? new Uint8Array([0, 0, 0, 12, ...new TextEncoder().encode("ftypM4A mp4a" + body)])
           : body,
   });
   expect(response.status).toBe(200);
@@ -978,8 +986,7 @@ describe("bounded API limits", () => {
     const endpoint = "https://fcm.googleapis.com/fcm/send/ownership";
     await alice.client.mutation(api.devices.registerWeb, {
       endpoint,
-      p256dh: "test",
-      auth: "test",
+      ...pushKeys(),
     });
     await alice.client.mutation(api.devices.viewing, { endpoint, groupId });
     await bob.client.mutation(api.devices.viewing, { endpoint, groupId: null });
@@ -987,7 +994,7 @@ describe("bounded API limits", () => {
     expect(await t.run((ctx) => ctx.db.query("devices").collect())).toMatchObject([
       { profileId: alice.id, viewing: { groupId } },
     ]);
-    await bob.client.mutation(api.devices.registerWeb, { endpoint, p256dh: "test", auth: "test" });
+    await bob.client.mutation(api.devices.registerWeb, { endpoint, ...pushKeys() });
     const rows = await t.run((ctx) => ctx.db.query("devices").collect());
     expect(rows[0]).toMatchObject({ profileId: bob.id });
     expect(rows[0]).not.toHaveProperty("viewing");
@@ -1020,5 +1027,416 @@ it("deleted reply quotes retain the original author and viewer identity", async 
   expect(await bob.client.query(api.messages.range, args)).toMatchObject([
     { replyTo: { deleted: true, author: { id: alice.id, isYou: false } } },
   ]);
+  await drain(t);
+});
+
+it("review probe groups.list with 42 disjoint 100-member groups", async () => {
+  const t = fixture();
+  const owner = await account(t, "Owner");
+  for (let i = 0; i < 42; i++) {
+    const ids = await t.run(async (ctx) => {
+      const ids = [];
+      for (let j = 0; j < 99; j++)
+        ids.push(
+          await ctx.db.insert("profiles", {
+            status: "active",
+            authUserId: `g${i}m${j}`,
+            email: `g${i}m${j}@example.com`,
+            displayName: `Member${j} Person`,
+          }),
+        );
+      return ids;
+    });
+    await owner.client.mutation(api.groups.create, {
+      name: "Team",
+      memberIds: ids,
+      inviteToken: `ReviewGroup${String(i).padStart(10, "0")}`,
+    });
+  }
+  await expect(owner.client.query(api.groups.list, {})).resolves.toHaveLength(42);
+}, 60000);
+it("review probe messages.range with 100 mentions in each of 100 posts", async () => {
+  const t = fixture();
+  const owner = await account(t, "Owner", "A Owner");
+  const ids = await t.run(async (ctx) => {
+    const ids = [owner.id];
+    for (let i = 0; i < 99; i++)
+      ids.push(
+        await ctx.db.insert("profiles", {
+          status: "active",
+          authUserId: `p${i}`,
+          email: `p${i}@example.com`,
+          displayName: "A Person",
+        }),
+      );
+    return ids;
+  });
+  const groupId = await owner.client.mutation(api.groups.create, {
+    name: "Team",
+    memberIds: ids,
+    inviteToken: "ReviewRange1234567",
+  });
+  await t.run(async (ctx) => {
+    for (let i = 3; i <= 102; i++)
+      await ctx.db.insert("messages", {
+        kind: "post",
+        groupId,
+        sequence: i,
+        authorId: owner.id,
+        clientKey: String(i),
+        body: "@A",
+        searchText: "@A",
+        mentions: ids,
+        attachments: [],
+        reactionCounts: [],
+      });
+    await ctx.db.patch(groupId, { lastSequence: 102 });
+  });
+  const page = await owner.client.query(api.messages.range, {
+    groupId,
+    fromSequence: 3,
+    toSequence: 102,
+  });
+  expect(page).toHaveLength(100);
+  for (const post of page) {
+    if (post.kind !== "post") throw new Error("Missing post");
+    expect(post.mentions).toEqual(ids);
+  }
+});
+it("review probe full length message stays within push payload budget", async () => {
+  const t = fixture();
+  const { alice, bob, groupId } = await group(t);
+  await bob.client.mutation(api.devices.registerExpo, { expoPushToken: "ExpoPushToken[bob]" });
+  await send(alice.client, groupId, "@Bob " + "界".repeat(3995));
+  await drain(t);
+  const push = outbound.mock.calls.find(([url]) => fetchUrl(url).includes("exp.host"));
+  if (!push || typeof push[1]?.body !== "string") throw new Error("No push");
+  const bytes = new TextEncoder().encode(push[1].body).length;
+
+  expect(bytes).toBeLessThanOrEqual(4096);
+});
+it("review probe push retry rechecks eligibility after muting", async () => {
+  const t = fixture();
+  const { alice, bob, groupId } = await group(t);
+  await bob.client.mutation(api.devices.registerExpo, { expoPushToken: "ExpoPushToken[bob]" });
+  let pushes = 0;
+  outbound.mockImplementation(async (input) => {
+    if (fetchUrl(input).includes("exp.host")) {
+      pushes++;
+      if (pushes === 1) {
+        await bob.client.mutation(api.groups.setNotify, { groupId, notify: "muted" });
+        return new Response(null, { status: 500 });
+      }
+      return Response.json({ data: { status: "ok" } });
+    }
+    throw new Error("unexpected call");
+  });
+  await send(alice.client, groupId, "@Bob private message");
+  await t.finishAllScheduledFunctions(vi.runAllTimersAsync);
+
+  expect(pushes).toBe(1);
+});
+
+it("review probe deleting name matches do not hide an active result", async () => {
+  const t = fixture();
+  const owner = await account(t, "Owner");
+  const ids = await t.run(async (ctx) => {
+    const ids = [];
+    for (let i = 0; i < 5; i++)
+      ids.push(
+        await ctx.db.insert("profiles", {
+          status: "active",
+          authUserId: `match${i}`,
+          email: `match${i}@example.com`,
+          displayName: "Match Person",
+        }),
+      );
+    return ids;
+  });
+  const groupId = await owner.client.mutation(api.groups.create, {
+    name: "Team",
+    memberIds: ids,
+    inviteToken: "ReviewPeople123456",
+  });
+  const ordered = await t.run((ctx) =>
+    ctx.db
+      .query("memberships")
+      .withIndex("by_group_profile", (q) => q.eq("groupId", groupId))
+      .collect(),
+  );
+  const matches = ordered.filter((r) => r.profileId !== owner.id);
+  for (const row of matches.slice(0, 4)) {
+    const profile = await t.run((ctx) => ctx.db.get(row.profileId));
+    if (profile?.status !== "active") throw new Error("Missing active fixture");
+    await t.withIdentity({ subject: profile.authUserId }).mutation(api.profiles.deleteAccount, {});
+  }
+
+  expect(await owner.client.query(api.people.find, { query: "Match" })).toHaveLength(1);
+  await drain(t);
+});
+it("review probe forbidden push hosts are rejected", async () => {
+  const t = fixture();
+  const alice = await account(t, "Alice");
+  for (const endpoint of [
+    "https://127.0.0.1/x",
+    "https://fcm.googleapis.com.evil.test/x",
+    "https://evil.test/fcm.googleapis.com",
+    "https://user:pass@fcm.googleapis.com/x",
+    "https://fcm.googleapis.com:8443/x",
+    "http://fcm.googleapis.com/x",
+  ])
+    await expect(
+      alice.client.mutation(api.devices.registerWeb, { endpoint, p256dh: "test", auth: "test" }),
+    ).rejects.toThrow("Invalid push subscription");
+});
+it("review probe push retry rechecks membership after removal", async () => {
+  const t = fixture();
+  const { alice, bob, groupId } = await group(t);
+  await bob.client.mutation(api.devices.registerExpo, { expoPushToken: "ExpoPushToken[bob]" });
+  let pushes = 0;
+  outbound.mockImplementation(async (input) => {
+    if (fetchUrl(input).includes("exp.host")) {
+      pushes++;
+      if (pushes === 1) {
+        await alice.client.mutation(api.groups.removeMember, { groupId, profileId: bob.id });
+        return new Response(null, { status: 500 });
+      }
+      return Response.json({ data: { status: "ok" } });
+    }
+    throw new Error("unexpected call");
+  });
+  await send(alice.client, groupId, "@Bob private message");
+  await t.finishAllScheduledFunctions(vi.runAllTimersAsync);
+  expect(pushes).toBe(1);
+});
+
+it("review probe Expo error ticket does not masquerade as successful delivery", async () => {
+  const t = fixture();
+  const { alice, bob, groupId } = await group(t);
+  await bob.client.mutation(api.devices.registerExpo, { expoPushToken: "ExpoPushToken[bob]" });
+  outbound.mockImplementation(async () =>
+    Response.json({
+      data: {
+        status: "error",
+        message: "Device is not registered",
+        details: { error: "DeviceNotRegistered" },
+      },
+    }),
+  );
+  await send(alice.client, groupId, "@Bob ping");
+  await drain(t);
+  expect(await t.run((ctx) => ctx.db.query("devices").collect())).toHaveLength(0);
+});
+it("review probe truncated Ogg header is not accepted as a playable voice note", async () => {
+  const t = fixture();
+  const { alice, groupId } = await group(t);
+  const uploadId = await upload(alice.client, "OggS");
+  await expect(
+    alice.client.mutation(api.messages.send, {
+      groupId,
+      clientKey: "invalid-audio",
+      body: "",
+      attachments: [{ kind: "voice", uploadId, durationMs: 1000, waveform: [0.5] }],
+    }),
+  ).rejects.toThrow("bad_attachment");
+});
+
+it("bounds timeline added events to three people and an others count", async () => {
+  const t = fixture();
+  const owner = await account(t, "Owner");
+  const groupId = await owner.client.mutation(api.groups.create, {
+    name: "Team",
+    memberIds: [],
+    inviteToken: "BoundedEvent123456",
+  });
+  for (let i = 2; i <= 101; i++) {
+    await t.run(async (ctx) => {
+      const ids = [];
+      for (let j = 0; j < 99; j++)
+        ids.push(
+          await ctx.db.insert("profiles", {
+            status: "active",
+            authUserId: `event${i}-${j}`,
+            email: `e${i}-${j}@example.com`,
+            displayName: "Past Member",
+          }),
+        );
+      await ctx.db.insert("messages", {
+        kind: "event",
+        groupId,
+        sequence: i,
+        event: { type: "added", by: owner.id, profileIds: ids },
+      });
+    });
+  }
+  const page = await owner.client.query(api.messages.range, {
+    groupId,
+    fromSequence: 2,
+    toSequence: 101,
+  });
+  expect(page).toHaveLength(100);
+  for (const message of page) {
+    expect(message).toMatchObject({ kind: "event", event: { type: "added", othersCount: 96 } });
+    if (message.kind !== "event" || message.event.type !== "added")
+      throw new Error("Missing event");
+    expect(message.event.people).toHaveLength(3);
+  }
+  expect(await owner.client.query(api.groups.list, {})).toMatchObject([
+    { preview: { summary: "You added Past, Past, Past and 96 others" } },
+  ]);
+  await drain(t);
+});
+
+it("caps worst-case CJK Expo JSON and encrypted Web Push payloads below 4096 bytes", async () => {
+  const t = fixture();
+  const alice = await account(t, "Alice", "界".repeat(60));
+  const bob = await account(t, "Bob");
+  const groupId = await alice.client.mutation(api.groups.create, {
+    name: "界".repeat(80),
+    memberIds: [bob.id],
+    inviteToken: "WorstPayload123456",
+  });
+  await bob.client.mutation(api.groups.setNotify, { groupId, notify: "all" });
+  await bob.client.mutation(api.devices.registerExpo, {
+    expoPushToken: `ExpoPushToken[${"x".repeat(185)}]`,
+  });
+  const { generateVAPIDKeys } = await import("web-push");
+  const vapid = generateVAPIDKeys();
+  vi.stubEnv("VAPID_PUBLIC_KEY", vapid.publicKey);
+  vi.stubEnv("VAPID_PRIVATE_KEY", vapid.privateKey);
+  vi.stubEnv("VAPID_SUBJECT", "mailto:chat@q9labs.ai");
+  await bob.client.mutation(api.devices.registerWeb, {
+    endpoint: "https://fcm.googleapis.com/fcm/send/budget",
+    ...pushKeys(),
+  });
+  await send(alice.client, groupId, "界".repeat(4000));
+  await drain(t);
+  const pushes = outbound.mock.calls.filter(([input]) => !fetchUrl(input).includes("workos.com"));
+  expect(pushes).toHaveLength(2);
+  for (const [, init] of pushes) {
+    const body = init?.body;
+    if (typeof body === "string") {
+      expect(new TextEncoder().encode(body).length).toBeLessThanOrEqual(4096);
+      expect(JSON.parse(body)).toMatchObject({ body: "界".repeat(200) + "…" });
+    } else if (body instanceof Uint8Array) expect(body.byteLength).toBeLessThanOrEqual(4096);
+    else throw new Error("Missing serialized push payload");
+  }
+});
+
+it("stops a web retry when a viewing lease is created after the failed attempt", async () => {
+  const t = fixture();
+  const { alice, bob, groupId } = await group(t);
+  const { generateVAPIDKeys } = await import("web-push");
+  const vapid = generateVAPIDKeys();
+  vi.stubEnv("VAPID_PUBLIC_KEY", vapid.publicKey);
+  vi.stubEnv("VAPID_PRIVATE_KEY", vapid.privateKey);
+  vi.stubEnv("VAPID_SUBJECT", "mailto:chat@q9labs.ai");
+  const endpoint = "https://fcm.googleapis.com/fcm/send/retry";
+  await bob.client.mutation(api.devices.registerWeb, { endpoint, ...pushKeys() });
+  let pushes = 0;
+  outbound.mockImplementation(async () => {
+    pushes++;
+    await bob.client.mutation(api.devices.viewing, { endpoint, groupId });
+    return new Response(null, { status: 500 });
+  });
+  await send(alice.client, groupId, "@Bob private");
+  await drain(t);
+  expect(pushes).toBe(1);
+});
+
+it.each([404, 410])("discards a dead web device on HTTP %i", async (status) => {
+  const t = fixture();
+  const { alice, bob, groupId } = await group(t);
+  const { generateVAPIDKeys } = await import("web-push");
+  const vapid = generateVAPIDKeys();
+  vi.stubEnv("VAPID_PUBLIC_KEY", vapid.publicKey);
+  vi.stubEnv("VAPID_PRIVATE_KEY", vapid.privateKey);
+  vi.stubEnv("VAPID_SUBJECT", "mailto:chat@q9labs.ai");
+  await bob.client.mutation(api.devices.registerWeb, {
+    endpoint: "https://fcm.googleapis.com/fcm/send/dead",
+    ...pushKeys(),
+  });
+  outbound.mockResolvedValue(new Response(null, { status }));
+  await send(alice.client, groupId, "@Bob ping");
+  await drain(t);
+  expect(await t.run((ctx) => ctx.db.query("devices").collect())).toHaveLength(0);
+});
+
+it("does not discard a device transferred while its old ticket is in flight", async () => {
+  const t = fixture();
+  const { alice, bob, carol, groupId } = await group(t);
+  const expoPushToken = "ExpoPushToken[transfer]";
+  await bob.client.mutation(api.devices.registerExpo, { expoPushToken });
+  outbound.mockImplementation(async () => {
+    await carol.client.mutation(api.devices.registerExpo, { expoPushToken });
+    return Response.json({ data: { status: "error", details: { error: "DeviceNotRegistered" } } });
+  });
+  await send(alice.client, groupId, "@Bob ping");
+  await drain(t);
+  expect(await t.run((ctx) => ctx.db.query("devices").collect())).toMatchObject([
+    { profileId: carol.id },
+  ]);
+});
+
+it("rejects invalid web key lengths and the wrong public-key prefix", async () => {
+  const t = fixture();
+  const alice = await account(t, "Alice");
+  const keys = pushKeys();
+  for (const invalid of [
+    { ...keys, p256dh: "test" },
+    { ...keys, auth: "test" },
+    { ...keys, p256dh: Buffer.alloc(65).toString("base64url") },
+  ])
+    await expect(
+      alice.client.mutation(api.devices.registerWeb, {
+        endpoint: "https://fcm.googleapis.com/fcm/send/key",
+        ...invalid,
+      }),
+    ).rejects.toThrow("Invalid push subscription");
+});
+
+it("sniffs real audio codecs and rejects video tracks and incomplete containers", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const t = fixture();
+  const { alice, groupId } = await group(t);
+  for (const name of ["voice.ogg", "voice.webm", "voice.m4a", "video.webm", "video.m4a"]) {
+    const bytes = await readFile(new URL(`./fixtures/${name}`, import.meta.url));
+    const response = await alice.client.fetch("/upload", {
+      method: "POST",
+      headers: { Authorization: "Bearer test", "Content-Type": "audio/mp4" },
+      body: new Uint8Array(bytes),
+    });
+    const id = await t.run(async (ctx) => {
+      const rows = await ctx.db.query("uploads").collect();
+      return rows.at(-1)?._id;
+    });
+    expect(response.status).toBe(200);
+    if (!id) throw new Error("Missing upload");
+    const sendVoice = alice.client.mutation(api.messages.send, {
+      groupId,
+      clientKey: name,
+      body: "",
+      attachments: [{ kind: "voice", uploadId: id, durationMs: 50, waveform: [0] }],
+    });
+    if (name.startsWith("voice")) await expect(sendVoice).resolves.toBeDefined();
+    else await expect(sendVoice).rejects.toThrow("bad_attachment");
+  }
+  for (const bytes of [
+    "OggS",
+    "OggSvorbis",
+    "\x1a\x45\xdf\xa3webm",
+    "0000ftypM4A ",
+    "OggS" + "x".repeat(65536) + "OpusHead",
+  ]) {
+    const uploadId = await upload(alice.client, bytes);
+    await expect(
+      alice.client.mutation(api.messages.send, {
+        groupId,
+        clientKey: String(bytes.length),
+        body: "",
+        attachments: [{ kind: "voice", uploadId, durationMs: 50, waveform: [0] }],
+      }),
+    ).rejects.toThrow("bad_attachment");
+  }
   await drain(t);
 });

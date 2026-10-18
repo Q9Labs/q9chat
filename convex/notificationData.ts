@@ -1,7 +1,7 @@
 import { firstName, messageSummary } from "@q9chat/domain";
 import { v } from "convex/values";
 
-import { internalQuery } from "./_generated/server";
+import { internalMutation, internalQuery } from "./_generated/server";
 import { membership } from "./lib/groups";
 import { groupDisplay } from "./lib/presentation";
 export const eligible = internalQuery({
@@ -32,11 +32,12 @@ export const eligible = internalQuery({
     const group = await ctx.db.get(message.groupId);
     if (!group) return null;
     const display = await groupDisplay(ctx, group, args.profileId);
+    const summary = Array.from(messageSummary(message));
     return {
       device,
       payload: {
         title: group.kind === "pair" ? name : `${name} in ${display.title}`,
-        body: messageSummary(message),
+        body: summary.slice(0, 200).join("") + (summary.length > 200 ? "…" : ""),
         url: `/g/${message.groupId}?m=${message.sequence}`,
       },
     };
@@ -49,4 +50,18 @@ export const devices = internalQuery({
       .query("devices")
       .withIndex("by_profile", (q) => q.eq("profileId", args.profileId))
       .collect(),
+});
+
+export const discardDevice = internalMutation({
+  args: { deviceId: v.id("devices"), profileId: v.id("profiles"), token: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const device = await ctx.db.get(args.deviceId);
+    if (
+      device?.profileId === args.profileId &&
+      (device.kind === "expo" ? device.expoPushToken : device.endpoint) === args.token
+    )
+      await ctx.db.delete(device._id);
+    return null;
+  },
 });

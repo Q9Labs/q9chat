@@ -70,7 +70,7 @@ export function parseMentions(body: string, members: readonly { id: string; name
 export type Person = { id: string; name: string; isYou: boolean };
 export type MemberEvent =
   | { type: "created"; by: Person }
-  | { type: "added"; by: Person; people: Person[] }
+  | { type: "added"; by: Person; people: Person[]; othersCount: number }
   | { type: "joined" | "left"; person: Person }
   | { type: "removed"; by: Person; person: Person };
 const subject = (person: Person) => (person.isYou ? "You" : person.name);
@@ -80,7 +80,7 @@ export function eventSentence(event: MemberEvent): string {
     case "created":
       return `${subject(event.by)} created this group`;
     case "added":
-      return `${subject(event.by)} added ${event.people.map(object).join(", ")}`;
+      return `${subject(event.by)} added ${event.people.map(object).join(", ")}${event.othersCount ? ` and ${event.othersCount} others` : ""}`;
     case "joined":
       return `${subject(event.person)} joined the group`;
     case "left":
