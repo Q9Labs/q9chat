@@ -12,7 +12,7 @@ export default {
   targets: [
     {
       name: "ios",
-      engine: mobile({ platform: "ios", ...(udid ? { device: udid } : {}) }),
+      engine: mobile({ platform: "ios", settle: false, ...(udid ? { device: udid } : {}) }),
       app: {
         bundleId: "ai.q9labs.chat",
         launchArguments: [

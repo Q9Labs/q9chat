@@ -19,8 +19,10 @@ const cookies = new Map<string, string>();
 export async function magicCode(email: string) {
   // Read the challenge created by our UI/public API, never replace it with another challenge.
   for (let attempt = 0; attempt < 30; attempt++) {
+    // The list is oldest first and capped at 100, so an unbounded read never reaches a new event.
+    const since = new Date(Date.now() - 10 * 60_000).toISOString();
     const response = await fetch(
-      "https://api.workos.com/events?events=magic_auth.created&limit=100",
+      `https://api.workos.com/events?events=magic_auth.created&limit=100&range_start=${since}`,
       { headers },
     );
     if (!response.ok) throw new Error(`WorkOS events returned ${response.status}`);

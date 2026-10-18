@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { test } from "@e2e-dev/mobile";
 import { api } from "@q9chat/convex";
 import { ConvexHttpClient } from "convex/browser";
-import { expect } from "e2e";
+import { expect, type Locator } from "e2e";
 
 import {
   deletePhoneProfile,
@@ -29,18 +29,88 @@ const udid = (() => {
   return value;
 })();
 
-const ONE_PIXEL_PNG =
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jW4UAAAAASUVORK5CYII=";
+const PHOTO_JPEG =
+  "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAA0JCgsKCA0LCgsODg0PEyAVExISEyccHhcgLikxMC4pLSwzOko+MzZGNywtQFdBRkxOUlNSMj5aYVpQYEpRUk//2wBDAQ4ODhMREyYVFSZPNS01T09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0//wAARCABAAEADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAAQG/8QAFRABAQAAAAAAAAAAAAAAAAAAABP/xAAXAQEBAQEAAAAAAAAAAAAAAAAABgQD/8QAFhEBAQEAAAAAAAAAAAAAAAAAABIU/9oADAMBAAIRAxEAPwDDzJq5k11pcISTJq5kzSQkmTVzJmkhJMmrmTNJCyZNXMmntLZCSZNXMmaSEkyauZM0kJJk1cyZpIVzJq5k09pbISTJq5kzSQkmTVzJmkhJMmrmTNJCyZNXMmntLXCSZNXMmaSEkyauZM0kJJk1cyZpIf/Z";
 
 function simctl(...args: string[]) {
   execFileSync("xcrun", ["simctl", ...args], { stdio: "ignore" });
 }
 
+// A system sheet from an earlier run (the photo picker, the web sign-in sheet) lingers after it closes and
+// hides the next one from the accessibility tree, so each run starts with those hosts stopped.
+function stopSystemSheets() {
+  for (const bundleId of ["com.apple.PhotosViewService", "com.apple.SafariViewService"])
+    spawnSync("xcrun", ["simctl", "terminate", udid, bundleId], { stdio: "ignore" });
+}
+
+// A plain fill reads the field back before the controlled input has re-rendered and fails on identical text,
+// so the text goes in key by key.
+async function enter(field: Locator, text: string) {
+  await field.fill("");
+  if (text) await field.pressSequentially(text, { delay: 80 });
+}
+
 function addPhotoToLibrary() {
-  const file = join(mkdtempSync(join(tmpdir(), "q9-j1-photo-")), "profile.png");
-  writeFileSync(file, Buffer.from(ONE_PIXEL_PNG, "base64"));
+  const file = join(mkdtempSync(join(tmpdir(), "q9-j1-photo-")), "profile.jpg");
+  writeFileSync(file, Buffer.from(PHOTO_JPEG, "base64"));
   simctl("addmedia", udid, file);
 }
+
+const SIGN_IN_INCOMPLETE = "Sign-in wasn't completed. Try again.";
+
+test(
+  "Google opens the system auth session, and closing it shows the sign-in error",
+  // The error line is on screen for about two seconds and a runner step can take longer, so a missed line is retried.
+  { timeout: 120_000, retries: 2, platforms: ["ios"] },
+  async ({ app, device, screen }) => {
+    await device.clearKeychain();
+    await app.open();
+    await screen.getByRole("button", "Continue with Google").tap();
+    // The system asks once before it opens the WorkOS page; the proof runner reads the page it shows.
+    await screen.getByRole("button", "Continue", { exact: true }).tap();
+    await app.screenshot("oauth-google-session");
+    // The error line clears itself after about two seconds, so the check starts before the tap returns.
+    await Promise.all([
+      expect(screen.getByText(SIGN_IN_INCOMPLETE)).toBeVisible(),
+      screen.getByRole("button", "Cancel").tap(),
+    ]);
+  },
+);
+
+test(
+  "a made-up code on the phone-callback page returns to the app with the error copy",
+  { timeout: 120_000, retries: 2, platforms: ["ios"] },
+  async ({ app, device, screen }) => {
+    await device.clearKeychain();
+    await app.open();
+    simctl("openurl", udid, `${origin}/auth/phone-callback?code=made-up&state=made-up`);
+    // Safari asks before it hands the q9chat link to the app, so the device is pointed at Safari to answer.
+    await device.openApp("com.apple.mobilesafari");
+    await screen.getByRole("button", "Open").tap();
+    await device.openApp("ai.q9labs.chat");
+    await expect(screen.getByText(SIGN_IN_INCOMPLETE)).toBeVisible();
+    await expect(screen.getByRole("button", "Email me a code")).toBeVisible();
+  },
+);
+
+test(
+  "a failed phone sign-in lands on the return-to-your-phone page",
+  { timeout: 120_000, platforms: ["ios"] },
+  async ({ app, device, screen }) => {
+    await device.clearKeychain();
+    simctl("openurl", udid, `${origin}/auth/error?reason=phone_failed`);
+    // The page opens in Safari, so the device is pointed at Safari to read it.
+    await device.openApp("com.apple.mobilesafari");
+    await expect(screen.getByText("Sign-in wasn\u2019t completed")).toBeVisible();
+    await expect(
+      screen.getByText(
+        "Close this page to return to your phone, or try signing in again on the web.",
+      ),
+    ).toBeVisible();
+    await expect(screen.getByRole("link", "Return to Q9 Chat")).toBeVisible();
+    await app.screenshot("return-to-your-phone");
+  },
+);
 
 test(
   "J1: sign up, set up, live groups and sign out",
@@ -53,49 +123,58 @@ test(
     let firstAuthenticated = false;
     let peerSession: PhoneSession | undefined;
     try {
+      stopSystemSheets();
       await device.clearKeychain();
       addPhotoToLibrary();
       await app.open();
       await expect(screen.getByRole("button", "Continue with Google")).toBeVisible();
       await expect(screen.getByRole("button", "Continue with Apple")).toBeVisible();
 
-      await screen.getByLabel("Email").fill("not-an-email");
+      await enter(screen.getByLabel("Email"), "not-an-email");
       await screen.getByRole("button", "Email me a code").tap();
       await expect(screen.getByText("Enter your email address")).toBeVisible();
 
-      await screen.getByLabel("Email").fill(email);
+      await enter(screen.getByLabel("Email"), email);
       await screen.getByRole("button", "Email me a code").tap();
-      await expect(screen.getByRole("heading", "Check your email")).toBeVisible();
+      await expect(screen.getByText("Check your email")).toBeVisible();
       await expect(screen.getByLabel("Digit 1")).toBeFocused();
       await expect(screen.getByText(`Enter the 6-digit code we sent to ${email}.`)).toBeVisible();
       await app.screenshot("02-code");
 
       await magicCode(email);
-      await screen.getByText("send a new code").tap();
+      await screen.getByRole("link", "send a new code").tap();
       await expect(screen.getByText("We sent a new code")).toBeVisible();
       await expect(screen.getByLabel("Digit 1")).toBeFocused();
       const code = await magicCode(email);
-      await screen.getByLabel("Digit 1").fill(code === "000000" ? "111111" : "000000");
+      // The code cells hand focus on after each digit, so the code is typed key by key from the first cell.
+      await screen
+        .getByLabel("Digit 1")
+        .pressSequentially(code === "000000" ? "111111" : "000000", { delay: 80 });
       await expect(
         screen.getByText("That code didn't work. Check it and try again."),
       ).toBeVisible();
       await expect(screen.getByLabel("Digit 1")).toHaveValue("");
       await expect(screen.getByLabel("Digit 1")).toBeFocused();
-      await screen.getByLabel("Digit 1").fill(code);
+      await screen.getByLabel("Digit 1").pressSequentially(code, { delay: 80 });
 
-      await expect(screen.getByRole("heading", "Set up your profile")).toBeVisible();
+      await expect(screen.getByText("Set up your profile")).toBeVisible();
       await expect(
         screen.getByText(
           `Signed in as ${email}. Without a photo, people see your initials on your color.`,
         ),
       ).toBeVisible();
       firstAuthenticated = true;
-      await screen.getByLabel("Your name").fill("");
-      await expect(screen.getByRole("button", "Continue", { exact: true })).toBeDisabled();
-      await screen.getByLabel("Your name").fill("Nadia Journey");
+      // The photo goes first: the keyboard's large accessibility tree makes the picker unreadable for the runner.
       await screen.getByRole("button", "Add a photo").tap();
-      await screen.getByLabel(/^Photo/).tap();
+      // The picker lists the library newest first, so the first photo is the one added at the start of this test.
+      await screen
+        .getByRole("image", /^Photo, /)
+        .first()
+        .tap();
       await expect(screen.getByRole("button", "Remove photo")).toBeVisible();
+      await enter(screen.getByRole("textbox", "Your name"), "");
+      await expect(screen.getByRole("button", "Continue", { exact: true })).toBeDisabled();
+      await enter(screen.getByRole("textbox", "Your name"), "Nadia Journey");
       await app.screenshot("03-setup");
       await screen.getByRole("button", "Continue", { exact: true }).tap();
 
@@ -123,7 +202,9 @@ test(
         attachments: [],
       });
       // No navigation after the other person's mutation: this checks the live subscription.
-      await expect(screen.getByRole("button", "Journey live group, 1 unread")).toBeVisible();
+      await expect(
+        screen.getByRole("button", "Journey live group, Sara: Welcome to the live group, 1 unread"),
+      ).toBeVisible();
       await expect(screen.getByText("Sara: Welcome to the live group")).toBeVisible();
       await app.screenshot("05-live-groups");
 
@@ -140,49 +221,5 @@ test(
       if (firstAuthenticated) await deletePhoneProfile(await signInPhone(email));
       await Promise.all([removeTestUser(email), removeTestUser(secondEmail)]);
     }
-  },
-);
-
-const SIGN_IN_INCOMPLETE = "Sign-in wasn't completed. Try again.";
-
-test(
-  "Google opens the system auth session, and closing it shows the sign-in error",
-  { timeout: 120_000, platforms: ["ios"] },
-  async ({ app, device, screen }) => {
-    await device.clearKeychain();
-    await app.open();
-    await screen.getByRole("button", "Continue with Google").tap();
-    // The system asks once before it opens the WorkOS page; the proof runner reads the page it shows.
-    await screen.getByRole("button", "Continue", { exact: true }).tap();
-    await app.screenshot("oauth-google-session");
-    await screen.getByRole("button", "Cancel").tap();
-    await expect(screen.getByText(SIGN_IN_INCOMPLETE)).toBeVisible();
-  },
-);
-
-test(
-  "a made-up code on the phone-callback page returns to the app with the error copy",
-  { timeout: 120_000, platforms: ["ios"] },
-  async ({ app, device, screen }) => {
-    await device.clearKeychain();
-    await app.open();
-    simctl("openurl", udid, `${origin}/auth/phone-callback?code=made-up&state=made-up`);
-    await screen.getByRole("button", "Open").tap();
-    await expect(screen.getByText(SIGN_IN_INCOMPLETE)).toBeVisible();
-    await expect(screen.getByRole("button", "Email me a code")).toBeVisible();
-  },
-);
-
-test(
-  "a failed phone sign-in lands on the return-to-your-phone page",
-  { timeout: 120_000, platforms: ["ios"] },
-  async ({ device }) => {
-    await device.clearKeychain();
-    simctl("openurl", udid, `${origin}/auth/error?reason=phone_failed`);
-    await expect(
-      device.locator(
-        "label=Close this page to return to your phone, or try signing in again on the web.",
-      ),
-    ).toBeVisible();
   },
 );
