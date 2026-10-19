@@ -15,6 +15,7 @@
 - **Send photos, files and voice notes on the web**: Send attachments without losing a text draft. Keep unsent bytes on this device for retry, and open, download or play protected attachments.
 - **Find old messages on the web**: Search your groups as you type, then open a result at its highlighted message.
 - **Manage group membership and mute on web**: Mute or unmute a group, leave with confirmation, remove a member, and clear a removal notice.
+- **Production phone build settings**: Store builds connect to the same Q9 Chat service as the web app. Development builds keep their local settings.
 
 ### Fixed
 

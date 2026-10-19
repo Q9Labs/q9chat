@@ -16,7 +16,8 @@
     "ios": "expo run:ios",
     "android": "expo run:android",
     "test": "node --test tests/*.test.ts",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tests"
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tests",
+    "eas-build-post-install": "pnpm --filter @q9chat/convex build"
   },
   "dependencies": {
     "@expo-google-fonts/figtree": "0.4.1",

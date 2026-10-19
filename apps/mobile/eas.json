@@ -7,13 +7,22 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "ios": { "simulator": true }
+      "ios": {
+        "simulator": true
+      }
     },
     "preview": {
       "distribution": "internal"
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "environment": "production",
+      "env": {
+        "EXPO_PUBLIC_CONVEX_URL": "https://utmost-alligator-175.convex.cloud",
+        "EXPO_PUBLIC_CONVEX_SITE_URL": "https://utmost-alligator-175.convex.site",
+        "EXPO_PUBLIC_AUTH_ORIGIN": "https://chat.q9labs.ai",
+        "EXPO_PUBLIC_WORKOS_CLIENT_ID": "client_01M57CT79FJ9Z90Y9SDBYN5C97"
+      }
     }
   },
   "submit": {
