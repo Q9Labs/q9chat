@@ -225,8 +225,7 @@ test(
         .click();
       await page.getByText("Desktop notifications are on", { exact: true }).waitFor();
       await page.evaluate(() => {
-        PushSubscription.prototype.unsubscribe = () =>
-          Promise.reject(new Error("Push service unavailable"));
+        PushSubscription.prototype.unsubscribe = () => new Promise<boolean>(() => {});
       });
       await page.getByRole("button", { name: "Account" }).click();
       await page.getByRole("button", { name: "Sign out", exact: true }).click();

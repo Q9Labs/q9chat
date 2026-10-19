@@ -105,10 +105,23 @@ export async function signOutWithNotifications(
   stop: () => Promise<void>,
   signOut: () => Promise<void>,
 ) {
-  const cleaned = await stop().then(
-    () => true,
-    () => false,
-  );
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  let cleaned: boolean;
+  try {
+    cleaned = await Promise.race([
+      Promise.resolve()
+        .then(stop)
+        .then(
+          () => true,
+          () => false,
+        ),
+      new Promise<false>((resolve) => {
+        timeout = setTimeout(() => resolve(false), 10_000);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timeout);
+  }
   await signOut();
   return cleaned;
 }
