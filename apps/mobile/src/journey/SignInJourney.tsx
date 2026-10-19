@@ -20,7 +20,7 @@ function noticeOf(complete: boolean, toast: string | null): ToastNotice | null {
 }
 
 /** Sign in by email code, or through Google or Apple in the system auth session; behaves as the web journey does. */
-export function SignInJourney() {
+export function SignInJourney({ invite }: { invite?: string | undefined }) {
   const signOut = useSignOut();
   const [email, setEmail] = useState("");
   const [codeEmail, setCodeEmail] = useState<string | null>(null);
@@ -56,7 +56,7 @@ export function SignInJourney() {
     }
     busy.current = true;
     try {
-      await sessionClient.startEmail(target);
+      await sessionClient.startEmail(target, invite);
       setCodeEmail(target);
       setCode("");
       setCodeError("");
@@ -93,7 +93,7 @@ export function SignInJourney() {
     signOut.clear();
     busy.current = true;
     try {
-      await sessionClient.startOAuth(provider);
+      await sessionClient.startOAuth(provider, invite);
       postNotice(`Signed in with ${provider === "google" ? "Google" : "Apple"}`);
     } catch (error) {
       // A closed window, a refusal and a failed exchange all read the same to the person.

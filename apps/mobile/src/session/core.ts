@@ -18,10 +18,13 @@ import {
 } from "./pkce.ts";
 import {
   ATTEMPT_TTL_MS,
+  isInviteToken,
   readAttempt,
   readEmailAttempt,
+  readPendingInvite,
   writeAttempt,
   writeEmailAttempt,
+  writePendingInvite,
   type OAuthAttempt,
   type Store,
 } from "./storage.ts";
@@ -61,6 +64,10 @@ const REFRESH_AHEAD_MS = 30_000;
 const REVOKE_TRIES = 3;
 
 const noop = () => {};
+
+/** The invite a sign-in attempt carries, when the route that started it had a valid one. */
+const inviteOf = (invite: string | undefined) =>
+  invite && isInviteToken(invite) ? { invite } : {};
 
 /**
  * The phone session. Every operation that touches the keychain or changes the session (restore,
@@ -118,10 +125,10 @@ export function createSessionClient(edges: SessionEdges) {
   }
 
   /** One Worker request; a sign-out can cancel it while it is `cancelable`. */
-  async function request<T>(call: (options: authApi.RequestOptions) => Promise<T>, cancels = true) {
-    if (cancels && leaving > 0) throw new Error("signed_out");
+  async function request<T>(call: (options: authApi.RequestOptions) => Promise<T>) {
+    if (leaving > 0) throw new Error("signed_out");
     const controller = new AbortController();
-    if (cancels) cancelable = controller;
+    cancelable = controller;
     try {
       return await call({ signal: controller.signal, timeoutMs });
     } finally {
@@ -214,14 +221,21 @@ export function createSessionClient(edges: SessionEdges) {
     await readEmailAttempt(store, edges.now());
   }
 
-  /** A sign-in, by email or OAuth, ends every other attempt in the same step that adopts its session. */
-  async function signIn(next: PhoneSession) {
+  /**
+   * A sign-in, by email or OAuth, ends every other attempt in the same step that adopts its session.
+   * The invite goes with it: the one this attempt was started for is saved for the first screen to
+   * take, and any other saved invite is deleted (a failure to delete fails the sign-in), so a later
+   * account never meets an invite that belongs to another attempt.
+   */
+  async function signIn(next: PhoneSession, invite: string | undefined) {
     await clearAttempts();
+    await store.delete("pendingInvite");
+    if (invite) await writePendingInvite(store, invite, edges.now()).catch(noop);
     await adopt(next);
   }
 
   /** Sends the code and saves the attempt with the Worker's email transaction cookie, so a restarted app can finish it. */
-  const startEmail = (email: string) =>
+  const startEmail = (email: string, invite?: string) =>
     enqueue(async () => {
       jar.delete("q9_email");
       await request((options) => authApi.startEmail(email, jar, options));
@@ -229,19 +243,21 @@ export function createSessionClient(edges: SessionEdges) {
         email,
         expiresAt: edges.now() + ATTEMPT_TTL_MS,
         cookies: [...jar].filter(([name]) => name === "q9_email"),
+        ...inviteOf(invite),
       });
     });
 
-  /** Puts the saved email cookie back in the jar and returns that email; null when nothing valid is saved, or it is for another email than the one named. */
+  /** Puts the saved email cookie back in the jar and returns that attempt; null when nothing valid is saved, or it is for another email than the one named. */
   async function restoreEmailCookie(email?: string) {
     const saved = await readEmailAttempt(store, edges.now());
     if (!saved || (email !== undefined && saved.email !== email)) return null;
     for (const [name, value] of saved.cookies) jar.set(name, value);
-    return saved.email;
+    return saved;
   }
 
   /** The email a code was sent to before the app was killed, when it is still within ten minutes; null otherwise. */
-  const resumeEmail = () => enqueue(() => restoreEmailCookie()).catch(() => null);
+  const resumeEmail = () =>
+    enqueue(async () => (await restoreEmailCookie())?.email ?? null).catch(() => null);
 
   /** "Use a different email": forgets the code that was sent. */
   const discardEmail = () => {
@@ -251,13 +267,15 @@ export function createSessionClient(edges: SessionEdges) {
 
   const verifyEmail = (email: string, code: string) =>
     enqueue(async () => {
-      await restoreEmailCookie(email);
-      const next = await request((options) => authApi.verifyEmail(email, code, jar, options));
-      await signIn(next);
+      const attempt = await restoreEmailCookie(email);
+      // The saved attempt is for this email by construction; the code is checked against the attempt's own address.
+      const target = attempt?.email ?? email;
+      const next = await request((options) => authApi.verifyEmail(target, code, jar, options));
+      await signIn(next, attempt?.invite);
     });
 
   /** Saves a started attempt, with the Worker's transaction cookie, so a restarted app can finish it. */
-  async function beginAttempt(provider: Provider) {
+  async function beginAttempt(provider: Provider, invite: string | undefined) {
     const verifier = base64Url(edges.randomBytes(32));
     const nonce = base64Url(edges.randomBytes(16));
     jar.delete("q9_phone");
@@ -267,6 +285,7 @@ export function createSessionClient(edges: SessionEdges) {
       verifier,
       expiresAt: edges.now() + ATTEMPT_TTL_MS,
       cookies: [...jar].filter(([name]) => name === "q9_phone"),
+      ...inviteOf(invite),
     };
     await writeAttempt(store, attempt);
     const challenge = toBase64Url(await edges.sha256Base64(verifier));
@@ -297,7 +316,7 @@ export function createSessionClient(edges: SessionEdges) {
       const next = await request((options) =>
         authApi.exchangeOAuthCode(params.code, attempt.verifier, jar, options),
       );
-      await signIn(next);
+      await signIn(next, attempt.invite);
     } catch {
       throw new SignInIncompleteError();
     } finally {
@@ -332,13 +351,13 @@ export function createSessionClient(edges: SessionEdges) {
   }
 
   /** Opens Google or Apple in the system auth window and signs in with the code it returns. */
-  async function startOAuth(provider: Provider) {
+  async function startOAuth(provider: Provider, invite?: string) {
     if (liveWindow) throw new SignInIncompleteError();
     const mine = {};
     liveWindow = mine;
     delivered = null;
     try {
-      const started = await enqueue(() => beginAttempt(provider));
+      const started = await enqueue(() => beginAttempt(provider, invite));
       const params = await openWindow(started.url);
       if (!params) {
         await enqueue(() => dropAttempt(started.state)).catch(noop);
@@ -350,12 +369,50 @@ export function createSessionClient(edges: SessionEdges) {
     }
   }
 
+  /** The invite a finished sign-in saved, once: reading it deletes it, so it is never offered twice. */
+  const takeInvite = () =>
+    enqueue(async () => {
+      const token = await readPendingInvite(store, edges.now());
+      if (token) await store.delete("pendingInvite");
+      return token;
+    });
+
+  /**
+   * The route of `token` went away: the sign-in it started stops carrying the invite, and a saved
+   * copy is deleted. When a delete fails the invite stays with that attempt only, and no other
+   * sign-in will hand it on.
+   */
+  const forgetInvite = (token: string) =>
+    enqueue(async () => {
+      const email = await readEmailAttempt(store, edges.now());
+      if (email?.invite === token)
+        await writeEmailAttempt(store, {
+          email: email.email,
+          expiresAt: email.expiresAt,
+          cookies: email.cookies,
+        });
+      const oauth = await readAttempt(store, edges.now());
+      if (oauth?.invite === token)
+        await writeAttempt(store, {
+          state: oauth.state,
+          verifier: oauth.verifier,
+          expiresAt: oauth.expiresAt,
+          cookies: oauth.cookies,
+        });
+      if ((await readPendingInvite(store, edges.now())) === token)
+        await store.delete("pendingInvite");
+    });
+
   /** Asks the server to revoke a signed-out token. Nothing is saved: if the app ends first, the server session runs out by itself. */
-  async function revokeQuietly(token: string, triesLeft = REVOKE_TRIES): Promise<void> {
-    try {
-      await request((options) => authApi.revokeSession(token, options), false);
-    } catch {
-      if (triesLeft > 1) await revokeQuietly(token, triesLeft - 1);
+  async function revokeQuietly(token: string) {
+    for (let attempt = 0; attempt < REVOKE_TRIES; attempt += 1) {
+      try {
+        // react-doctor-disable-next-line react-doctor/async-await-in-loop -- the tries are one after another by design
+        await authApi.revokeSession(token, { timeoutMs }); // oxlint-disable-line no-await-in-loop
+        return;
+      } catch {
+        // Try again, up to REVOKE_TRIES.
+      }
     }
   }
 
@@ -373,6 +430,8 @@ export function createSessionClient(edges: SessionEdges) {
     const token = await enqueue(async () => {
       try {
         const active = await store.get("refreshToken").catch(() => null);
+        // The invite goes first and a failure to delete it fails the sign-out too, so a later account never meets it.
+        await store.delete("pendingInvite");
         await store.delete("refreshToken");
         await clearAttempts().catch(noop);
         publish({ status: "unauthenticated" });
@@ -401,6 +460,8 @@ export function createSessionClient(edges: SessionEdges) {
     verifyEmail,
     startOAuth,
     finishOAuth,
+    takeInvite,
+    forgetInvite,
     signOut,
     subscribe,
     snapshot: () => state,

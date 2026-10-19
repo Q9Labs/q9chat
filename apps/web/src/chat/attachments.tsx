@@ -145,7 +145,7 @@ async function playVoice(element: HTMLAudioElement, voice: VoiceAttachment) {
   if (voice.resource) {
     // eslint-disable-next-line react-doctor/async-defer-await -- Safe because the node can unmount while private bytes load; this guard must run after the await.
     const url = await voice.resource.load(voice.resource.path);
-    if (!element.isConnected) return;
+    if (!element.isConnected || activeAudio !== element) return;
     if (element.src !== url) element.src = url;
   }
   if (element.error) element.load();
@@ -248,7 +248,7 @@ export function VoiceRow({ voice, onError }: VoiceRowProps) {
       {error ? (
         <span>
           {error}{" "}
-          <a href={voice.url} download="voice-note">
+          <a href={voice.url} download="voice-note" hidden={!voice.url}>
             Download voice note
           </a>
         </span>

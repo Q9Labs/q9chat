@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Attachment, PostView } from "../chat/types.js";
 import { transportLifetime } from "../lib/convex.js";
 import { useSession } from "../lib/session.js";
+import { journeyError } from "./group-errors.js";
 import { loadMedia, removeMedia, saveMedia, type Media, type SavedMedia } from "./media-storage.js";
 import { httpOrigin, uploadResponse } from "./photos.js";
 
@@ -186,7 +187,11 @@ export function useMediaOutbox(group: Group, rows: readonly Row[]) {
       signal.throwIfAborted();
     }
     signal.throwIfAborted();
-    return send({ groupId: group.groupId, clientKey: post.clientKey, body: "", attachments });
+    return send({ groupId: group.groupId, clientKey: post.clientKey, body: "", attachments }).catch(
+      (cause: unknown) => {
+        throw new Error(journeyError(cause));
+      },
+    );
   }
   async function deliver(post: Pending) {
     const controller = availableController(

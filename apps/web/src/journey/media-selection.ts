@@ -52,5 +52,10 @@ export async function selectedMedia(
 ): Promise<readonly Media[]> {
   if (!files.length || files.length > 10) throw new Error("Choose one to ten attachments.");
   for (const file of files) validateFile(file, kind);
-  return Promise.all(files.map((file) => (kind === "file" ? genericFile(file) : photo(file))));
+  const selected: Media[] = [];
+  for (const file of files) {
+    // eslint-disable-next-line react-doctor/async-await-in-loop -- Serial decoding is intentional because concurrent phone photos can exhaust tab memory.
+    selected.push(await (kind === "file" ? genericFile(file) : photo(file)));
+  }
+  return selected;
 }
