@@ -4,11 +4,14 @@ import { useEffect, useState } from "react";
 
 import { PermissionBanner } from "../screens/sidebar.js";
 import {
+  desktopDeliveryEnabled,
+  setDesktopDelivery,
   desktopPublicKey,
   desktopSubscription,
   pushDetails,
   useDesktopSupport,
 } from "./desktop-notifications.js";
+import { trackDesktopViewing } from "./notification-viewing.js";
 
 export function Notifications({
   groupId,
@@ -28,46 +31,62 @@ export function Notifications({
   const supported = useDesktopSupport();
 
   useEffect((): (() => void) | void => {
-    if (!supported || Notification.permission !== "granted") return;
+    if (!supported) return;
     let active = true;
-    void navigator.serviceWorker
-      .getRegistration("/notifications.js")
-      .then(async (worker) => {
-        const subscription = await worker?.pushManager.getSubscription();
-        if (!subscription) return;
-        await register(pushDetails(subscription));
-        if (active) {
-          setEndpoint(subscription.endpoint);
-          setEnabled(true);
-        }
-      })
-      .catch(() => {
-        if (active) setError("Couldn't reconnect notifications. Turn on to retry.");
-      });
+    const reconnect = () => {
+      if (Notification.permission !== "granted") return;
+      void desktopDeliveryEnabled()
+        .then(async (deliveryEnabled) => {
+          if (!deliveryEnabled) return;
+          const worker = await navigator.serviceWorker.getRegistration("/notifications.js");
+          const subscription = await worker?.pushManager.getSubscription();
+          if (!subscription) {
+            if (active) {
+              setEnabled(false);
+              setError("Notifications need reconnecting. Turn on to retry.");
+            }
+            return;
+          }
+          await register(pushDetails(subscription));
+          await (await caches.open("q9chat-notifications")).delete("/__notifications__/reconnect");
+          if (active) {
+            setEndpoint(subscription.endpoint);
+            setEnabled(true);
+          }
+          for (const notification of (await worker?.getNotifications({
+            tag: "q9chat-reconnect",
+          })) ?? [])
+            notification.close();
+        })
+        .catch(() => {
+          if (active) {
+            setEnabled(false);
+            setError("Couldn't reconnect notifications. Turn on to retry.");
+          }
+        });
+    };
+    reconnect();
+    const changed = (event: MessageEvent<unknown>) => {
+      if (
+        typeof event.data === "object" &&
+        event.data !== null &&
+        "type" in event.data &&
+        event.data.type === "subscription-changed"
+      )
+        reconnect();
+    };
+    navigator.serviceWorker.addEventListener("message", changed);
     return () => {
       active = false;
+      navigator.serviceWorker.removeEventListener("message", changed);
     };
   }, [supported, register]);
 
   useEffect((): (() => void) | void => {
     if (!endpoint) return;
-    const update = () => {
-      void viewing({
-        endpoint,
-        groupId: document.visibilityState === "visible" && document.hasFocus() ? groupId : null,
-      }).catch(() => setError("Couldn't update notifications. Check your connection."));
-    };
-    update();
-    const timer = window.setInterval(update, 30_000);
-    document.addEventListener("visibilitychange", update);
-    window.addEventListener("focus", update);
-    window.addEventListener("blur", update);
-    return () => {
-      window.clearInterval(timer);
-      document.removeEventListener("visibilitychange", update);
-      window.removeEventListener("focus", update);
-      window.removeEventListener("blur", update);
-    };
+    return trackDesktopViewing(viewing, endpoint, groupId, () =>
+      setError("Couldn't update notifications. Check your connection."),
+    );
   }, [endpoint, groupId, viewing]);
 
   async function turnOn() {
@@ -87,6 +106,7 @@ export function Notifications({
       }
       const subscription = await desktopSubscription(key);
       await register(pushDetails(subscription));
+      await setDesktopDelivery(true);
       setEndpoint(subscription.endpoint);
       setEnabled(true);
       onNotice("Desktop notifications are on");

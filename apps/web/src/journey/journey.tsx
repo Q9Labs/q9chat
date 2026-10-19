@@ -8,13 +8,14 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 
 import type { GroupListRow, Me } from "../chat/types.js";
 import { AccountTransport } from "../lib/account-transport.js";
+import { accountConvexClient } from "../lib/convex.js";
 import { useSession } from "../lib/session.js";
 import { AccountDialog } from "../screens/dialogs.js";
 import { ChatShell, PickAGroup } from "../screens/shell.js";
 import { NoGroupsYet, Sidebar } from "../screens/sidebar.js";
 import { Toast } from "../ui/overlay.js";
 import { AppRoot } from "../ui/root.js";
-import { stopDesktopNotifications } from "./desktop-notifications.js";
+import { signOutWithNotifications, stopDesktopNotifications } from "./desktop-notifications.js";
 import { GroupJourneyBoundary, useGroupJourney } from "./groups.js";
 import { Notifications } from "./notifications.js";
 import { OAuthArrival } from "./oauth-arrival.js";
@@ -36,6 +37,7 @@ function useJourneySignOut() {
   const [signOutStatus, setSignOutStatus] = useState<"idle" | "pending" | "complete" | "failed">(
     "idle",
   );
+  const [notificationWarning, setNotificationWarning] = useState(false);
   const generation = useRef(0);
   const signOutSession = useRef<string | null>(null);
   const currentSession = useRef<string | null>(null);
@@ -67,19 +69,35 @@ function useJourneySignOut() {
     if (signOutStatus === "pending") return;
     const started = ++generation.current;
     signOutSession.current = currentSession.current;
+    setNotificationWarning(false);
     setSignOutStatus("pending");
-    void stopDesktopNotifications()
-      .then(signOut)
-      .then(
-        () => {
-          if (started === generation.current) setSignOutStatus("complete");
-        },
-        () => {
-          if (started === generation.current) setSignOutStatus("failed");
-        },
-      );
+    void signOutWithNotifications(
+      () =>
+        stopDesktopNotifications((endpoint) =>
+          accountConvexClient().mutation(api.devices.unregister, { endpoint }),
+        ),
+      signOut,
+    ).then(
+      (cleaned) => {
+        if (started === generation.current) {
+          setNotificationWarning(!cleaned);
+          setSignOutStatus("complete");
+        }
+      },
+      () => {
+        if (started === generation.current) setSignOutStatus("failed");
+      },
+    );
   }, [signOut, signOutStatus]);
-  return { signOutStatus, leave, clearSignOutStatus: () => setSignOutStatus("idle") };
+  return {
+    signOutStatus,
+    notificationWarning,
+    leave,
+    clearSignOutStatus: () => {
+      setNotificationWarning(false);
+      setSignOutStatus("idle");
+    },
+  };
 }
 
 export function Journey({
@@ -91,7 +109,7 @@ export function Journey({
 }) {
   const session = useSession();
   const [now, setNow] = useState(Date.now);
-  const { signOutStatus, leave, clearSignOutStatus } = useJourneySignOut();
+  const { signOutStatus, notificationWarning, leave, clearSignOutStatus } = useJourneySignOut();
   const arrivalMethod = authError ? null : session.method;
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 30_000);
@@ -111,22 +129,42 @@ export function Journey({
         ) : (
           <InviteToken.Provider value={inviteToken}>
             <AccountTransport key={session.user.id}>
-              <ProfileGate />
+              {signOutStatus === "pending" ? <Loading /> : <ProfileGate />}
             </AccountTransport>
           </InviteToken.Provider>
         )}
-        {signOutStatus === "failed" ? (
-          <Toast
-            message="Couldn't sign out. Try again."
-            action={{ label: "Try again", onClick: leave }}
-          />
-        ) : null}
+        <SignOutNotice
+          status={signOutStatus}
+          notificationWarning={notificationWarning}
+          onRetry={leave}
+        />
         {session.status !== "loading" ? (
           <OAuthArrival key={arrivalMethod ?? "signed-out"} method={arrivalMethod} />
         ) : null}
       </AppRoot>
     </SignOutAction.Provider>
   );
+}
+
+function SignOutNotice({
+  status,
+  notificationWarning,
+  onRetry,
+}: {
+  readonly status: ReturnType<typeof useJourneySignOut>["signOutStatus"];
+  readonly notificationWarning: boolean;
+  readonly onRetry: () => void;
+}) {
+  if (notificationWarning)
+    return <Toast message="Signed out. Notification cleanup failed. Quit this browser." />;
+  if (status === "failed")
+    return (
+      <Toast
+        message="Couldn't sign out. Try again."
+        action={{ label: "Try again", onClick: onRetry }}
+      />
+    );
+  return null;
 }
 
 function Loading() {

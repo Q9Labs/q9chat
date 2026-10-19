@@ -96,6 +96,55 @@ test(
           async () => !!(await (await navigator.serviceWorker.ready).pushManager.getSubscription()),
         ),
       ).toBe(true);
+      const notificationWorker = context.serviceWorkers()[0];
+      if (!notificationWorker) throw new Error("Missing notification service worker");
+      await page.evaluate(() => {
+        navigator.serviceWorker.addEventListener(
+          "message",
+          (event: MessageEvent<unknown>) => {
+            if (
+              typeof event.data === "object" &&
+              event.data !== null &&
+              "type" in event.data &&
+              event.data.type === "subscription-changed"
+            )
+              document.documentElement.dataset["j8Replacement"] = "received";
+          },
+          { once: true },
+        );
+      });
+      await notificationWorker.evaluate(
+        'self.dispatchEvent(new ExtendableEvent("pushsubscriptionchange"))',
+      );
+      await until(
+        () => page.evaluate(() => document.documentElement.dataset["j8Replacement"] === "received"),
+        "subscription replacement reconnect",
+      );
+      await until(
+        () =>
+          page.evaluate(async () => {
+            const cache = await caches.open("q9chat-notifications");
+            return !(await cache.match("/__notifications__/reconnect"));
+          }),
+        "authenticated subscription synchronization",
+      );
+      const background = await context.newPage();
+      await background.goto("http://localhost:3000/");
+      await background.getByText("Pick a group to read it.").waitFor();
+      await page.bringToFront();
+      await until(
+        () =>
+          page.evaluate(async () => {
+            const locks = await navigator.locks.query();
+            return (
+              document.hasFocus() &&
+              locks.held?.filter((lock) => lock.name === "q9chat-notification-viewing").length === 1
+            );
+          }),
+        "one focused-tab viewing lease",
+      );
+      expect(await background.evaluate(() => document.hasFocus())).toBe(false);
+      await background.close();
       // An older target proves this isn't just opening the newest page.
       for (let index = 0; index < 305; index++)
         // eslint-disable-next-line no-await-in-loop -- Ordered history avoids concurrent mutation conflicts in the shared dev database.
@@ -124,9 +173,7 @@ test(
           }),
         "reply notification",
       );
-      const worker = context.serviceWorkers()[0];
-      if (!worker) throw new Error("Missing notification service worker");
-      await worker.evaluate(`(async () => {
+      await notificationWorker.evaluate(`(async () => {
         const notifications = await self.registration.getNotifications();
         const notification = notifications.find((item) => item.body === "The launch needs you");
         if (!notification) throw new Error("Missing reply notification");
@@ -170,6 +217,40 @@ test(
             (await (await navigator.serviceWorker.ready).pushManager.getSubscription()) === null,
         ),
       ).toBe(true);
+      await signInDevAccount(context, email, "Amal Journey");
+      await page.goto(`http://localhost:3000/?group=${groupId}`);
+      await page
+        .getByRole("region", { name: "Turn on notifications" })
+        .getByRole("button", { name: "Turn on", exact: true })
+        .click();
+      await page.getByText("Desktop notifications are on", { exact: true }).waitFor();
+      await page.evaluate(() => {
+        PushSubscription.prototype.unsubscribe = () =>
+          Promise.reject(new Error("Push service unavailable"));
+      });
+      await page.getByRole("button", { name: "Account" }).click();
+      await page.getByRole("button", { name: "Sign out", exact: true }).click();
+      await page.getByRole("button", { name: "Email me a code" }).waitFor();
+      await page
+        .getByText("Signed out. Notification cleanup failed. Quit this browser.", { exact: true })
+        .waitFor();
+      expect(
+        (
+          await context.request.post("http://localhost:3000/api/auth/token", {
+            headers: { Origin: "http://localhost:3000" },
+            data: {},
+          })
+        ).status(),
+      ).toBe(401);
+      expect(
+        await page.evaluate(async () =>
+          (
+            await (await caches.open("q9chat-notifications")).match("/__notifications__/enabled")
+          )?.text(),
+        ),
+      ).toBe("off");
+      // Reload restores the browser API before disposable-profile cleanup.
+      await page.reload();
     } catch (error) {
       await page.screenshot({ path: "artifacts/j8/failure.png" });
       throw error;

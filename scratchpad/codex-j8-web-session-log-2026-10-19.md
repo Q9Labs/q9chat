@@ -29,3 +29,9 @@
 - Running normal hooks and final full gate; no production access. Judge and merge remain separate.
 
 - Rebased onto J7 search (9823569). Reused its shared root message query, bounded history window, highlight and viewport positioning; removed this lane's duplicate destination logic. Legacy phone-compatible /g links now redirect to that shared destination. Reproving the integrated path before the final gate.
+
+## Review corrections
+
+The integrated Chrome probe passed on 0ab090d and CI was green. Before the final gate, PR review found logout cleanup gating auth, cross-tab viewing ownership, refreshed subscriptions, and an in-flight delivery/logout race. Added a failing-before Node 24 regression for logout and a live browser unsubscribe-failure case. The worker now uses durable delivery state and serialized stop acknowledgement; logout unregisters while authenticated but always attempts session sign-out. Web Locks give one focused tab lease ownership. Refreshed subscriptions queue authenticated reconnect and show a generic repair alert when no page is open; no worker-held access token. Final proof and gate will run on the corrected commit.
+
+The corrected source passed web/E2E typechecks, lint, fallow, and React Doctor. The headless browser passed real enrollment and worker subscription-change reconciliation, then demonstrated that headless Chrome reports both tabs focused. Strict headed J8 keeps the real-focus assertion. The independent headless probe instead asserts one held Web Lock plus a waiting second tab; actual OS focus remains part of the no-desktop proof gap.

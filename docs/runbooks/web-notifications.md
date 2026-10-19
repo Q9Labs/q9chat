@@ -15,7 +15,18 @@ Group info offers Mentions and replies (the default), All messages and Muted.
 Existing server eligibility checks exclude the sender, muted groups and people
 who lost membership. A focused tab renews a short viewing lease so its group
 does not also interrupt through an OS notification. Sign-out unsubscribes the
-browser before ending its session and closes its displayed notifications.
+browser and unregisters its server endpoint before ending its session. A durable
+worker delivery switch and a serialized cleanup barrier suppress queued and
+in-flight notifications. Push cleanup failure never prevents session sign-out;
+the signed-out screen tells the person to quit the browser if cleanup fails.
+Only the focused tab owns the viewing lease, using Web Locks. Browsers without
+Web Locks omit foreground suppression rather than letting tabs overwrite it.
+
+A subscription replacement stays in the browser PushManager and queues an
+authenticated reconnect. Open pages synchronize it immediately. When no page is
+open, a generic reconnect notification asks the person to open Q9 Chat. No access
+token is stored in the worker; message delivery resumes after that signed-in
+reconnect. This avoids silently losing alerts after an endpoint replacement.
 
 Push links retain `/g/<groupId>?m=<sequence>` for compatibility with the phone.
 The web route redirects into the authenticated group journey, which loads the
