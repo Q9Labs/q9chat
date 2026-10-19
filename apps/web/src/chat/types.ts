@@ -143,6 +143,7 @@ export type MemberEvent =
   | { readonly type: "start"; readonly people: readonly Author[] };
 
 interface MessageBase {
+  readonly renderKey?: string;
   readonly id: string;
   readonly sequence: number;
   readonly createdAt: number;

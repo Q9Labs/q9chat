@@ -4,6 +4,7 @@ export const removedInviteCopy = "You were removed from this group. Ask a member
 export const invalidInviteCopy = "This invite link isn't valid.";
 
 const errorCopy = new Map([
+  ["message_too_long", "Use 4,000 characters or fewer."],
   ["name_required", "Enter a group name or add someone."],
   ["name_too_long", "Use a group name of 80 characters or fewer."],
   ["group_full", "This group is full. A group can have up to 100 people."],

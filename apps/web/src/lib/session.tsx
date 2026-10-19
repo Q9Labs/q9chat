@@ -7,12 +7,13 @@ import {
   type ReactNode,
 } from "react";
 
+import { retireAccountTransport } from "./convex.js";
 import { createSessionClient } from "./session-client.js";
 
 export { EmailVerificationError } from "./session-client.js";
 
 function useSessionState() {
-  const [client] = useState(createSessionClient);
+  const [client] = useState(() => createSessionClient(retireAccountTransport));
   const { session, loading } = useSyncExternalStore(
     client.subscribe,
     client.getSnapshot,

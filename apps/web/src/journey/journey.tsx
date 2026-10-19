@@ -7,6 +7,7 @@ import { Schema } from "effect";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 
 import type { GroupListRow, Me } from "../chat/types.js";
+import { AccountTransport } from "../lib/account-transport.js";
 import { useSession } from "../lib/session.js";
 import { AccountDialog } from "../screens/dialogs.js";
 import { ChatShell, PickAGroup } from "../screens/shell.js";
@@ -104,7 +105,9 @@ export function Journey({
           />
         ) : (
           <InviteToken.Provider value={inviteToken}>
-            <ProfileGate key={session.user.id} />
+            <AccountTransport key={session.user.id}>
+              <ProfileGate />
+            </AccountTransport>
           </InviteToken.Provider>
         )}
         {signOutStatus === "failed" ? (

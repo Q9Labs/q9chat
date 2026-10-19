@@ -475,7 +475,7 @@ export function Message({
     <div
       className={messageClass(sendState, highlighted, menuOpen)}
       id={`m-${message.id}`}
-      data-sequence={message.sequence}
+      data-sequence={sendState === undefined ? message.sequence : undefined}
     >
       <Bubble message={message} onOpenQuote={handlers.onOpenQuote} readOnly={readOnly} />
       {message.attachmentLabels?.map(({ id, label }) => (

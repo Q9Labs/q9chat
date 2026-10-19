@@ -3,11 +3,9 @@ import "@fontsource-variable/figtree/index.css";
 import "@q9labsai/ui/tokens.css";
 import { ThemeProvider } from "@q9labsai/ui";
 import { createRootRoute, Outlet } from "@tanstack/react-router";
-import { ConvexProviderWithAuth } from "convex/react";
 
 import { RootDocument } from "../components/root-document.js";
-import { convexClient } from "../lib/convex.js";
-import { SessionProvider, useSession } from "../lib/session.js";
+import { SessionProvider } from "../lib/session.js";
 
 import "../styles.css";
 
@@ -28,12 +26,9 @@ export const Route = createRootRoute({
 function RootComponent() {
   return (
     <SessionProvider>
-      {/* oxlint-disable-next-line react/rules-of-hooks -- intentional: ConvexProviderWithAuth takes the auth hook and calls it as a hook itself. */}
-      <ConvexProviderWithAuth client={convexClient} useAuth={useSession}>
-        <ThemeProvider defaultProductTheme="q9chat">
-          <Outlet />
-        </ThemeProvider>
-      </ConvexProviderWithAuth>
+      <ThemeProvider defaultProductTheme="q9chat">
+        <Outlet />
+      </ThemeProvider>
     </SessionProvider>
   );
 }

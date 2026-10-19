@@ -34,7 +34,7 @@ function closeRun(builder: Builder): void {
   if (run === null) return;
   builder.items.push({
     type: "run",
-    key: `run-${run.messages[0]?.id ?? ""}`,
+    key: `run-${run.messages[0]?.renderKey ?? run.messages[0]?.id ?? ""}`,
     author: run.author,
     time: run.time,
     messages: run.messages,

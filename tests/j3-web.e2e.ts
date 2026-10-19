@@ -4,8 +4,8 @@ import type { ConvexHttpClient } from "convex/browser";
 import { expect } from "e2e";
 import { Schema } from "effect";
 
-import { browserEngine, devClient } from "./support/browser.js";
-import { magicCode, removeTestUser } from "./support/workos.js";
+import { browserEngine, devClient, signInDevAccount } from "./support/browser.js";
+import { removeTestUser } from "./support/workos.js";
 
 type BrowserContext = ReturnType<NonNullable<ReturnType<typeof surfaceOf>>["context"]>;
 const QueryChanges = Schema.Struct({
@@ -28,7 +28,6 @@ const RangeRequest = Schema.Struct({
   toSequence: Schema.Number,
 });
 const ServerPing = Schema.Struct({ type: Schema.Literal("Ping") });
-const origin = "http://localhost:3000";
 
 test(
   "journey 3: unread, history, live activity, typing and post states",
@@ -87,24 +86,9 @@ test(
     async function account(person: string, context: BrowserContext) {
       const email = `q9-j3-${person.toLowerCase()}-${stamp}@example.net`;
       addresses.push(email);
-      const headers = { Origin: origin };
-      expect(
-        (
-          await context.request.post(`${origin}/api/auth/email/start`, { headers, data: { email } })
-        ).status(),
-      ).toBe(200);
-      expect(
-        (
-          await context.request.post(`${origin}/api/auth/email/verify`, {
-            headers,
-            data: { email, code: await magicCode(email), client: "web" },
-          })
-        ).status(),
-      ).toBe(200);
-      const client = await devClient(context);
-      clients.push({ client, context });
-      const id = await client.action(api.profiles.setUp, { displayName: `${person} Journey` });
-      return { client, id };
+      const result = await signInDevAccount(context, email, `${person} Journey`);
+      clients.push({ client: result.client, context });
+      return result;
     }
     async function shot(name: string) {
       await page.screenshot({ path: `artifacts/j3-round3/${name}.png` });
@@ -230,6 +214,13 @@ test(
         return unread;
       }
       const unread = await seedHistory();
+      const deletedFirst = unread[0];
+      if (!deletedFirst) throw new Error("Missing first unread post");
+      await b.client.mutation(api.messages.remove, { messageId: deletedFirst.messageId });
+      const afterDeletion = await a.client.query(api.groups.get, { groupId });
+      expect(afterDeletion?.status === "member" && afterDeletion.firstUnreadSequence).toBe(
+        deletedFirst.sequence,
+      );
       async function verifyReading() {
         await app.open("/");
         await expect(browser.locator(".list .row .badge:not(.at)")).toContainText("30");
@@ -248,8 +239,10 @@ test(
           };
         }, first.messageId);
         expect(placement.before).toBe(true);
-        expect(placement.body).toBe("Unread 1 @Amira");
+        expect(placement.body).toBe("Message deleted");
         expect(Math.abs(placement.gap - 90) < 3).toBe(true);
+        await expect(browser.locator(`#m-${first.messageId} .bub`)).toHaveText("Message deleted");
+        await expect(browser.locator(".arrival-announcement")).toHaveText("");
         await shot("01-unread");
         await bottom();
         await page.waitForFunction(
@@ -307,6 +300,20 @@ test(
         await page.locator(`#m-${live.messageId}`).waitFor({ state: "visible" });
         await expect(browser.locator(".arrival-announcement")).toHaveText("Bilal: A live arrival");
         await expect(browser.locator("[role=log]")).toHaveAttribute("aria-live", "off");
+        const arrivalId = await page
+          .locator(".arrival-announcement span")
+          .getAttribute("data-arrival");
+        const ownLive = await a.client.mutation(api.messages.send, {
+          groupId,
+          body: "A live own send",
+          clientKey: crypto.randomUUID(),
+          attachments: [],
+        });
+        await page.locator(`[data-sequence="${ownLive.sequence}"]`).waitFor();
+        await expect(browser.locator(".arrival-announcement")).toHaveText("Bilal: A live arrival");
+        expect(await page.locator(".arrival-announcement span").getAttribute("data-arrival")).toBe(
+          arrivalId,
+        );
         await page.waitForFunction(() => {
           const el = document.querySelector("[role=log]");
           return el && el.scrollHeight - el.scrollTop - el.clientHeight <= 1;
@@ -351,8 +358,14 @@ test(
       }
       await verifyReading();
       async function verifyTyping() {
-        for (const [index, peer] of [b, c, d].entries()) {
-          await peer.client.mutation(api.typing.start, { groupId });
+        const peers = [b, c, d];
+        for (const index of peers.keys()) {
+          // Snapshot work can outlast a lease; keep every intended typer active.
+          await Promise.all(
+            peers
+              .slice(0, index + 1)
+              .map((peer) => peer.client.mutation(api.typing.start, { groupId })),
+          );
           const text = ["Bilal is typing", "Bilal and Cora are typing", "3 people are typing"][
             index
           ];
@@ -388,6 +401,28 @@ test(
       await expect(browser.locator(`#m-${edited.messageId} .txt`)).toHaveText("After editedited");
       await bottom();
       await shot("05-post-states");
+      const dinaPost = await d.client.mutation(api.messages.send, {
+        groupId,
+        body: "Before account deletion",
+        clientKey: crypto.randomUUID(),
+        attachments: [],
+      });
+      await page.locator(`#m-${dinaPost.messageId}`).waitFor();
+      await page.getByRole("button", { name: "About Dina", exact: true }).first().click();
+      await page.getByRole("dialog", { name: "Dina Journey", exact: true }).waitFor();
+      await d.client.mutation(api.profiles.deleteAccount, {});
+      clients.splice(
+        clients.findIndex(({ client }) => client === d.client),
+        1,
+      );
+      await page.getByRole("dialog", { name: "Deleted account", exact: true }).waitFor();
+      expect(
+        await page
+          .getByRole("dialog")
+          .getByRole("button", { name: "Message", exact: true })
+          .count(),
+      ).toBe(0);
+      await page.getByRole("dialog").getByRole("button", { name: "Close", exact: true }).click();
       const pair = await a.client.mutation(api.groups.openPair, { profileId: b.id });
       await app.open(`/?group=${pair}`);
       await expect(browser.locator(".chat-title b .tt")).toHaveText("Bilal Journey");
@@ -478,6 +513,15 @@ test(
         process.stdout.write(
           "J3 announcer: live page boundary and repeated text update distinct arrival nodes; 100-character limit verified\n",
         );
+        const coraPost = await c.client.mutation(api.messages.send, {
+          groupId: backlog,
+          body: "Cora before the history slide",
+          clientKey: crypto.randomUUID(),
+          attachments: [],
+        });
+        await page.locator(`#m-${coraPost.messageId}`).waitFor();
+        await page.getByRole("button", { name: "About Cora", exact: true }).first().click();
+        await page.getByRole("dialog", { name: "Cora Journey", exact: true }).waitFor();
         const deliveryConnection = connectionCount;
         holdResponses = true;
         for (let index = 0; index < 305; index += 5)
@@ -534,6 +578,14 @@ test(
           { timeout: 10000 },
         );
         expect(currentSubscriptions <= 3).toBe(true);
+        await page.getByRole("dialog").waitFor({ state: "detached" });
+        await expect
+          .poll(async () => {
+            const detail = await a.client.query(api.groups.get, { groupId: backlog });
+            return detail?.status === "member" && detail.lastReadSequence >= catchUp.sequence;
+          })
+          .toBe(true);
+        process.stdout.write("J3 author eviction: dialog closes and live read tracking resumes\n");
         process.stdout.write(
           "J3 bottom-pinned catch-up: 306 held arrivals replaced the obsolete anchor; latest visible\n",
         );
@@ -545,9 +597,17 @@ test(
           memberIds: [b.id],
           inviteToken: crypto.randomUUID().replaceAll("-", ""),
         });
+        async function addCoraEvent() {
+          await a.client.mutation(api.groups.addMembers, { groupId: backlog, profileIds: [c.id] });
+          const snapshot = await a.client.query(api.groups.get, { groupId: backlog });
+          if (snapshot?.status !== "member") throw new Error("Missing seeded history");
+          return snapshot.lastSequence;
+        }
+        let eventSequence = 0;
         const posts: { readonly messageId: string; readonly sequence: number }[] = [];
         // Public backend mutations, batched to avoid 450 sequential network round trips.
-        for (let from = 1; from <= 450; from += 5)
+        for (let from = 1; from <= 450; from += 5) {
+          if (from === 246) eventSequence = await addCoraEvent();
           posts.push(
             ...(await Promise.all(
               Array.from({ length: 5 }, (_, index) =>
@@ -564,6 +624,7 @@ test(
               ),
             )),
           );
+        }
         const first = posts.toSorted((left, right) => left.sequence - right.sequence)[0];
         if (!first) throw new Error("Missing backlog seed");
         await app.open(`/?group=${backlog}`);
@@ -625,11 +686,11 @@ test(
           }, direction === "older");
           await page.locator('[role=log][aria-busy="true"]').waitFor();
           const anchor = await page.locator("[role=log]").evaluate(
-            (el, sequence) => {
+            (el, { sequence, offset }) => {
               const node = el.querySelector<HTMLElement>(`[data-sequence="${sequence}"]`);
               if (!node) throw new Error("Missing outgoing-page post");
               el.scrollTop +=
-                node.getBoundingClientRect().top - el.getBoundingClientRect().top - 70;
+                node.getBoundingClientRect().top - el.getBoundingClientRect().top - offset;
               const bounds = el.getBoundingClientRect();
               const visible = Array.from(el.querySelectorAll<HTMLElement>("[data-sequence]")).find(
                 (item) => item.getBoundingClientRect().bottom > bounds.top,
@@ -641,9 +702,16 @@ test(
                 sequence: Number(visible.dataset["sequence"]),
               };
             },
-            direction === "older" ? 450 : 250,
+            {
+              sequence: direction === "older" ? 450 : eventSequence,
+              offset: direction === "older" ? 70 : -1,
+            },
           );
-          expect(direction === "older" ? anchor.sequence > 400 : anchor.sequence <= 300).toBe(true);
+          expect(
+            direction === "older" ? anchor.sequence > 400 : anchor.sequence === eventSequence,
+          ).toBe(true);
+          if (direction === "newer")
+            expect(await page.locator(`[id="${anchor.id}"].sys`).count()).toBe(1);
           // Let the browser dispatch the reversal scroll before releasing server delivery.
           await page.evaluate(
             () =>
@@ -742,15 +810,16 @@ test(
       await verifyOwnOnlyHistory();
       async function verifyCappedEvent() {
         const additional = [];
-        for (const name of ["Eli", "Faye", "Gus", "Hana"]) additional.push(await createPeer(name));
+        for (const name of ["Eli", "Faye", "Gus", "Hana", "Ivan"])
+          additional.push(await createPeer(name));
         const capped = await a.client.mutation(api.groups.create, {
           name: "Capped member event",
-          memberIds: [b.id, c.id, d.id, ...additional.map((peer) => peer.id)],
+          memberIds: [b.id, c.id, ...additional.map((peer) => peer.id)],
           inviteToken: crypto.randomUUID().replaceAll("-", ""),
         });
         await app.open(`/?group=${capped}`);
         await expect(browser.locator("[role=log] .sys").last()).toHaveText(
-          "You added Bilal, Cora, Dina and 4 others",
+          "You added Bilal, Cora, Eli and 4 others",
         );
       }
       await verifyCappedEvent();

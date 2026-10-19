@@ -56,7 +56,10 @@ function restorePosition(
 function visibleSequence(el: HTMLDivElement, messages: readonly MessageView[]) {
   const bounds = el.getBoundingClientRect();
   return messages
-    .filter((message) => message.kind !== "event")
+    .filter(
+      (message) =>
+        message.kind !== "event" && (message.kind === "deleted" || message.sendState === undefined),
+    )
     .reduce((sequence, message) => {
       const node = document.getElementById(`m-${message.id}`);
       if (!node) return sequence;
@@ -74,11 +77,13 @@ export function useTimelineViewport(
   loading: boolean,
   onAtBottom: ((bottom: boolean) => void) | undefined,
   onAnchor: ((sequence: number) => void) | undefined,
+  latestRequest: number | undefined,
 ) {
   const log = useRef<HTMLDivElement>(null);
   const position = useRef<Position | null>(null);
   const paging = useRef(false);
   const jumping = useRef(false);
+  const requestedLatest = useRef(latestRequest);
   const preserveAnchor = () => {
     const el = log.current;
     if (el && position.current)
@@ -96,6 +101,10 @@ export function useTimelineViewport(
   useLayoutEffect((): (() => void) | undefined => {
     const el = log.current;
     if (!el) return () => {};
+    if (requestedLatest.current !== latestRequest) {
+      requestedLatest.current = latestRequest;
+      jumping.current = true;
+    }
     const previous = position.current;
     const first = messages[0]?.id;
     // Retained rows can receive live updates while the destination window loads.
