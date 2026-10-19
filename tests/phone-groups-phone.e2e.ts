@@ -8,7 +8,8 @@ void test(
   { timeout: 900_000, platforms: ["ios"] },
   async ({ app, device, screen }) => {
     await device.clearKeychain();
-    await app.open();
+    // The engine opens the app before the test; restart so it reads the now-empty keychain.
+    await app.restart();
     await expect(screen.getByLabel("Email")).toBeVisible({ timeout: 120_000 });
     await runPhoneGroups({
       screen,
