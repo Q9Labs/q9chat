@@ -1,7 +1,7 @@
 import { api } from "@q9chat/convex";
 import { useMutation, useQueries } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { MessageHandlers } from "../chat/message.js";
 import { Timeline } from "../chat/timeline-view.js";
@@ -236,6 +236,7 @@ function findAuthor(rows: readonly Row[], id: string) {
 }
 
 interface Opening {
+  readonly target: number | undefined;
   readonly read: number;
   readonly latest: number;
   readonly at: number;
@@ -243,7 +244,10 @@ interface Opening {
 }
 
 function initialWindow(opened: Opening): HistoryWindow {
-  const page = pageOf(opened.firstUnread ?? opened.latest);
+  const page = Math.min(
+    pageOf(opened.latest),
+    pageOf(opened.target ?? opened.firstUnread ?? opened.latest),
+  );
   return { first: Math.max(0, page - 1), last: Math.min(pageOf(opened.latest), page + 1) };
 }
 function moveWindow(
@@ -398,16 +402,31 @@ function useAuthorSelection(rows: readonly Row[], loading: boolean) {
   return { person, select };
 }
 
+function useSearchHighlight(rows: readonly Row[], sequence: number | undefined, loading: boolean) {
+  const targetId = rows.find((row) => row.sequence === sequence)?.id;
+  const [highlight, setHighlight] = useState(true);
+  useEffect(() => {
+    const timer = targetId && !loading ? window.setTimeout(() => setHighlight(false), 2400) : null;
+    return () => {
+      if (timer !== null) window.clearTimeout(timer);
+    };
+  }, [targetId, loading]);
+  return highlight ? (targetId ?? null) : null;
+}
+
 export function History({
+  targetSequence,
   group,
   onMessage,
   covered,
 }: {
+  readonly targetSequence?: number | undefined;
   readonly group: Group;
   readonly covered: boolean;
   readonly onMessage: (id: Person["id"]) => void;
 }) {
   const [opened] = useState(() => ({
+    target: targetSequence,
     read: group.lastReadSequence,
     latest: group.lastSequence,
     at: Date.now(),
@@ -426,6 +445,7 @@ export function History({
     navigation,
     sequence: newFromSequence,
   } = useHistory(group, opened);
+  const highlightId = useSearchHighlight(rows, opened.target, loading);
   const { person: selectedPerson, select: setAuthor } = useAuthorSelection(rows, loading);
   const [error, setError] = useState("");
   const { photos } = usePhotos(historyPhotoPaths(rows), setError);
@@ -483,10 +503,11 @@ export function History({
           }}
           onOpenAuthor={(person) => setAuthor(person.id)}
           menuMessageId={null}
-          highlightId={null}
+          highlightId={highlightId}
           playing={null}
           readOnly
           reading={{
+            initialSequence: opened.target,
             onVisible,
             onAnchor: setAnchor,
             announcement,
