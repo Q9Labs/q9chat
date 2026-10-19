@@ -30,7 +30,7 @@ export function Screen({ children, safeBottom }: { children: ReactNode; safeBott
   );
 }
 
-type NavStart = { label?: string; back?: boolean; onPress: () => void };
+type NavStart = { label?: string; back?: boolean; onPress: () => void; disabled?: boolean };
 type NavEnd = { label: string; onPress: () => void; disabled?: boolean; strong?: boolean };
 
 function NavStartButton({ start }: { start: NavStart }) {
@@ -38,9 +38,17 @@ function NavStartButton({ start }: { start: NavStart }) {
     <Press
       accessibilityRole="button"
       accessibilityLabel={start.back ? "Back" : (start.label ?? "Back")}
+      accessibilityState={{ disabled: !!start.disabled }}
+      disabled={start.disabled}
       onPress={start.onPress}
       scaleTo={1}
-      style={{ minHeight: 44, flexDirection: "row", alignItems: "center", gap: 2 }}
+      style={{
+        minHeight: 44,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 2,
+        opacity: start.disabled ? 0.35 : 1,
+      }}
     >
       {start.back ? (
         <Icon name="back" size={24} color="tx" />

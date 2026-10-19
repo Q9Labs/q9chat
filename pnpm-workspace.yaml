@@ -11,6 +11,7 @@ catalog:
   react: 19.3.0
   react-doctor: 0.9.14
   react-dom: 19.3.0
+  react-test-renderer: 19.3.0
   "@tanstack/react-router": 1.170.42
   "@tanstack/react-start": 1.168.61
   tailwindcss: 4.3.3

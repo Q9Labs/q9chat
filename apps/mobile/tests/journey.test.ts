@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { groupRows, msUntilMidnight, photoUrlOf, rowStamp } from "../src/journey/groupRows.ts";
+import { groupRows, msUntilMidnight, removedWhen, rowStamp } from "../src/journey/groupRows.ts";
+import { photoUrlOf } from "../src/journey/livePeople.ts";
 import { saveThenCheck } from "../src/journey/nameRules.ts";
 import { MAX_PHOTO_BYTES, photoTooLarge } from "../src/journey/photoRules.ts";
 import { saveSetup, savingSetup } from "../src/journey/setupRules.ts";
@@ -17,6 +18,13 @@ void test("a row stamp shows the time today, then Yesterday, a weekday, then the
   assert.equal(rowStamp(at("2026-09-30T08:00:00").getTime(), now), "30 Sep");
 });
 
+void test("a removal reads as a sentence: today at, yesterday at, then the weekday or the date", () => {
+  assert.equal(removedWhen(at("2026-10-18T10:44:00").getTime(), now), "today at 10:44");
+  assert.equal(removedWhen(at("2026-10-17T23:59:00").getTime(), now), "yesterday at 23:59");
+  assert.equal(removedWhen(at("2026-10-15T08:00:00").getTime(), now), "on Thu at 08:00");
+  assert.equal(removedWhen(at("2026-09-30T08:00:00").getTime(), now), "on 30 Sep at 08:00");
+});
+
 void test("a photo path becomes a URL on the Convex HTTP origin", () => {
   assert.equal(
     photoUrlOf("https://x.convex.site", "/photos/abc"),
@@ -30,7 +38,7 @@ void test("the 20 MB photo cap is exact", () => {
   assert.equal(photoTooLarge(MAX_PHOTO_BYTES + 1), true);
 });
 
-const avatar = { color: "#0369a1", lightColor: "#38bdf8", initials: "SJ", photo: null };
+const avatar = { color: "#0369a1", lightColor: "#38bdf8", initials: "SJ", photo: null } as const;
 const person = {
   id: "p1",
   name: "Sara",

@@ -40,18 +40,23 @@ outcomes:
     title: Create a group or start a group of two
     area: groups
     state: in_progress
-    summary: Web group creation, people search, pairs, adding members and joining by invite are wired to the dev backend. Phone wiring remains.
+    summary: Group creation, people search, pairs, adding members and joining by invite are wired to the dev backend on web and on the phone. The phone end-to-end test passes on an iOS simulator and an Android emulator. A saved invite survives sign-in once and is then cleared, and a write that may never end (offline) can be left after a warning. An HTTPS invite link does not open the phone app yet.
     theory: theory.md#groups
     code:
       - apps/web/src/journey/groups.tsx
       - tests/j2-web.e2e.ts
+      - apps/mobile/src/journey/NewGroupJourney.tsx
+      - apps/mobile/src/journey/GroupInfoJourney.tsx
+      - apps/mobile/src/journey/JoinJourney.tsx
+      - tests/j2-phone.e2e.ts
+      - tests/j2-android.e2e.ts
       - convex/groups.ts
     priority: P0
-    size: M
-    size_reason: The phone needs group creation, pairs, member addition and invite joining.
+    size: S
+    size_reason: Only the HTTPS app link and a run on a physical phone remain.
     remaining:
-      - Create groups, start pairs and add people on the phone.
-      - Join a group by invite link on the phone.
+      - Open the phone app from an HTTPS invite link (iOS associated domains, an Android verified intent filter, and the Worker's apple-app-site-association and assetlinks.json), which needs the Apple team ID and the release certificate from the first EAS build.
+      - Run the group journey on a physical phone.
 
   - id: chat.send_messages
     title: Send text, images, files and voice notes
@@ -177,7 +182,7 @@ outcomes:
     title: The phone app offers every journey
     area: mobile
     state: in_progress
-    summary: The Expo app has every version 1 phone screen. Sign in, profile setup, the live groups list, Account and sign out are wired to the dev backend; chat, group info, new group and search still run on gallery fixtures.
+    summary: The Expo app has every version 1 phone screen. Sign in, profile setup, the live groups list, Account and sign out, New group, Group info with Add people and the invite link, and joining by link are wired to the dev backend; chat and search still run on gallery fixtures, and Group info's Leave, Remove, Mute and notification choices say they come in a later journey.
     theory: theory.md#fast-and-reliable
     code:
       - apps/mobile
@@ -185,7 +190,8 @@ outcomes:
     size: L
     size_reason: Most journeys still need their screens wired to Convex and a device run.
     remaining:
-      - Wire chat, group info, new group and search to the backend.
+      - Wire chat and search to the backend.
+      - Wire Group info's Leave, Remove, Mute and notification choices to the backend.
 
   - id: release.first_live
     title: Q9's team uses Q9 Chat on chat.q9labs.ai and TestFlight
@@ -201,3 +207,4 @@ outcomes:
       - Create the Convex production and set its settings.
       - Deploy the web app to chat.q9labs.ai and allow it in the production WorkOS environment.
       - Build with EAS and submit to TestFlight and Play internal testing.
+      - Serve apple-app-site-association and assetlinks.json from the Worker with the first build's team ID and certificate, so HTTPS invite links open the phone app.
