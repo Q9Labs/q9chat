@@ -16,7 +16,13 @@ export type AccountScreenProps = {
   /** A name save is out: the field is locked until it ends. */
   nameSaving: boolean;
   /** Set when leaving could not save the name; asks whether to keep editing or discard. */
-  unsaved: { text: string; onKeepEditing: () => void; onDiscard: () => void } | null;
+  unsaved: {
+    text: string;
+    confirmLabel: string;
+    cancelLabel: string;
+    onKeepEditing: () => void;
+    onDiscard: () => void;
+  } | null;
   hasPhoto: boolean;
   onTogglePhoto: () => void;
   confirmDelete: boolean;
@@ -159,8 +165,8 @@ export function AccountScreen(props: AccountScreenProps) {
         <ConfirmSheet
           title="Your name isn't saved"
           text={props.unsaved.text}
-          confirmLabel="Discard changes"
-          cancelLabel="Keep editing"
+          confirmLabel={props.unsaved.confirmLabel}
+          cancelLabel={props.unsaved.cancelLabel}
           onConfirm={props.unsaved.onDiscard}
           onCancel={props.unsaved.onKeepEditing}
         />

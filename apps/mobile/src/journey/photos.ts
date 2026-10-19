@@ -49,7 +49,7 @@ export async function pickPhoto(): Promise<PickResult> {
   return asset ? checkAsset(asset) : { kind: "cancelled" };
 }
 
-async function checkAsset(asset: ImagePicker.ImagePickerAsset): Promise<PickResult> {
+function checkAsset(asset: ImagePicker.ImagePickerAsset): PickResult {
   const mimeType = asset.mimeType ?? "image/jpeg";
   const size = SUPPORTED_TYPES.has(mimeType) ? (asset.fileSize ?? sizeOfFile(asset.uri)) : null;
   if (size === null) return { kind: "refused", notice: photoRejectedNotice };

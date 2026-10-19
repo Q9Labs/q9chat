@@ -1,6 +1,6 @@
 import { api } from "@q9chat/convex";
 import { firstName } from "@q9chat/domain";
-import { useMutation } from "convex/react";
+import { useConvexConnectionState, useMutation } from "convex/react";
 import { usePreventRemove, useRouter } from "expo-router";
 import { useRef } from "react";
 
@@ -32,7 +32,10 @@ export function AccountJourney({
   const router = useRouter();
   const signOut = useSignOut();
   const update = useMutation(api.profiles.update);
-  const editing = useNameEditing(profile.displayName, (displayName) => update({ displayName }));
+  const { isWebSocketConnected } = useConvexConnectionState();
+  const editing = useNameEditing(profile.displayName, isWebSocketConnected, (displayName) =>
+    update({ displayName }),
+  );
   const [toast, showToast] = useToast();
   const busy = useRef(false);
 
@@ -80,6 +83,8 @@ export function AccountJourney({
       unsaved={
         editing.unsaved && {
           text: editing.unsaved.text,
+          confirmLabel: editing.unsaved.confirmLabel,
+          cancelLabel: editing.unsaved.cancelLabel,
           onKeepEditing: editing.keepEditing,
           onDiscard: editing.discard,
         }

@@ -42,6 +42,7 @@ function Navigator() {
         {/* Still backed by sample data until their journeys are wired: a link to them lands on Groups, never on fake groups. */}
         <Stack.Protected guard={false}>
           <Stack.Screen name="g/[groupId]" />
+          <Stack.Screen name="g/[groupId]/info" />
           <Stack.Screen name="new-group" />
           <Stack.Screen name="search" />
         </Stack.Protected>

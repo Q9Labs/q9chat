@@ -1,11 +1,27 @@
 import { ConvexProviderWithAuth, ConvexReactClient } from "convex/react";
-import { useEffect, useMemo, type ReactNode } from "react";
+import { useEffect, useMemo, useSyncExternalStore, type ReactNode } from "react";
 import { AppState } from "react-native";
 
 import { sessionClient, useSessionState } from "./client";
 import { config } from "./config";
 
-const convex = new ConvexReactClient(config.convexUrl, { unsavedChangesWarning: false });
+const newConvexClient = () =>
+  new ConvexReactClient(config.convexUrl, { unsavedChangesWarning: false });
+
+let held = { epoch: 0, client: newConvexClient() };
+
+/**
+ * One Convex client per signed-in session. Convex keeps a mutation that was sent while the phone was
+ * offline and sends it again on reconnect under whatever auth the client holds then, so a name saved
+ * offline by one account could land on the next. Closing the client when its session ends drops that queue.
+ */
+function convexClientFor(epoch: number) {
+  if (held.epoch !== epoch) {
+    void held.client.close();
+    held = { epoch, client: newConvexClient() };
+  }
+  return held.client;
+}
 
 function useConvexSession() {
   const { status } = useSessionState();
@@ -21,6 +37,7 @@ function useConvexSession() {
 
 /** Restores the saved session once, then feeds Convex its tokens from it. */
 export function SessionProvider({ children }: { children: ReactNode }) {
+  const epoch = useSyncExternalStore(sessionClient.subscribe, sessionClient.epoch);
   useEffect(() => {
     void sessionClient.bootstrap();
     // Coming back to the app is the moment a lost connection may have returned.
@@ -31,7 +48,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
   return (
     <ConvexProviderWithAuth
-      client={convex}
+      client={convexClientFor(epoch)}
       // oxlint-disable-next-line react/hooks -- Convex's provider takes its auth hook as a prop and calls it itself
       useAuth={useConvexSession}
     >

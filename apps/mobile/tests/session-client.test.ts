@@ -101,6 +101,7 @@ function createKeychain(initial: Partial<Record<StoreKey, string>>) {
   const values = new Map<string, string>(Object.entries(initial));
   let writeGate: Promise<void> | null = null;
   let readFails = false;
+  let failingWrites: readonly StoreKey[] = [];
   const store: Store = {
     get: async (key) => {
       if (readFails) throw new Error("keychain unavailable");
@@ -108,10 +109,12 @@ function createKeychain(initial: Partial<Record<StoreKey, string>>) {
     },
     set: async (key, value) => {
       await writeGate;
+      if (failingWrites.includes(key)) throw new Error("keychain write failed");
       values.set(key, value);
     },
     delete: async (key) => {
       await writeGate;
+      if (failingWrites.includes(key)) throw new Error("keychain write failed");
       values.delete(key);
     },
   };
@@ -126,6 +129,10 @@ function createKeychain(initial: Partial<Record<StoreKey, string>>) {
     },
     failReads(fails: boolean) {
       readFails = fails;
+    },
+    /** Writes and deletes of these keys reject, until the list is empty again. */
+    failWrites(keys: readonly StoreKey[]) {
+      failingWrites = keys;
     },
   };
 }
@@ -143,13 +150,16 @@ function harness(
   const keychain = createKeychain(initial);
   const windows: AuthWindow[] = [];
   const clock = { skewMs: 0 };
+  const authWindowBroken = { value: false };
   const create = () =>
     createSessionClient({
       store: keychain.store,
       openAuth: (url) =>
-        new Promise((resolve) => {
-          windows.push({ url: new URL(url), finish: resolve });
-        }),
+        authWindowBroken.value
+          ? Promise.reject(new Error("the auth window could not open"))
+          : new Promise((resolve) => {
+              windows.push({ url: new URL(url), finish: resolve });
+            }),
       randomBytes: (length) => randomBytes(length),
       sha256Base64: async (text) => createHash("sha256").update(text).digest("base64"),
       now: () => Date.now() + clock.skewMs,
@@ -167,6 +177,10 @@ function harness(
     /** The app was killed and opened again: a new client, the same keychain. */
     restart: create,
     clock,
+    /** From now on the system auth window fails to open. */
+    breakAuthWindow: () => {
+      authWindowBroken.value = true;
+    },
     authWindow: async (index: number) => {
       for (let attempt = 0; attempt < 50 && !windows[index]; attempt += 1) await tick();
       const opened = windows[index];
@@ -486,8 +500,8 @@ void test("an OAuth attempt survives the app being killed: a new client finishes
   assert.equal(exchanges(worker).length, 1);
 });
 
-void test("a saved OAuth attempt expires after ten minutes", async () => {
-  const { worker, restart, clock, client, authWindow } = harness({});
+void test("a saved OAuth attempt expires after ten minutes, and the expired record is deleted when it is met", async () => {
+  const { worker, keychain, restart, clock, client, authWindow } = harness({});
   void client.startOAuth("google").catch(() => {});
   const state = (await authWindow(0)).url.searchParams.get("state") ?? "";
 
@@ -496,6 +510,7 @@ void test("a saved OAuth attempt expires after ten minutes", async () => {
   await assert.rejects(restarted.finishOAuth({ code: "real", state }), SignInIncompleteError);
   assert.equal(exchanges(worker).length, 0);
   assert.equal(statusOf(restarted), "loading");
+  assert.equal(keychain.value("oauthAttempt"), null);
 });
 
 void test("a link with the wrong state is refused and leaves the live attempt alone", async () => {
@@ -689,10 +704,13 @@ void test("a saved email code expires after ten minutes, and a different email d
   startsEmailWithCookie(worker);
   await client.startEmail("b@example.net");
 
+  assert.equal(await restart().resumeEmail(), "b@example.net");
   clock.skewMs = 10 * 60_000 + 1_000;
   assert.equal(await restart().resumeEmail(), null);
+  assert.equal(keychain.value("emailAttempt"), null);
 
   clock.skewMs = 0;
+  await client.startEmail("b@example.net");
   assert.equal(await restart().resumeEmail(), "b@example.net");
   await client.discardEmail();
   assert.equal(keychain.value("emailAttempt"), null);
@@ -721,4 +739,186 @@ void test("signing out while an older sign-out is still revoking is not ignored:
   assert.equal(keychain.value("refreshToken"), null);
   assert.equal(keychain.value("pendingRevoke"), null);
   assert.equal(client.revokeStatus(), "idle");
+});
+
+void test("crash recovery that met a keychain read failure still signs the account out when the retry runs", async () => {
+  const { worker, keychain, client } = harness({
+    refreshToken: "refresh-a",
+    pendingRevoke: JSON.stringify(["refresh-a"]),
+  });
+  worker.auto("token", () => json(phoneSession("a")));
+  keychain.failReads(true);
+  await client.bootstrap();
+  assert.equal(statusOf(client), "offline");
+
+  keychain.failReads(false);
+  const retrying = client.retry();
+  (await worker.next("sign-out")).reply(json({}));
+  await retrying;
+  assert.equal(worker.count("token"), 0);
+  assert.equal(statusOf(client), "unauthenticated");
+  assert.equal(keychain.value("refreshToken"), null);
+  assert.equal(keychain.value("pendingRevoke"), null);
+  assert.equal(client.revokeStatus(), "idle");
+});
+
+/** A phone that signed in as A, then lost its keychain writes for `keys` during sign-out. */
+async function signedOutWithFailedMove(keys: readonly StoreKey[]) {
+  const setup = harness({ refreshToken: "refresh-a" });
+  setup.worker.auto("token", () => json(phoneSession("a")));
+  await setup.client.bootstrap();
+  assert.equal(statusOf(setup.client), "authenticated");
+  setup.keychain.failWrites(keys);
+  await assert.rejects(setup.client.signOut());
+  assert.equal(statusOf(setup.client), "unauthenticated");
+  assert.equal(setup.client.revokeStatus(), "failed");
+  return setup;
+}
+
+void test("a sign-out whose pending write failed is finished by the next retry, and a restart stays signed out", async () => {
+  const { worker, keychain, restart, client } = await signedOutWithFailedMove(["pendingRevoke"]);
+  assert.equal(keychain.value("refreshToken"), "refresh-a");
+
+  keychain.failWrites([]);
+  const retrying = client.retry();
+  const revoke = await worker.next("sign-out");
+  assert.equal(revoke.body.refreshToken, "refresh-a");
+  revoke.reply(json({}));
+  await retrying;
+  assert.equal(keychain.value("refreshToken"), null);
+  assert.equal(keychain.value("pendingRevoke"), null);
+  assert.equal(client.revokeStatus(), "idle");
+
+  const restarted = restart();
+  await restarted.bootstrap();
+  assert.equal(statusOf(restarted), "unauthenticated");
+  assert.equal(worker.count("token"), 1);
+});
+
+void test("a sign-out that listed the token but could not delete it is finished without listing it twice", async () => {
+  const { worker, keychain, client } = await signedOutWithFailedMove(["refreshToken"]);
+  assert.equal(keychain.value("pendingRevoke"), JSON.stringify(["refresh-a"]));
+
+  keychain.failWrites([]);
+  const retrying = client.retry();
+  (await worker.next("sign-out")).reply(json({}));
+  await retrying;
+  assert.equal(worker.count("sign-out"), 1);
+  assert.equal(keychain.value("refreshToken"), null);
+  assert.equal(keychain.value("pendingRevoke"), null);
+});
+
+void test("a refresh after a failed sign-out move does not bring the account back", async () => {
+  const { worker, keychain, client } = await signedOutWithFailedMove(["pendingRevoke"]);
+  keychain.failWrites([]);
+
+  assert.equal(await client.fetchAccessToken({ forceRefreshToken: true }), null);
+  assert.equal(statusOf(client), "unauthenticated");
+  assert.equal(worker.count("token"), 1);
+  assert.equal(keychain.value("refreshToken"), null);
+  assert.equal(keychain.value("pendingRevoke"), JSON.stringify(["refresh-a"]));
+});
+
+void test("a sign-in after a failed sign-out move lists the old token first and never moves the new one", async () => {
+  const { worker, keychain, client } = await signedOutWithFailedMove(["pendingRevoke"]);
+  worker.auto("email/verify", () => json(phoneSession("b")));
+
+  // While the keychain still fails, the sign-in fails before it spends the code.
+  await assert.rejects(client.verifyEmail("b@example.net", "123456"));
+  assert.equal(worker.count("email/verify"), 0);
+  assert.equal(keychain.value("refreshToken"), "refresh-a");
+
+  keychain.failWrites([]);
+  await client.verifyEmail("b@example.net", "123456");
+  assert.equal(accessTokenOf(client), "access-b");
+  assert.equal(keychain.value("refreshToken"), "refresh-b");
+  assert.equal(keychain.value("pendingRevoke"), JSON.stringify(["refresh-a"]));
+
+  worker.auto("sign-out", () => json({}));
+  await client.retry();
+  assert.deepEqual(
+    worker.log.filter((entry) => entry.path === "sign-out").map((entry) => entry.body.refreshToken),
+    ["refresh-a"],
+  );
+  assert.equal(keychain.value("refreshToken"), "refresh-b");
+  assert.equal(accessTokenOf(client), "access-b");
+});
+
+void test("an expired saved attempt is deleted at launch and when the app returns to the foreground", async () => {
+  const gone = { state: "s", verifier: "v", expiresAt: 1, cookies: [] };
+  const { worker, keychain, client, clock } = harness({
+    oauthAttempt: JSON.stringify(gone),
+    emailAttempt: JSON.stringify({ email: "x@example.net", expiresAt: 1, cookies: [] }),
+  });
+  await client.bootstrap();
+  assert.equal(keychain.value("oauthAttempt"), null);
+  assert.equal(keychain.value("emailAttempt"), null);
+
+  startsEmailWithCookie(worker);
+  await client.startEmail("b@example.net");
+  clock.skewMs = 10 * 60_000 + 1_000;
+  await client.retry();
+  assert.equal(keychain.value("emailAttempt"), null);
+});
+
+void test("an auth window that fails to open drops its own attempt and its cookie", async () => {
+  const { worker, keychain, client, breakAuthWindow } = harness({});
+  breakAuthWindow();
+  await assert.rejects(client.startOAuth("google"), SignInIncompleteError);
+  assert.equal(keychain.value("oauthAttempt"), null);
+
+  // The dropped attempt's cookie does not travel with the next request.
+  worker.auto("email/verify", () => json(phoneSession("b")));
+  await client.verifyEmail("b@example.net", "123456");
+  assert.equal(worker.log.findLast((entry) => entry.path === "email/verify")?.cookie, null);
+});
+
+void test("the saved OAuth attempt holds only the OAuth cookie, not an email code's", async () => {
+  const { worker, keychain, client, authWindow } = harness({});
+  startsEmailWithCookie(worker);
+  await client.startEmail("b@example.net");
+  void client.startOAuth("google").catch(() => {});
+  await authWindow(0);
+  const saved = Schema.decodeUnknownSync(
+    Schema.Struct({ cookies: Schema.Array(Schema.Tuple(Schema.String, Schema.String)) }),
+  )(JSON.parse(keychain.value("oauthAttempt") ?? "null"));
+  assert.deepEqual(
+    saved.cookies.map(([name]) => name),
+    ["q9_phone"],
+  );
+});
+
+void test("signing out clears the in-memory transaction cookies, not only the saved attempts", async () => {
+  const { worker, client } = harness({});
+  startsEmailWithCookie(worker);
+  worker.auto("sign-out", () => json({}));
+  await client.startEmail("b@example.net");
+  await client.signOut();
+
+  await client.verifyEmail("b@example.net", "123456");
+  assert.equal(worker.log.findLast((entry) => entry.path === "email/verify")?.cookie, null);
+});
+
+void test("the epoch moves when a session ends or another account takes over, and not on refresh or offline", async () => {
+  const { worker, keychain, client } = harness({ refreshToken: "refresh-a" });
+  worker.auto("token", () => json(phoneSession("a")));
+  worker.auto("sign-out", () => json({}));
+  worker.auto("email/verify", () => json(phoneSession("b")));
+  await client.bootstrap();
+  const first = client.epoch();
+
+  await client.fetchAccessToken({ forceRefreshToken: true });
+  keychain.failReads(true);
+  await client.fetchAccessToken({ forceRefreshToken: true });
+  assert.equal(statusOf(client), "offline");
+  keychain.failReads(false);
+  await client.retry();
+  assert.equal(client.epoch(), first);
+
+  await client.signOut();
+  assert.equal(client.epoch(), first + 1);
+  await client.verifyEmail("b@example.net", "123456");
+  assert.equal(client.epoch(), first + 1);
+  await client.verifyEmail("b@example.net", "123456");
+  assert.equal(client.epoch(), first + 1);
 });

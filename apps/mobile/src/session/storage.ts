@@ -50,21 +50,25 @@ export async function writePending(store: Store, tokens: readonly string[]) {
   else await store.set("pendingRevoke", JSON.stringify(tokens));
 }
 
-/** The started OAuth attempt, or null when there is none, it is unreadable, or it has expired. */
+/** The started OAuth attempt, or null when there is none. One that is unreadable or has expired is deleted. */
 export async function readAttempt(store: Store, now: number): Promise<OAuthAttempt | null> {
-  const decoded = Schema.decodeUnknownEither(Attempt)(parseJson(await store.get("oauthAttempt")));
-  return Either.isRight(decoded) && decoded.right.expiresAt > now ? decoded.right : null;
+  const saved = await store.get("oauthAttempt");
+  const decoded = Schema.decodeUnknownEither(Attempt)(parseJson(saved));
+  if (Either.isRight(decoded) && decoded.right.expiresAt > now) return decoded.right;
+  if (saved !== null) await store.delete("oauthAttempt");
+  return null;
 }
 
 export const writeAttempt = (store: Store, attempt: OAuthAttempt) =>
   store.set("oauthAttempt", JSON.stringify(attempt));
 
-/** The email whose code is still awaited, or null when there is none, it is unreadable, or it has expired. */
+/** The email whose code is still awaited, or null when there is none. One that is unreadable or has expired is deleted. */
 export async function readEmailAttempt(store: Store, now: number): Promise<EmailAttempt | null> {
-  const decoded = Schema.decodeUnknownEither(EmailAttemptShape)(
-    parseJson(await store.get("emailAttempt")),
-  );
-  return Either.isRight(decoded) && decoded.right.expiresAt > now ? decoded.right : null;
+  const saved = await store.get("emailAttempt");
+  const decoded = Schema.decodeUnknownEither(EmailAttemptShape)(parseJson(saved));
+  if (Either.isRight(decoded) && decoded.right.expiresAt > now) return decoded.right;
+  if (saved !== null) await store.delete("emailAttempt");
+  return null;
 }
 
 export const writeEmailAttempt = (store: Store, attempt: EmailAttempt) =>

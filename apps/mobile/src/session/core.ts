@@ -85,6 +85,8 @@ export function createSessionClient(edges: SessionEdges) {
   let queued = 0;
   /** Sign-outs whose keychain move is not done yet: nothing may publish a session meanwhile. */
   let leaving = 0;
+  /** Set when a sign-out could not finish moving the departing token; every restore and sign-in finishes that move first. */
+  let moveOwed = false;
   let cancelable: AbortController | null = null;
   let refreshing: { queued: number; promise: Promise<string | null> } | null = null;
   /** The open sign-in window of this process; a new one starts only when it is null. */
@@ -92,7 +94,20 @@ export function createSessionClient(edges: SessionEdges) {
   /** The last link handed to `finishOAuth`, so the window and the deep-link route share one exchange. */
   let delivered: { state: string; code: string; promise: Promise<void> } | null = null;
 
+  /** The account whose session this client last held; null once it signed out. */
+  let account: string | null = null;
+  /** Counts the sessions this client has ended, so the app can give each one its own Convex client. */
+  let epoch = 0;
+
   const publish = (next: SessionState) => {
+    const accountNow =
+      next.status === "authenticated"
+        ? next.session.user.id
+        : next.status === "unauthenticated"
+          ? null
+          : account;
+    if (account !== null && accountNow !== account) epoch += 1;
+    account = accountNow;
     state = next;
     for (const listener of listeners) listener();
   };
@@ -141,6 +156,7 @@ export function createSessionClient(edges: SessionEdges) {
   /** The restore or refresh body. It never throws: a failure that is not a confirmed 401 keeps the token and goes offline. */
   async function restore(): Promise<string | null> {
     try {
+      await settleSignOut();
       const token = await store.get("refreshToken");
       if (!token) {
         publishUnlessLeaving({ status: "unauthenticated" });
@@ -156,7 +172,8 @@ export function createSessionClient(edges: SessionEdges) {
       await adopt(next);
       return leaving === 0 ? next.accessToken : null;
     } catch {
-      publishUnlessLeaving({ status: "offline" });
+      // A sign-out that could not finish its move stays signed out; any other failure keeps the token and goes offline.
+      publishUnlessLeaving({ status: moveOwed ? "unauthenticated" : "offline" });
       return null;
     }
   }
@@ -170,13 +187,18 @@ export function createSessionClient(edges: SessionEdges) {
     return promise;
   }
 
-  /** Revokes the given signed-out sessions, oldest first, saving the rest after each; throws on the first failure. */
-  async function revokeEach(tokens: readonly string[]) {
-    const [token, ...rest] = tokens;
-    if (token === undefined) return;
+  /** Revokes one signed-out session, then saves the tokens still waiting. */
+  async function revokeOne(token: string, rest: readonly string[]) {
     await request((options) => authApi.revokeSession(token, options), false);
     await writePending(store, rest);
-    await revokeEach(rest);
+  }
+
+  /** Revokes the given signed-out sessions, oldest first, saving the rest after each; throws on the first failure. */
+  async function revokeEach(tokens: readonly string[]) {
+    for (const [index, token] of tokens.entries()) {
+      // react-doctor-disable-next-line react-doctor/async-await-in-loop -- one at a time, oldest first: the saved list shrinks after each
+      await revokeOne(token, tokens.slice(index + 1)); // oxlint-disable-line no-await-in-loop -- same
+    }
   }
 
   async function revokePending() {
@@ -189,6 +211,7 @@ export function createSessionClient(edges: SessionEdges) {
 
   async function revokeOrFail() {
     try {
+      await settleSignOut();
       await revokePending();
     } catch (error) {
       setRevoke("failed");
@@ -197,22 +220,26 @@ export function createSessionClient(edges: SessionEdges) {
   }
 
   /**
-   * A crash can land between a sign-out writing its pending token and deleting the active one. The
-   * pending token wins: that session stays signed out, and nothing refreshes it.
+   * Keeps a signed-out session out of the keychain's active slot, in every restore and revoke retry.
+   * A sign-out whose move failed finishes it now; and after a crash between a sign-out's pending
+   * write and its delete, the pending token wins. Only the token that is active now is moved, so a
+   * newer account's token is never taken for the old one. It throws when the keychain cannot be
+   * read or written, which leaves the session unpublished.
    */
-  async function dropSignedOutToken() {
-    try {
-      const active = await store.get("refreshToken");
-      if (active && (await readPending(store)).includes(active)) await store.delete("refreshToken");
-    } catch {
-      // An unreadable keychain surfaces as offline in the restore that follows.
+  async function settleSignOut() {
+    if (moveOwed) {
+      await moveActiveToPending();
+      moveOwed = false;
+      return;
     }
+    const active = await store.get("refreshToken");
+    if (active && (await readPending(store)).includes(active)) await store.delete("refreshToken");
   }
 
   /** Restores the saved session at launch, then retries any sign-out the server never confirmed. */
   async function bootstrap() {
     await enqueue(async () => {
-      await dropSignedOutToken();
+      await sweepAttempts().catch(noop);
       return restore();
     });
     await enqueue(revokeOrFail).catch(noop);
@@ -225,6 +252,7 @@ export function createSessionClient(edges: SessionEdges) {
       await refresh();
     }
     if (revoke === "failed") await enqueue(revokeOrFail).catch(noop);
+    await enqueue(sweepAttempts).catch(noop);
   }
 
   /** Convex's token source: the cached access token, or a refreshed one when it is about to expire. */
@@ -235,10 +263,23 @@ export function createSessionClient(edges: SessionEdges) {
     return refresh();
   }
 
-  /** A sign-in, by email or OAuth, ends every other attempt in the same step that adopts its session. */
-  async function signIn(next: PhoneSession) {
+  /** Forgets both started sign-ins: their transaction cookies and their saved records. */
+  async function clearAttempts() {
+    jar.delete("q9_phone");
+    jar.delete("q9_email");
     await store.delete("oauthAttempt");
     await store.delete("emailAttempt");
+  }
+
+  /** Deletes a saved attempt that has expired or cannot be read; the readers delete as they meet one. */
+  async function sweepAttempts() {
+    await readAttempt(store, edges.now());
+    await readEmailAttempt(store, edges.now());
+  }
+
+  /** A sign-in, by email or OAuth, ends every other attempt in the same step that adopts its session. */
+  async function signIn(next: PhoneSession) {
+    await clearAttempts();
     await adopt(next);
   }
 
@@ -273,6 +314,7 @@ export function createSessionClient(edges: SessionEdges) {
 
   const verifyEmail = (email: string, code: string) =>
     enqueue(async () => {
+      await settleSignOut();
       await restoreEmailCookie(email);
       const next = await request((options) => authApi.verifyEmail(email, code, jar, options));
       await signIn(next);
@@ -288,7 +330,7 @@ export function createSessionClient(edges: SessionEdges) {
       state: nonce,
       verifier,
       expiresAt: edges.now() + ATTEMPT_TTL_MS,
-      cookies: [...jar],
+      cookies: [...jar].filter(([name]) => name === "q9_phone"),
     };
     await writeAttempt(store, attempt);
     const challenge = toBase64Url(await edges.sha256Base64(verifier));
@@ -302,13 +344,16 @@ export function createSessionClient(edges: SessionEdges) {
     return { state: nonce, url };
   }
 
-  /** Removes the saved attempt, but only if it is the one with this state. */
+  /** Removes the saved attempt and its cookie, but never a replacement attempt with another state. */
   async function dropAttempt(attemptState: string) {
-    if ((await readAttempt(store, edges.now()))?.state === attemptState)
-      await store.delete("oauthAttempt");
+    const saved = await readAttempt(store, edges.now());
+    if (saved && saved.state !== attemptState) return;
+    jar.delete("q9_phone");
+    await store.delete("oauthAttempt");
   }
 
   async function exchangeAttempt(params: CallbackParams | null) {
+    await settleSignOut();
     const attempt = params ? await readAttempt(store, edges.now()) : null;
     // A link that does not match the saved attempt is refused and leaves it alone.
     if (!params || !attempt || attempt.state !== params.state) throw new SignInIncompleteError();
@@ -321,6 +366,7 @@ export function createSessionClient(edges: SessionEdges) {
     } catch {
       throw new SignInIncompleteError();
     } finally {
+      jar.delete("q9_phone");
       await store.delete("oauthAttempt");
     }
   }
@@ -340,6 +386,16 @@ export function createSessionClient(edges: SessionEdges) {
     return promise;
   }
 
+  /** The link the auth window returned, or null when it did not open, was closed, or returned something that is not a sign-in link. */
+  async function openWindow(url: string): Promise<CallbackParams | null> {
+    try {
+      const result = await edges.openAuth(url, CALLBACK_URL);
+      return result.type === "success" ? callbackParams(result.url) : null;
+    } catch {
+      return null;
+    }
+  }
+
   /** Opens Google or Apple in the system auth window and signs in with the code it returns. */
   async function startOAuth(provider: Provider) {
     if (liveWindow) throw new SignInIncompleteError();
@@ -348,31 +404,36 @@ export function createSessionClient(edges: SessionEdges) {
     delivered = null;
     try {
       const started = await enqueue(() => beginAttempt(provider));
-      const result = await edges.openAuth(started.url, CALLBACK_URL);
-      if (result.type !== "success") {
+      const params = await openWindow(started.url);
+      if (!params) {
         await enqueue(() => dropAttempt(started.state)).catch(noop);
         throw new SignInIncompleteError();
       }
-      await finishOAuth(callbackParams(result.url));
+      await finishOAuth(params);
     } finally {
       if (liveWindow === mine) liveWindow = null;
     }
   }
 
-  /** Moves the active session's token to the pending list, so a failed revoke can be retried later. */
-  async function moveToPending() {
+  /**
+   * Moves the active session's token to the pending list, so a failed revoke can be retried later,
+   * and forgets the started sign-ins. Every step can run again after a failure: the token is listed
+   * once, and the active one is deleted only after it is listed.
+   */
+  async function moveActiveToPending() {
     const active = await store.get("refreshToken");
     if (active) {
-      await writePending(store, [...(await readPending(store)), active]);
+      const pending = await readPending(store);
+      if (!pending.includes(active)) await writePending(store, [...pending, active]);
       await store.delete("refreshToken");
     }
-    await store.delete("oauthAttempt");
-    await store.delete("emailAttempt");
+    await clearAttempts();
   }
 
   /**
    * Signs out of this phone at once; the promise rejects when the server did not confirm the revocation.
    * The token stays pending in the keychain until it does, across restarts, and a new sign-in does not touch it.
+   * When the move itself fails, the person is still signed out here, and the next restore, sign-in or retry finishes the move.
    */
   function signOut() {
     leaving += 1;
@@ -383,8 +444,9 @@ export function createSessionClient(edges: SessionEdges) {
     setRevoke("revoking");
     return enqueue(async () => {
       try {
-        await moveToPending();
+        await moveActiveToPending();
       } catch (error) {
+        moveOwed = true;
         setRevoke("failed");
         throw error;
       } finally {
@@ -415,5 +477,6 @@ export function createSessionClient(edges: SessionEdges) {
     subscribe,
     snapshot: () => state,
     revokeStatus: () => revoke,
+    epoch: () => epoch,
   };
 }

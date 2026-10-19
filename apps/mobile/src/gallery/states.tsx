@@ -699,6 +699,52 @@ export const STATES: GalleryState[] = [
         toast={null}
         unsaved={{
           text: "Enter a name of 1 to 60 characters, or discard your change.",
+          confirmLabel: "Discard changes",
+          cancelLabel: "Keep editing",
+          onKeepEditing: noop,
+          onDiscard: noop,
+        }}
+      />
+    ),
+  },
+  {
+    id: "account-unsaved-offline",
+    title: "Name not saved, offline before saving",
+    group: "Account",
+    render: () => (
+      <AccountScreen
+        {...accountHandlers}
+        me={{ person: personOf(ME, w), signedInWith: "Google" }}
+        name="Nadia Jo"
+        hasPhoto={false}
+        confirmDelete={false}
+        toast={null}
+        unsaved={{
+          text: "You're offline, so your name can't be saved. Keep editing, or discard your change.",
+          confirmLabel: "Discard changes",
+          cancelLabel: "Keep editing",
+          onKeepEditing: noop,
+          onDiscard: noop,
+        }}
+      />
+    ),
+  },
+  {
+    id: "account-save-waiting",
+    title: "Name save waiting for the connection",
+    group: "Account",
+    render: () => (
+      <AccountScreen
+        {...accountHandlers}
+        me={{ person: personOf(ME, w), signedInWith: "Google" }}
+        name="Nadia Jo"
+        hasPhoto={false}
+        confirmDelete={false}
+        toast={null}
+        unsaved={{
+          text: "You're offline, so your name hasn't saved yet. It may still save when you're back online.",
+          confirmLabel: "Leave anyway",
+          cancelLabel: "Stay here",
           onKeepEditing: noop,
           onDiscard: noop,
         }}
