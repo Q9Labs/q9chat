@@ -117,15 +117,18 @@ outcomes:
   - id: chat.search
     title: Find an old message with search
     area: messages
-    state: planned
-    summary: Not built.
+    state: in_progress
+    summary: Web search finds messages across current groups and opens old results in place. Phone search still needs wiring.
     theory: theory.md#version-1-journeys
-    code: []
+    code:
+      - apps/web/src/journey/search.tsx
+      - apps/web/src/journey/history.tsx
+      - tests/j7-web.e2e.ts
     priority: P1
     size: S
-    size_reason: Convex full-text search limited to the person's groups.
+    size_reason: Connect the phone search screen to the existing backend.
     remaining:
-      - Search message text across the person's groups and open the result in place.
+      - Search message text across the person's groups and open the result in place on phone.
 
   - id: chat.calm_notifications
     title: Get notified only when something needs you

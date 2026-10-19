@@ -104,6 +104,7 @@ interface TimelineReading {
   readonly announcement: { readonly id: string; readonly text: string };
   readonly loading: boolean;
   readonly latestRequest?: number;
+  readonly initialSequence?: number | undefined;
 }
 const STATIC_READING: TimelineReading = {
   onVisible: undefined,
@@ -249,6 +250,7 @@ export function Timeline({
     reading.onAtBottom,
     reading.onAnchor,
     reading.latestRequest,
+    reading.initialSequence,
   );
 
   const compact = useCompactTimeline(log);

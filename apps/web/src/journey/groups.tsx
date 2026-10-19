@@ -1,5 +1,5 @@
 import { api, type Id } from "@q9chat/convex";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useConvex, useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { Component, useEffect, useRef, useState, useTransition, type ReactNode } from "react";
@@ -449,12 +449,14 @@ export function useGroupJourney({
   token,
   selectedGroup,
   renderEmpty,
+  onSearchGroup,
   onNotice,
 }: {
   readonly covered: boolean;
   readonly token: string | undefined;
   readonly selectedGroup: Id<"groups"> | null;
   readonly renderEmpty: (onNewGroup: () => void) => ReactNode;
+  readonly onSearchGroup: (id: Id<"groups">) => void;
   readonly onNotice: (text: string) => void;
 }) {
   const navigate = useNavigate();
@@ -468,7 +470,7 @@ export function useGroupJourney({
   const { copied, copy, reset } = useInviteCopy(detail, onNotice);
   const unavailable = () => onNotice("This is coming in the next journey.");
   function open(id: Id<"groups">) {
-    void navigate({ to: "/", search: { group: id, authError: undefined } });
+    void navigate({ to: "/", search: { group: id, authError: undefined, message: undefined } });
     setInfoOpen(false);
     reset();
   }
@@ -496,7 +498,7 @@ export function useGroupJourney({
         onInfo={() => setInfoOpen(true)}
         onMessage={(id) => void message(id)}
         photos={photos}
-        onUnavailable={unavailable}
+        onSearchGroup={onSearchGroup}
       />
     ),
     info: infoOpen ? (
@@ -533,7 +535,7 @@ function GroupWorkspace({
   onInfo,
   onMessage,
   photos,
-  onUnavailable,
+  onSearchGroup,
 }: {
   readonly covered: boolean;
   readonly empty: ReactNode;
@@ -545,36 +547,40 @@ function GroupWorkspace({
   readonly onInfo: () => void;
   readonly onMessage: (id: Id<"profiles">) => void;
   readonly photos: ReadonlyMap<string, string>;
-  readonly onUnavailable: () => void;
+  readonly onSearchGroup: (id: Id<"groups">) => void;
 }) {
+  const routeSearch = useSearch({ strict: false });
   if (selected === null)
     return token ? <Join token={token} info={invite} onOpen={onOpen} /> : empty;
   if (detail === undefined) return <output className="center">Loading…</output>;
   return (
     <LoadedGroup
+      targetSequence={routeSearch.message}
       covered={covered}
       detail={detail}
       photos={photos}
       onInfo={onInfo}
       onMessage={onMessage}
-      onUnavailable={onUnavailable}
+      onSearchGroup={onSearchGroup}
     />
   );
 }
 function LoadedGroup({
+  targetSequence,
   covered,
   detail,
   photos,
   onInfo,
   onMessage,
-  onUnavailable,
+  onSearchGroup,
 }: {
+  readonly targetSequence: number | undefined;
   readonly covered: boolean;
   readonly detail: Detail;
   readonly photos: ReadonlyMap<string, string>;
   readonly onInfo: () => void;
   readonly onMessage: (id: Id<"profiles">) => void;
-  readonly onUnavailable: () => void;
+  readonly onSearchGroup: (id: Id<"groups">) => void;
 }) {
   if (detail?.status !== "member")
     return (
@@ -587,8 +593,18 @@ function LoadedGroup({
   const group = displayGroup(detail, photos);
   return (
     <>
-      <ChatHeader group={group} onOpenInfo={onInfo} onSearchGroup={onUnavailable} />
-      <History key={detail.groupId} group={detail} covered={covered} onMessage={onMessage} />
+      <ChatHeader
+        group={group}
+        onOpenInfo={onInfo}
+        onSearchGroup={() => onSearchGroup(detail.groupId)}
+      />
+      <History
+        key={`${detail.groupId}-${targetSequence ?? "latest"}`}
+        targetSequence={targetSequence}
+        group={detail}
+        covered={covered}
+        onMessage={onMessage}
+      />
     </>
   );
 }

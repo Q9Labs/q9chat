@@ -17,6 +17,7 @@ import { AppRoot } from "../ui/root.js";
 import { GroupJourneyBoundary, useGroupJourney } from "./groups.js";
 import { OAuthArrival } from "./oauth-arrival.js";
 import { isPhotoRejection, photoSelectionError, uploadPhoto, usePhotos } from "./photos.js";
+import { useSearchJourney } from "./search.js";
 import { ProfileSetup } from "./setup.js";
 import { SignInJourney } from "./sign-in.js";
 
@@ -226,11 +227,14 @@ function Groups({
   const { method } = useSession();
   const groups = useQuery(api.groups.list, {});
   const [accountOpen, setAccountOpen] = useState(false);
-  const [notice, setNotice] = useState(welcome ? `Welcome, ${firstName(profile.displayName)}` : "");
+  const [notice, setNotice] = useState(() =>
+    welcome ? `Welcome, ${firstName(profile.displayName)}` : "",
+  );
   const { photos, refresh: refreshPhotos } = usePhotos(
     photoPaths(profile, groups ?? []),
     setNotice,
   );
+  const search = useSearchJourney(groups, photos);
   const me: Me = {
     displayName: profile.displayName,
     email: profile.email,
@@ -243,13 +247,13 @@ function Groups({
   };
   const rows = (groups ?? []).map((row) => groupRow(row, photos));
   const workspace = useGroupJourney({
-    covered: accountOpen,
+    covered: accountOpen || search.isOpen,
+    onSearchGroup: search.openGroup,
     selectedGroup: useSelectedGroup(groups),
     token: useContext(InviteToken),
     onNotice: setNotice,
     renderEmpty: (onNewGroup) => <GroupsContent groups={groups} onNewGroup={onNewGroup} />,
   });
-  const unavailable = () => setNotice("This is coming in the next journey.");
 
   return (
     <>
@@ -264,14 +268,15 @@ function Groups({
               if (row) workspace.open(row.groupId);
             }}
             onNewGroup={workspace.newGroup}
-            onSearch={unavailable}
+            onSearch={search.openAll}
             onAccount={() => setAccountOpen(true)}
           />
         }
         main={workspace.main}
         info={workspace.info}
-        onOpenSearch={unavailable}
+        onOpenSearch={search.openAll}
       />
+      {search.dialog}
       {workspace.dialog}
       {accountOpen ? (
         <Account

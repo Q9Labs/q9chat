@@ -307,6 +307,7 @@ export function NewGroupDialog(props: NewGroupDialogProps) {
 // ---------- Search ----------
 
 interface SearchDialogProps {
+  readonly status?: string | undefined;
   readonly query: string;
   readonly onQueryChange: (query: string) => void;
   /** The group the search is limited to, or null for all groups. */
@@ -399,6 +400,7 @@ export function SearchDialog({
   hits,
   onOpenHit,
   onClose,
+  status,
 }: SearchDialogProps) {
   return (
     <Dialog label="Search messages" size="top" onClose={onClose}>
@@ -429,8 +431,12 @@ export function SearchDialog({
           </span>
         )}
       </div>
-      <div className="res">
-        <SearchResults query={query} scopeTitle={scopeTitle} hits={hits} onOpenHit={onOpenHit} />
+      <div className="res" aria-live="polite">
+        {status ? (
+          <output className="search-empty">{status}</output>
+        ) : (
+          <SearchResults query={query} scopeTitle={scopeTitle} hits={hits} onOpenHit={onOpenHit} />
+        )}
       </div>
       <div className="search-hints">
         <span>
