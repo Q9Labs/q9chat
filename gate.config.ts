@@ -11,13 +11,11 @@ export default defineGate({
   },
   concurrency: "50%",
   lanes: [
-    // Warm dependency builds before checks consume their output. The build lane
-    // is exclusive, so a cold cache never starts with competing clean builds.
-    lanes.build(),
     lanes.typecheck(),
     lanes.lint(),
     lanes.format(),
     lanes.test(),
+    lanes.build(),
     lanes.fallow({ baselineDir: "gates/baselines/fallow" }),
     lanes.semgrep({
       packs: ["@q9labsai/config-semgrep/type-safety", "@q9labsai/config-semgrep/shape-heuristics"],
