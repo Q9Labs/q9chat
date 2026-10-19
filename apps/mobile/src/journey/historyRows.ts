@@ -165,7 +165,19 @@ export function openingOffset(
   return box ? Math.max(0, box.y - 12) : null;
 }
 
-export function followAfterScroll(following: boolean, from: number, to: number, atBottom: boolean) {
+export function followAfterScroll({
+  following,
+  from,
+  to,
+  atBottom,
+  userScrolling,
+}: {
+  following: boolean;
+  from: number;
+  to: number;
+  atBottom: boolean;
+  userScrolling: boolean;
+}) {
   if (atBottom) return true;
-  return to < from - 2 ? false : following;
+  return userScrolling && to < from - 2 ? false : following;
 }

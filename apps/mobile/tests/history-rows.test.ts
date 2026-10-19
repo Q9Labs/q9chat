@@ -129,20 +129,54 @@ void test("opening waits for the unread layout and falls back to latest only wit
 
 void test("bottom following survives layout shrink but stops when the reader scrolls back", () => {
   assert.equal(
-    followAfterScroll(true, 800, 800, false),
+    followAfterScroll({
+      following: true,
+      from: 800,
+      to: 800,
+      atBottom: false,
+      userScrolling: true,
+    }),
     true,
     "typing shrinks the viewport without moving the reader",
   );
-  assert.equal(followAfterScroll(true, 800, 800, true), true);
-  assert.equal(followAfterScroll(true, 800, 760, false), false, "scrolling back stops following");
-  assert.equal(followAfterScroll(false, 760, 780, false), false);
   assert.equal(
-    followAfterScroll(false, 780, 820, true),
+    followAfterScroll({ following: true, from: 800, to: 800, atBottom: true, userScrolling: true }),
+    true,
+  );
+  assert.equal(
+    followAfterScroll({
+      following: true,
+      from: 800,
+      to: 760,
+      atBottom: false,
+      userScrolling: true,
+    }),
+    false,
+    "scrolling back stops following",
+  );
+  assert.equal(
+    followAfterScroll({
+      following: false,
+      from: 760,
+      to: 780,
+      atBottom: false,
+      userScrolling: true,
+    }),
+    false,
+  );
+  assert.equal(
+    followAfterScroll({
+      following: false,
+      from: 780,
+      to: 820,
+      atBottom: true,
+      userScrolling: true,
+    }),
     true,
     "reaching the bottom resumes following",
   );
   assert.equal(
-    followAfterScroll(true, 800, 400, true),
+    followAfterScroll({ following: true, from: 800, to: 400, atBottom: true, userScrolling: true }),
     true,
     "a bounded-window jump can reduce the offset at the bottom",
   );
@@ -158,4 +192,27 @@ void test("only message or deleted-placeholder content advances read progress", 
     assert.equal(visibleSequence(rows, layouts, 0, content.y + 1), 99);
     assert.equal(visibleSequence(rows, layouts, content.y + content.height, 100), 0);
   }
+});
+
+void test("layout-generated upward scrolls do not detach bottom following", () => {
+  assert.equal(
+    followAfterScroll({
+      following: true,
+      from: 800,
+      to: 760,
+      atBottom: false,
+      userScrolling: false,
+    }),
+    true,
+  );
+  assert.equal(
+    followAfterScroll({
+      following: false,
+      from: 800,
+      to: 760,
+      atBottom: false,
+      userScrolling: false,
+    }),
+    false,
+  );
 });
