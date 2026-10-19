@@ -1,34 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useSession } from "../lib/session.js";
+import { DisplayResources } from "./display-resources.js";
 import { httpOrigin } from "./photos.js";
-
-const MAX_DISPLAY_BYTES = 40_000_000;
-const MAX_DISPLAY_URLS = 8;
-interface Resource {
-  readonly url: string;
-  readonly bytes: number;
-}
-
-function displayResource(
-  cache: Map<string, Resource>,
-  path: string,
-  blob: Blob,
-  release: (path: string) => void,
-) {
-  while (
-    cache.size >= MAX_DISPLAY_URLS ||
-    [...cache.values()].reduce((total, item) => total + item.bytes, blob.size) > MAX_DISPLAY_BYTES
-  ) {
-    const oldest = cache.keys().next().value;
-    if (oldest === undefined) throw new Error("That attachment is too large to display.");
-    release(oldest);
-  }
-  // eslint-disable-next-line react-doctor/no-create-object-url-without-revoke -- Safe because the mounted bounded cache owns and revokes this URL on release, eviction and unmount.
-  const url = URL.createObjectURL(blob);
-  cache.set(path, { url, bytes: blob.size });
-  return url;
-}
 
 function lifetimeSignal(owner: AbortController | null) {
   return owner?.signal ?? AbortSignal.abort();
@@ -45,10 +19,11 @@ async function protectedBlob(path: string, token: string | null, signal: AbortSi
   return response.blob();
 }
 
-/** Mounted account/group owns bounded private bytes; callers own activation/visibility. */
-export function useMediaResources(onError: (message: string) => void) {
+/** Account/group owns private bytes; the idle budget never invalidates mounted consumers. */
+export function useMediaResources() {
+  const [error, setError] = useState("");
   const { fetchAccessToken } = useSession();
-  const cache = useRef(new Map<string, Resource>());
+  const [cache] = useState(() => new DisplayResources());
   const pending = useRef(
     new Map<string, { controller: AbortController; result: Promise<string> }>(),
   );
@@ -58,37 +33,36 @@ export function useMediaResources(onError: (message: string) => void) {
   const failed = useRef(new Set<string>());
   const [urls, setUrls] = useState<ReadonlyMap<string, string>>(() => new Map());
   const publish = useCallback(() => {
-    setUrls(new Map([...cache.current].map(([path, value]) => [path, value.url])));
-  }, []);
+    setUrls(cache.urls());
+  }, [cache]);
   const release = useCallback(
     (path: string) => {
+      const url = cache.release(path);
+      if (cache.held(path)) return;
       pending.current.get(path)?.controller.abort();
       pending.current.delete(path);
       failed.current.delete(path);
-      const value = cache.current.get(path);
-      if (value) URL.revokeObjectURL(value.url);
-      cache.current.delete(path);
+      if (url) URL.revokeObjectURL(url);
       publish();
     },
-    [publish],
+    [cache, publish],
   );
   useEffect(() => {
     const owner = new AbortController();
     lifetime.current = owner;
-    const owned = cache.current;
+    const owned = cache;
     const requests = pending.current;
     return () => {
       owner.abort();
       requests.forEach(({ controller }) => controller.abort());
       requests.clear();
-      owned.forEach(({ url }) => URL.revokeObjectURL(url));
-      owned.clear();
+      owned.clear().forEach((url) => URL.revokeObjectURL(url));
     };
-  }, []);
+  }, [cache]);
   const load = useCallback(
     async (path: string): Promise<string> => {
-      const existing = cache.current.get(path);
-      if (existing) return existing.url;
+      const existing = cache.get(path);
+      if (existing) return existing;
       const underway = pending.current.get(path);
       if (underway) return underway.result;
       const controller = new AbortController();
@@ -101,7 +75,9 @@ export function useMediaResources(onError: (message: string) => void) {
         const token = await fetchAccessToken({ forceRefreshToken: false });
         const blob = await protectedBlob(path, token, signal);
         signal.throwIfAborted();
-        const url = displayResource(cache.current, path, blob, release);
+        // eslint-disable-next-line react-doctor/no-create-object-url-without-revoke -- Safe because the owned cache revokes URLs on release, idle eviction and unmount.
+        const url = URL.createObjectURL(blob);
+        cache.add(path, { url, bytes: blob.size }).forEach((idle) => URL.revokeObjectURL(idle));
         failed.current.delete(path);
         publish();
         return url;
@@ -116,20 +92,24 @@ export function useMediaResources(onError: (message: string) => void) {
       } catch (cause) {
         if (!signal.aborted) {
           failed.current.add(path);
-          onError(cause instanceof Error ? cause.message : "Couldn't load an attachment. Retry.");
+          setError(cause instanceof Error ? cause.message : "Couldn't load an attachment. Retry.");
         }
         throw cause;
       } finally {
         if (!controller.signal.aborted) pending.current.delete(path);
       }
     },
-    [fetchAccessToken, onError, publish, release],
+    [cache, fetchAccessToken, publish],
   );
+  const retain = useCallback((path: string) => cache.retain(path), [cache]);
   return {
+    error,
     urls,
+    retain,
     load,
     release,
     retry: () => {
+      setError("");
       void Promise.allSettled([...failed.current].map(load));
     },
   };

@@ -1,7 +1,7 @@
 import { api } from "@q9chat/convex";
 import { useMutation, useQueries } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { MessageHandlers } from "../chat/message.js";
 import { Timeline } from "../chat/timeline-view.js";
@@ -76,7 +76,12 @@ function messageView(
     mentions: group.members.filter((p) => mentionIds.has(p.id)).map((p) => p.name),
     attachments: row.attachments.map((file) => {
       const url = resources.urls.get(file.url) ?? "";
-      const resource = { path: file.url, load: resources.load, release: resources.release };
+      const resource = {
+        path: file.url,
+        load: resources.load,
+        retain: resources.retain,
+        release: resources.release,
+      };
       return file.kind === "image"
         ? { ...file, url, resource, label: "Image" }
         : { ...file, url, resource };
@@ -243,6 +248,7 @@ function findAuthor(rows: readonly Row[], id: string) {
 }
 
 interface Opening {
+  readonly target: number | undefined;
   readonly read: number;
   readonly latest: number;
   readonly at: number;
@@ -250,7 +256,10 @@ interface Opening {
 }
 
 function initialWindow(opened: Opening): HistoryWindow {
-  const page = pageOf(opened.firstUnread ?? opened.latest);
+  const page = Math.min(
+    pageOf(opened.latest),
+    pageOf(opened.target ?? opened.firstUnread ?? opened.latest),
+  );
   return { first: Math.max(0, page - 1), last: Math.min(pageOf(opened.latest), page + 1) };
 }
 function moveWindow(
@@ -459,16 +468,31 @@ function usePlaybackErrors() {
   return { issue: [...playbackErrors.values()][0], report: reportPlaybackError };
 }
 
+function useSearchHighlight(rows: readonly Row[], sequence: number | undefined, loading: boolean) {
+  const targetId = rows.find((row) => row.sequence === sequence)?.id;
+  const [highlight, setHighlight] = useState(true);
+  useEffect(() => {
+    const timer = targetId && !loading ? window.setTimeout(() => setHighlight(false), 2400) : null;
+    return () => {
+      if (timer !== null) window.clearTimeout(timer);
+    };
+  }, [targetId, loading]);
+  return highlight ? (targetId ?? null) : null;
+}
+
 export function History({
+  targetSequence,
   group,
   onMessage,
   covered,
 }: {
+  readonly targetSequence?: number | undefined;
   readonly group: Group;
   readonly covered: boolean;
   readonly onMessage: (id: Person["id"]) => void;
 }) {
   const [opened] = useState(() => ({
+    target: targetSequence,
     read: group.lastReadSequence,
     latest: group.lastSequence,
     at: Date.now(),
@@ -487,12 +511,12 @@ export function History({
     navigation,
     sequence: newFromSequence,
   } = useHistory(group, opened);
+  const highlightId = useSearchHighlight(rows, opened.target, loading);
   const { person: selectedPerson, select: setAuthor } = useAuthorSelection(rows, loading);
   const [error, setError] = useState("");
-  const [mediaError, setMediaError] = useState("");
   const { issue: playbackIssue, report: reportPlaybackError } = usePlaybackErrors();
   const { photos } = usePhotos(historyPhotoPaths(rows), setError);
-  const resources = useMediaResources(setMediaError);
+  const resources = useMediaResources();
   const onVisible = useRead(group, opened.read, {
     setError,
     covered,
@@ -516,35 +540,31 @@ export function History({
     senderTyping.clear();
     toLatest();
   }
+  function changeDraft(value: string) {
+    outbox.change(value);
+    senderTyping.change(value);
+  }
   const issue = [
     error,
-    mediaError,
+    resources.error,
     playbackIssue?.text,
     media.error,
     outbox.error,
     senderTyping.error,
   ].find(Boolean);
-  function changeDraft(value: string) {
-    outbox.change(value);
-    senderTyping.change(value);
-  }
   function retry(message: MessageView) {
     outbox.retry(message.id);
     media.retry(message.renderKey ?? message.id);
     toLatest();
   }
   const showTimeline = hasTimeline(rows, loading);
-  function retryMedia() {
-    setMediaError("");
-    resources.retry();
-  }
   return (
     <>
       <HistoryNotice
         key={noticeKey(issue, playbackIssue)}
         issue={issue}
-        mediaFailed={mediaError !== ""}
-        reload={retryMedia}
+        mediaFailed={resources.error !== ""}
+        reload={resources.retry}
       />
       <output
         className="send-announcement"
@@ -567,9 +587,10 @@ export function History({
           }}
           onOpenAuthor={(person) => setAuthor(person.id)}
           menuMessageId={null}
-          highlightId={null}
+          highlightId={highlightId}
           readOnly
           reading={{
+            initialSequence: opened.target,
             onVisible,
             onAnchor: setAnchor,
             announcement,

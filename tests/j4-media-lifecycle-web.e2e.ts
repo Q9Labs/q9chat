@@ -164,8 +164,8 @@ test(
       await expect.poll(() => authorization.length).toBe(gets.length);
       expect(authorization.every(Boolean)).toBe(true);
       await page.evaluate(() => window.dispatchEvent(new Event("q9-resources")));
-      expect(await page.locator("html").getAttribute("data-resources")).toContain('"active":8');
-      expect(await page.locator("html").getAttribute("data-resources")).toContain('"revoked":1');
+      expect(await page.locator("html").getAttribute("data-resources")).toContain('"active":9');
+      expect(await page.locator("html").getAttribute("data-resources")).toContain('"revoked":0');
       const voices = page.locator(".voice");
       await voices.first().getByRole("button", { name: "Play voice note" }).click();
       await page.getByRole("alert").filter({ hasText: "Couldn't play" }).waitFor();
@@ -258,7 +258,7 @@ test(
       expect(await page.locator("html").getAttribute("data-resources")).toMatch(/"aborted":[1-9]/);
       await page.screenshot({ path: "artifacts/j4-fix1/lifecycle-signed-out.png" });
       process.stdout.write(
-        "PASS F1 F3 W10 W11: zero unactivated GETs, requested byte downloads, eight-URL eviction, real playback recovery/exclusion/unplayable download, owned errors, sign-out abort/revocation\n",
+        "PASS F1 F3 W10 W11: zero unactivated GETs, requested byte downloads, mounted resource preservation, real playback recovery/exclusion/unplayable download, owned errors, sign-out abort/revocation\n",
       );
     } catch (cause) {
       process.stdout.write(`FAILURE STATE: ${await page.locator("body").innerText()}\n`);

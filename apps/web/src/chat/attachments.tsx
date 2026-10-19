@@ -10,34 +10,40 @@ type VoiceAttachment = Extract<Attachment, { kind: "voice" }>;
 
 function useResourceLifetime(resource: MediaResource | undefined) {
   const path = resource?.path;
+  const retain = resource?.retain;
   const release = resource?.release;
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    if (path) retain?.(path);
+    return () => {
       if (path) release?.(path);
-    },
-    [path, release],
-  );
+    };
+  }, [path, retain, release]);
 }
 
 /** Only visible images own display bytes; dimensions remain reserved while released. */
 export function ImageTile({ image }: { readonly image: ImageAttachment }) {
   const anchor = useRef<HTMLAnchorElement>(null);
-  const path = image.resource?.path;
-  const load = image.resource?.load;
-  const release = image.resource?.release;
+  const { path, load, retain, release } = image.resource ?? {};
   useEffect((): (() => void) | undefined => {
     const node = anchor.current;
-    if (!node || !path || !load || !release) return undefined;
+    if (!node || !path || !load || !retain || !release) return undefined;
+    let visible = false;
     const observer = new IntersectionObserver(([entry]) => {
-      if (entry?.isIntersecting) void load(path).catch(() => {});
-      else release(path);
+      if (entry?.isIntersecting && !visible) {
+        visible = true;
+        retain(path);
+        void load(path).catch(() => {});
+      } else if (!entry?.isIntersecting && visible) {
+        visible = false;
+        release(path);
+      }
     });
     observer.observe(node);
     return () => {
       observer.disconnect();
-      release(path);
+      if (visible) release(path);
     };
-  }, [path, load, release]);
+  }, [path, load, retain, release]);
   return (
     <a
       ref={anchor}

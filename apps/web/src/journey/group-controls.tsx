@@ -106,7 +106,10 @@ function useMembershipControls(
     void action.run(async () => {
       if (confirmation.kind === "leave") {
         await leave({ groupId: detail.groupId });
-        await navigate({ to: "/", search: { group: undefined, authError: undefined } });
+        await navigate({
+          to: "/",
+          search: { group: undefined, authError: undefined, message: undefined },
+        });
         onClose();
       } else {
         await remove({ groupId: detail.groupId, profileId: confirmation.member.id });
@@ -230,7 +233,10 @@ export function RemovedWorkspace({
         onForget={() => {
           void action.run(async () => {
             await dismiss({ groupId });
-            await navigate({ to: "/", search: { group: undefined, authError: undefined } });
+            await navigate({
+              to: "/",
+              search: { group: undefined, authError: undefined, message: undefined },
+            });
           });
         }}
       />

@@ -98,6 +98,7 @@ export interface RemovedGroup {
 export interface MediaResource {
   readonly path: string;
   readonly load: (path: string) => Promise<string>;
+  readonly retain: (path: string) => void;
   readonly release: (path: string) => void;
 }
 

@@ -10,6 +10,12 @@ import { magicCode } from "./workos.js";
 
 export const browserEngine = web();
 
+export function liveSurface() {
+  const surface = surfaceOf(browserEngine);
+  if (!surface) throw new Error("Missing live browser");
+  return surface;
+}
+
 export async function signInDevAccount(
   context: ReturnType<NonNullable<ReturnType<typeof surfaceOf>>["context"]>,
   email: string,

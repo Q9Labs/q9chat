@@ -103,6 +103,13 @@ async function fixture() {
     await signOut();
     await signIn(email);
   }
+  async function expectNoRetry() {
+    expect(await page.getByRole("button", { name: "Retry", exact: true }).count()).toBe(0);
+  }
+  async function recoverOwnRetry(email: string) {
+    await switchAccount(email);
+    await retryRetained();
+  }
   async function cleanup() {
     const deleted = await Promise.allSettled([
       a.client.mutation(api.profiles.deleteAccount, {}),
@@ -133,6 +140,8 @@ async function fixture() {
     signIn,
     signOut,
     switchAccount,
+    recoverOwnRetry,
+    expectNoRetry,
     retryRetained,
     aEmail,
     bEmail,
@@ -209,9 +218,8 @@ isolationTest("J4 account transport: disconnected A never replays as B", async (
       (row) => row.kind === "post" && row.body === "A private queued composition",
     ),
   ).toEqual([]);
-  expect(await f.page.getByRole("button", { name: "Retry", exact: true }).count()).toBe(0);
-  await f.switchAccount(f.aEmail);
-  await f.retryRetained();
+  await f.expectNoRetry();
+  await f.recoverOwnRetry(f.aEmail);
   const ownPost = await f.onePost("A private queued composition");
   expect(ownPost.author.id).toBe(f.a.id);
   expect(ownPost.clientKey).toBe(originalKey);
@@ -637,9 +645,8 @@ isolationTest("J4B account transport: queued attachment never becomes B's send",
   blocked = false;
   await f.sendText("B media isolation sentinel");
   expect(await attachmentPosts(f)).toEqual([]);
-  expect(await f.page.getByRole("button", { name: "Retry", exact: true }).count()).toBe(0);
-  await f.switchAccount(f.aEmail);
-  await f.retryRetained();
+  await f.expectNoRetry();
+  await f.recoverOwnRetry(f.aEmail);
   await expect
     .poll(
       async () =>

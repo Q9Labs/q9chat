@@ -205,6 +205,7 @@ export function useVoiceRecorder(
       capture.current = value;
       observeCapture(value);
       value.recorder.start(250);
+      onError("");
       setRecording({ elapsed: "0:00", levels: [] });
     } catch (cause) {
       releaseFailedStart(stream);

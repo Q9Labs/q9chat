@@ -1,11 +1,11 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 
-import { surfaceOf, test } from "@e2e-dev/web";
+import { test } from "@e2e-dev/web";
 import { api } from "@q9chat/convex";
 import { expect } from "e2e";
 
-import { browserEngine, devClient, signInDevAccount } from "./support/browser.js";
+import { liveSurface, devClient, signInDevAccount } from "./support/browser.js";
 import { webOrigin } from "./support/origin.js";
 import { sendWire } from "./support/send-wire.js";
 import { removeTestUser } from "./support/workos.js";
@@ -16,8 +16,7 @@ test(
   "journey 4B: real attachment bytes, durable retries and capture",
   { timeout: 360_000 },
   async ({ app, browser }) => {
-    const surface = surfaceOf(browserEngine);
-    if (!surface) throw new Error("Missing live browser");
+    const surface = liveSurface();
     await app.open("/");
     const page = surface.page();
     const engine = surface.context().browser();
