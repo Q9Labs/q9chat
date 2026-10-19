@@ -39,6 +39,12 @@ jobs:
       - name: Run full gate
         run: pnpm gate:full
 
+      # The gate scans only what HEAD reaches, so each PR answers for its own
+      # commits. This net catches a secret on a pushed branch with no PR yet.
+      - name: Scan every branch for secrets
+        if: ${{ always() }}
+        run: gitleaks git --log-opts="--all" --redact --no-banner
+
       - name: Upload gate report
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
