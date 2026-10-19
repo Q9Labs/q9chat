@@ -20,11 +20,8 @@ export type SearchScreenProps = {
   onCancel: () => void;
 };
 
-const SCOPE_LIMIT = 22;
-
 function ScopeChip({ title, onClear }: { title: string; onClear: () => void }) {
   const { c } = useTheme();
-  const shown = title.length > SCOPE_LIMIT ? `${title.slice(0, SCOPE_LIMIT - 1)}…` : title;
   return (
     <View
       style={{
@@ -45,7 +42,7 @@ function ScopeChip({ title, onClear }: { title: string; onClear: () => void }) {
         color="tx2"
         numberOfLines={1}
         style={{ flexShrink: 1 }}
-      >{`In ${shown}`}</T>
+      >{`In ${title}`}</T>
       <Press
         accessibilityRole="button"
         accessibilityLabel="Search all groups"

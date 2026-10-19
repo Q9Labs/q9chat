@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { PillButton } from "../kit/Buttons";
 import {
+  CantConnectYet,
   CenterState,
   GroupsTop,
   OfflinePill,
@@ -17,7 +18,8 @@ import type { Avatar, GroupRow } from "../types";
 
 export type GroupsScreenProps = {
   me: Avatar;
-  rows: readonly GroupRow[];
+  /** The groups, or null while they have never loaded (the live connection is down). */
+  rows: readonly GroupRow[] | null;
   offline: boolean;
   /** Shown until the person answers; the OS permission dialog is the system's own. */
   showPermissionBanner: boolean;
@@ -56,7 +58,7 @@ export function GroupsScreen(props: GroupsScreenProps) {
       {props.showPermissionBanner ? (
         <PermissionBanner onNotNow={props.onNotNow} onTurnOn={props.onTurnOn} />
       ) : null}
-      {props.rows.length ? (
+      {props.rows?.length ? (
         <FlatList
           accessibilityLabel="Your groups"
           data={props.rows}
@@ -65,6 +67,8 @@ export function GroupsScreen(props: GroupsScreenProps) {
           renderItem={renderRow}
           ListFooterComponent={<View style={{ height: Math.max(insets.bottom, 8) }} />}
         />
+      ) : props.rows === null ? (
+        <CantConnectYet />
       ) : (
         <CenterState
           icon="users"

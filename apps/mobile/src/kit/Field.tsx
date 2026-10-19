@@ -82,7 +82,9 @@ export function FlatValue({ icon, text }: { icon: ReactNode; text: string }) {
       }}
     >
       {icon}
-      <T color="tx">{text}</T>
+      <T color="tx" style={{ flexShrink: 1 }}>
+        {text}
+      </T>
     </View>
   );
 }

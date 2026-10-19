@@ -1,5 +1,10 @@
 {
   "extends": "../tsconfig.json",
-  "compilerOptions": { "allowImportingTsExtensions": true, "types": ["node"] },
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    // config.ts reads process.env.NAME on purpose: Expo replaces values at build time only in that form.
+    "noPropertyAccessFromIndexSignature": false,
+    "types": ["node"]
+  },
   "include": ["."]
 }

@@ -9,6 +9,10 @@ Use Node 24 and pnpm 11. Run `pnpm dev`, `pnpm dev:status`, `pnpm dev:logs`,
 `pnpm dev:stop`, `pnpm gate` and `pnpm tracker:check`. `pnpm gate` runs the
 project checks plus tracker and changelog validation. Add release notes with
 `pnpm exec q9 changelog add --type added --title "Title" --body "User-facing change."`.
+Never rebuild `pnpm-lock.yaml` from nothing (`pnpm install --lockfile-only` with no
+lockfile): it writes the q9stack release tarballs without their `integrity`
+hashes. Add dependencies with `pnpm add` and resolve lockfile conflicts by
+keeping one side, then run `pnpm install`.
 
 ## Code and boundaries
 

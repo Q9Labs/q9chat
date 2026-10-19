@@ -50,6 +50,9 @@ words:
   - topbar
   - tsdown
   - tsgolint
+  - UDID
+  - nosemgrep
+  - ellipsize
   - Tweaker
   - vite
   - vitejs

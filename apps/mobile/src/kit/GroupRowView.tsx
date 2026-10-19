@@ -41,7 +41,6 @@ type RowFacts = {
   muted: boolean;
   unread: number;
   mentions: boolean;
-  removed: boolean;
   preview: string;
 };
 
@@ -51,22 +50,20 @@ const factsOf = (row: GroupRow): RowFacts => {
       muted: false,
       unread: 0,
       mentions: false,
-      removed: true,
       preview: `${row.removedBy} removed you`,
     };
   return {
     muted: row.notify === "muted",
     unread: row.unreadCount,
     mentions: row.needsYou && row.unreadCount > 0,
-    removed: false,
     preview: previewText(row.preview),
   };
 };
 
-const labelOf = (title: string, { unread, mentions, muted, removed, preview }: RowFacts) =>
+const labelOf = (title: string, { unread, mentions, muted, preview }: RowFacts) =>
   [
     title,
-    removed ? preview : null,
+    preview,
     unread ? `${unread} unread` : null,
     mentions ? "mentions you" : null,
     muted ? "muted" : null,

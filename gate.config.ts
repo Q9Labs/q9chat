@@ -22,9 +22,10 @@ export default defineGate({
     }),
     lanes.depcruise(),
     lanes.osv(),
-    // T3 keeps every agent turn as a checkpoint under refs/t3/. Those are not
-    // project history, so a dropped draft there must not block every commit.
-    lanes.gitleaks({ mode: "git", logOpts: "--exclude=refs/t3/* --all" }),
+    // Scan only what this checkout's HEAD can reach. Other lanes' branches and
+    // T3's refs/t3/ checkpoints share this repository, and CI fetches every
+    // branch, so scanning all refs lets one lane's draft fail another's PR.
+    lanes.gitleaks({ mode: "git", logOpts: "HEAD" }),
     lanes.cspell(),
     lanes.syncpack(),
     lanes.testPresence({ sourceRoots: ["apps/*/src", "packages/*/src"] }),

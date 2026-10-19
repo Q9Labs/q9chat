@@ -1,6 +1,12 @@
 {
   // Project-wide fallow config; `q9gate` runs `fallow audit` through the fallow lane.
-  "entry": ["gate.config.ts", "e2e.config.ts", "tests/*.e2e.ts"],
+  "entry": [
+    "gate.config.ts",
+    "e2e.config.ts",
+    "e2e.phone.config.ts",
+    "e2e.android.config.ts",
+    "tests/*.e2e.ts",
+  ],
   "ignorePatterns": [
     "**/dist/**",
     "**/coverage/**",
@@ -26,6 +32,17 @@
     "expo-font",
     "expo-system-ui",
   ],
+  // The phone ports web's auth contracts and journey steps because the apps share no UI or client package.
+  "duplicates": {
+    // The same journey runs on web, iOS and Android, so these two phone files repeat its end-to-end steps on purpose.
+    "ignore": ["tests/j1-phone.e2e.ts", "tests/j1-android.e2e.ts"],
+    "ignoredClones": [
+      "dup:c77b3abb6f87acd9-r1:2",
+      "dup:c77b3abb6f87acd9-r2:2",
+      "dup:c77b3abb6f87acd9-r3:2",
+      "dup:39277f89:2",
+    ],
+  },
   "audit": {
     "gate": "all",
   },

@@ -6,7 +6,7 @@ import { useTheme } from "../theme";
 import { T } from "../theme/Text";
 import { fonts } from "../theme/tokens";
 import { IconButton, PillButton } from "./Buttons";
-import { formatDuration } from "./format";
+import { formatDuration, truncate } from "./format";
 import { Icon, type IconName } from "./Icon";
 import { Waveform } from "./MessageParts";
 import { useReducedMotion } from "./motion";
@@ -199,8 +199,7 @@ function ModeBar({ mode, onClose }: { mode: ComposerMode; onClose: () => void })
   );
 }
 
-const shortTitle = (title: string) =>
-  title.length > SHRINK_AT ? `${title.slice(0, SHRINK_AT - 1)}…` : title;
+const shortTitle = (title: string) => truncate(title, SHRINK_AT);
 
 function TrailingButton({
   editing,
@@ -258,7 +257,6 @@ function ComposeRow({ props, editing }: { props: Props; editing: boolean }) {
         />
       )}
       <TextInput
-        accessibilityLabel="Message"
         multiline
         value={draft}
         onChangeText={props.onDraftChange}

@@ -1,7 +1,6 @@
 import { useState } from "react";
 import {
   Image,
-  Linking,
   View,
   type AccessibilityActionEvent,
   type AccessibilityActionInfo,
@@ -12,8 +11,9 @@ import { useTheme } from "../theme";
 import { T } from "../theme/Text";
 import type { Quote, Reaction, Segment } from "../types";
 import { PopIn } from "./Controls";
-import { formatDuration, isWebUrl, keyedByOffset } from "./format";
+import { formatDuration, keyedByOffset } from "./format";
 import { Icon } from "./Icon";
+import { openWebUrl } from "./links";
 import { Press } from "./Press";
 
 /** Body text: @mentions in the accent color, links underlined; an http or https link opens on tap. */
@@ -34,9 +34,7 @@ export function BodyText({ segments, edited }: { segments: readonly Segment[]; e
             <T
               key={key}
               accessibilityRole="link"
-              onPress={() => {
-                if (isWebUrl(segment.text)) void Linking.openURL(segment.text);
-              }}
+              onPress={() => openWebUrl(segment.text)}
               style={{ textDecorationLine: "underline", textDecorationColor: c.mu }}
             >
               {segment.text}
@@ -105,6 +103,7 @@ export function ReactionPills({
             accessibilityRole="button"
             accessibilityLabel={`${reaction.emoji} ${reaction.count}: ${reaction.who}`}
             accessibilityState={{ selected: reaction.mine }}
+            hitSlop={{ top: 9, bottom: 9, left: 2, right: 2 }}
             onPress={() => onPress?.(reaction.emoji)}
             onLongPress={() => onLongPress?.(reaction.emoji)}
             delayLongPress={480}

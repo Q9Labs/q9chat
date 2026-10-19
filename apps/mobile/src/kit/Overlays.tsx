@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Animated,
   BackHandler,
+  Keyboard,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -48,6 +49,11 @@ export function Sheet({
     return () => subscription.remove();
   }, [onDismiss]);
 
+  // The sheet is anchored to the screen bottom, so an open keyboard would cover its actions.
+  useEffect(() => {
+    Keyboard.dismiss();
+  }, []);
+
   useEffect(() => {
     if (!measured) return;
     if (reduced) {
@@ -77,6 +83,7 @@ export function Sheet({
       <RaisedSurface>
         <SheetPanel
           label={label}
+          onDismiss={onDismiss}
           y={y}
           onMeasured={() => setMeasured(true)}
           bottomInset={insets.bottom}
@@ -94,12 +101,14 @@ function SheetPanel({
   onMeasured,
   bottomInset,
   label,
+  onDismiss,
 }: {
   children: ReactNode;
   y: Animated.Value;
   onMeasured: () => void;
   bottomInset: number;
   label: string;
+  onDismiss: () => void;
 }) {
   const { c } = useTheme();
   const { height } = useWindowDimensions();
@@ -108,6 +117,8 @@ function SheetPanel({
     <Animated.View
       accessibilityViewIsModal
       accessibilityLabel={label}
+      // VoiceOver ignores the backdrop's Close button while the panel is modal; the two-finger scrub closes it.
+      onAccessibilityEscape={onDismiss}
       onLayout={(event) => {
         if (!first.current) return;
         first.current = false;
@@ -178,6 +189,7 @@ export function ConfirmSheet({
   title,
   text,
   confirmLabel,
+  cancelLabel = "Cancel",
   danger = true,
   confirmDisabled,
   onConfirm,
@@ -187,6 +199,7 @@ export function ConfirmSheet({
   title: string;
   text: string;
   confirmLabel: string;
+  cancelLabel?: string;
   danger?: boolean;
   confirmDisabled?: boolean | undefined;
   onConfirm: () => void;
@@ -206,7 +219,7 @@ export function ConfirmSheet({
           disabled={confirmDisabled}
           onPress={onConfirm}
         />
-        <PillButton label="Cancel" size="sheet" onPress={onCancel} />
+        <PillButton label={cancelLabel} size="sheet" onPress={onCancel} />
       </View>
     </Sheet>
   );
@@ -252,13 +265,16 @@ export function SheetRow({
   );
 }
 
+/** A toast line, with an optional action such as "Try again". */
+export type ToastNotice = { text: string; action?: { label: string; onPress: () => void } };
+
 /** A transient status: slides up 8px and fades in over 200ms. */
-export function Toast({ text }: { text: string }) {
+export function Toast({ text, action }: ToastNotice) {
   const { c } = useTheme();
   const progress = useEased(1, motion.toast, 0);
   return (
     <View
-      pointerEvents="none"
+      pointerEvents="box-none"
       style={{
         position: "absolute",
         start: 0,
@@ -270,6 +286,8 @@ export function Toast({ text }: { text: string }) {
     >
       <Animated.View
         accessibilityRole="alert"
+        // Only a toast with an action takes touches; a plain one lets taps through to the screen under it.
+        pointerEvents={action ? "auto" : "none"}
         style={{
           minHeight: 44,
           paddingStart: 12,
@@ -287,9 +305,22 @@ export function Toast({ text }: { text: string }) {
         }}
       >
         <Icon name="check" size={18} color="mu" />
-        <T size={14} numberOfLines={1}>
+        <T size={14} style={{ flexShrink: 1 }}>
           {text}
         </T>
+        {action ? (
+          <Press
+            accessibilityRole="button"
+            onPress={action.onPress}
+            scaleTo={1}
+            hitSlop={8}
+            style={{ minWidth: 44, minHeight: 44, justifyContent: "center" }}
+          >
+            <T size={14} weight={600} color="ac">
+              {action.label}
+            </T>
+          </Press>
+        ) : null}
       </Animated.View>
     </View>
   );

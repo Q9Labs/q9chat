@@ -375,6 +375,10 @@ void test("sign-out invalidates a peer's initial bootstrap even before it has a 
   const second = createSessionClient();
   const closeFirst = first.start();
   let closeSecond: (() => void) | undefined;
+  let invalidated = false;
+  const unsubscribe = second.subscribe(() => {
+    invalidated = true;
+  });
   try {
     await until(() => first.getSnapshot().session !== null);
     delay = true;
@@ -382,7 +386,7 @@ void test("sign-out invalidates a peer's initial bootstrap even before it has a 
     await until(() => started);
     await first.signOut();
     closeFirst();
-    await setTimeout(20);
+    await until(() => invalidated);
     release.resolve();
     await until(() => !second.getSnapshot().loading);
     assert.equal(second.getSnapshot().session, null);
@@ -390,6 +394,7 @@ void test("sign-out invalidates a peer's initial bootstrap even before it has a 
     release.resolve();
     closeFirst();
     closeSecond?.();
+    unsubscribe();
     globalThis.fetch = original;
   }
 });
