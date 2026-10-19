@@ -192,6 +192,11 @@ export async function runJ5J6Phone(p: {
     await expect(p.screen.getByRole("button", "Continue with Google")).toBeVisible({
       timeout: 30_000,
     });
+    const deletedSession = sessions.findIndex(
+      (session) => session.accessToken === reader.accessToken,
+    );
+    expect(deletedSession).toBeGreaterThanOrEqual(0);
+    sessions.splice(deletedSession, 1);
     await expect
       .poll(() =>
         rows.some(
