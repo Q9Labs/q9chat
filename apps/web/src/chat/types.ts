@@ -94,7 +94,13 @@ export interface RemovedGroup {
 
 // ---------- messages.range ----------
 
-export type Attachment =
+export interface MediaResource {
+  readonly path: string;
+  readonly load: (path: string) => Promise<string>;
+  readonly release: (path: string) => void;
+}
+
+export type Attachment = (
   | {
       readonly kind: "image";
       readonly url: string;
@@ -115,7 +121,8 @@ export type Attachment =
       readonly durationMs: number;
       /** Peak levels from 0 to 1, drawn as the waveform. */
       readonly waveform: readonly number[];
-    };
+    }
+) & { readonly resource?: MediaResource };
 
 export interface Reaction {
   readonly emoji: Emoji;

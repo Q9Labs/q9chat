@@ -154,8 +154,7 @@ export interface MessageHandlers {
   readonly onReport: (message: PostView) => void;
   readonly onRetry: (message: PostView) => void;
   readonly onOpenQuote: (reply: ReplyTo) => void;
-  readonly onMediaError: (error: string) => void;
-  readonly onTogglePlay: (message: PostView) => void;
+  readonly onMediaError: (error: string, owner: string) => void;
   readonly onMenuOpenChange: (message: RunMessage, open: boolean) => void;
 }
 
@@ -168,8 +167,6 @@ interface MessageProps {
   /** Brief highlight after a jump or an edit by someone else. */
   readonly highlighted?: boolean;
   readonly menuOpen: boolean;
-  /** 0 to 1 while this message's voice note plays. */
-  readonly playProgress: number | null;
   readonly handlers: MessageHandlers;
 }
 
@@ -231,14 +228,10 @@ function Bubble({
 
 function Attachments({
   message,
-  playProgress,
-  onTogglePlay,
   onMediaError,
 }: {
   readonly message: PostView;
-  readonly playProgress: number | null;
-  readonly onMediaError: (error: string) => void;
-  readonly onTogglePlay: (message: PostView) => void;
+  readonly onMediaError: (error: string, owner: string) => void;
 }) {
   // Slots are immutable within a post, including optimistic-to-live reconciliation.
   return message.attachments.map((attachment, index) => {
@@ -252,13 +245,7 @@ function Attachments({
     return (
       // Safe because attachment slots never reorder within a message.
       // react-doctor-disable-next-line react-doctor/no-array-index-as-key
-      <VoiceRow
-        key={slot}
-        voice={attachment}
-        progress={playProgress}
-        onTogglePlay={() => onTogglePlay(message)}
-        onError={onMediaError}
-      />
+      <VoiceRow key={slot} voice={attachment} onError={(error) => onMediaError(error, slot)} />
     );
   });
 }
@@ -475,7 +462,6 @@ export function Message({
   compact,
   highlighted = false,
   menuOpen,
-  playProgress,
   handlers,
   readOnly = false,
 }: MessageProps) {
@@ -495,12 +481,7 @@ export function Message({
           {label}
         </div>
       ))}
-      <Attachments
-        message={message}
-        playProgress={playProgress}
-        onTogglePlay={handlers.onTogglePlay}
-        onMediaError={handlers.onMediaError}
-      />
+      <Attachments message={message} onMediaError={handlers.onMediaError} />
       <ReactionPills
         readOnly={readOnly}
         reactions={message.reactions}

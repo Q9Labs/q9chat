@@ -2,20 +2,55 @@ import { useEffect, useRef, useState } from "react";
 
 import { Icon } from "../ui/icons.js";
 import { durationLabel, fileMeta } from "./format.js";
-import type { Attachment } from "./types.js";
+import type { Attachment, MediaResource } from "./types.js";
 
 type ImageAttachment = Extract<Attachment, { kind: "image" }>;
 type FileAttachment = Extract<Attachment, { kind: "file" }>;
 type VoiceAttachment = Extract<Attachment, { kind: "voice" }>;
 
-/** A photo, 320px wide at most, with a 14px radius. */
+function useResourceLifetime(resource: MediaResource | undefined) {
+  const path = resource?.path;
+  const release = resource?.release;
+  useEffect(
+    () => () => {
+      if (path) release?.(path);
+    },
+    [path, release],
+  );
+}
+
+/** Only visible images own display bytes; dimensions remain reserved while released. */
 export function ImageTile({ image }: { readonly image: ImageAttachment }) {
+  const anchor = useRef<HTMLAnchorElement>(null);
+  const path = image.resource?.path;
+  const load = image.resource?.load;
+  const release = image.resource?.release;
+  useEffect((): (() => void) | undefined => {
+    const node = anchor.current;
+    if (!node || !path || !load || !release) return undefined;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry?.isIntersecting) void load(path).catch(() => {});
+      else release(path);
+    });
+    observer.observe(node);
+    return () => {
+      observer.disconnect();
+      release(path);
+    };
+  }, [path, load, release]);
   return (
     <a
-      href={image.url || undefined}
+      ref={anchor}
+      href={image.url || "#"}
       target="_blank"
       rel="noopener noreferrer"
       aria-label="Open image"
+      onClick={(event) => {
+        if (!image.url && path && load) {
+          event.preventDefault();
+          void load(path).catch(() => {});
+        }
+      }}
     >
       <img
         className="photo"
@@ -29,10 +64,36 @@ export function ImageTile({ image }: { readonly image: ImageAttachment }) {
   );
 }
 
-/** A file as a card: icon, name and "84 KB · PDF". */
+/** Activate to fetch private bytes, then hand the browser a credential-free download. */
 export function FileCard({ file }: { readonly file: FileAttachment }) {
+  useResourceLifetime(file.resource);
   return (
-    <a className="file" href={file.url || undefined} aria-disabled={!file.url} download={file.name}>
+    // eslint-disable-next-line react-doctor/no-prevent-default -- Safe because native navigation must wait for authenticated bytes; only the resulting credential-free Blob URL may be downloaded.
+    <a
+      className="file"
+      href={file.url || "#"}
+      tabIndex={0}
+      download={file.name}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" && !file.url) {
+          event.preventDefault();
+          event.currentTarget.click();
+        }
+      }}
+      onClick={(event) => {
+        if (!file.resource) return;
+        event.preventDefault();
+        void file.resource
+          .load(file.resource.path)
+          .then((url) => {
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = file.name;
+            link.click();
+          })
+          .catch(() => {});
+      }}
+    >
       <span className="fi">
         <Icon name="file" />
       </span>
@@ -56,19 +117,55 @@ function barHeights(waveform: readonly number[]): readonly number[] {
 interface VoiceRowProps {
   readonly voice: VoiceAttachment;
   readonly onError: (error: string) => void;
-  /** 0 to 1 while playing, null when stopped. */
-  readonly progress: number | null;
-  readonly onTogglePlay: () => void;
+}
+
+function voiceSource(voice: VoiceAttachment) {
+  return voice.resource ? undefined : voice.url || undefined;
+}
+
+function Waveform({
+  waveform,
+  progress,
+}: {
+  readonly waveform: readonly number[];
+  readonly progress: number;
+}) {
+  return (
+    <span className="wave" aria-hidden="true">
+      {barHeights(waveform).map((height, bar) => (
+        // The bar index is the identity: the bars never reorder.
+        // oxlint-disable-next-line react/no-array-index-key
+        <i key={bar} className={bar / BARS < progress ? "on" : undefined} style={{ height }} />
+      ))}
+    </span>
+  );
+}
+
+async function playVoice(element: HTMLAudioElement, voice: VoiceAttachment) {
+  if (voice.resource) {
+    // eslint-disable-next-line react-doctor/async-defer-await -- Safe because the node can unmount while private bytes load; this guard must run after the await.
+    const url = await voice.resource.load(voice.resource.path);
+    if (!element.isConnected) return;
+    if (element.src !== url) element.src = url;
+  }
+  if (element.error) element.load();
+  await element.play();
 }
 
 /** A voice note: play or pause, a 38-bar waveform and the elapsed or total time. */
 let activeAudio: HTMLAudioElement | null = null;
-export function VoiceRow({ voice, onError }: VoiceRowProps) {
+function useVoiceAudio(voice: VoiceAttachment) {
   const audio = useRef<HTMLAudioElement>(null);
-  const [playing, setPlaying] = useState(false);
-  const [elapsed, setElapsed] = useState(0);
-  const [error, setError] = useState("");
-  const done = elapsed / voice.durationMs;
+  useResourceLifetime(voice.resource);
+  const path = voice.resource?.path;
+  useEffect(() => {
+    const element = audio.current;
+    if (path && !voice.url && element) {
+      element.pause();
+      element.removeAttribute("src");
+      element.load();
+    }
+  }, [path, voice.url]);
   useEffect(() => {
     const element = audio.current;
     return () => {
@@ -76,7 +173,19 @@ export function VoiceRow({ voice, onError }: VoiceRowProps) {
       if (activeAudio === element) activeAudio = null;
     };
   }, []);
+  return audio;
+}
+
+export function VoiceRow({ voice, onError }: VoiceRowProps) {
+  const audio = useVoiceAudio(voice);
+  const [playing, setPlaying] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  const [error, setError] = useState("");
+  const failed = useRef(false);
+  const icon = playing ? "pause" : "play";
   function playbackError() {
+    if (failed.current) return;
+    failed.current = true;
     const copy = "Couldn't play this voice note. Try again or download it.";
     setPlaying(false);
     setError(copy);
@@ -85,7 +194,9 @@ export function VoiceRow({ voice, onError }: VoiceRowProps) {
   async function toggle() {
     const element = audio.current;
     if (!element) return;
+    failed.current = false;
     setError("");
+    onError("");
     if (!element.paused) {
       element.pause();
       return;
@@ -93,10 +204,9 @@ export function VoiceRow({ voice, onError }: VoiceRowProps) {
     if (activeAudio && activeAudio !== element) activeAudio.pause();
     activeAudio = element;
     try {
-      if (element.error) element.load();
-      await element.play();
+      await playVoice(element, voice);
     } catch {
-      playbackError();
+      if (element.isConnected) playbackError();
     }
   }
   return (
@@ -105,9 +215,13 @@ export function VoiceRow({ voice, onError }: VoiceRowProps) {
       {/* oxlint-disable-next-line jsx-a11y/media-has-caption -- Voice notes are user audio without a transcript. */}
       <audio
         ref={audio}
-        src={voice.url || undefined}
+        src={voiceSource(voice)}
         preload="none"
-        onPlay={() => setPlaying(true)}
+        onPlay={() => {
+          setPlaying(true);
+          setError("");
+          onError("");
+        }}
         onPause={() => setPlaying(false)}
         onTimeUpdate={(event) => setElapsed(event.currentTarget.currentTime * 1000)}
         onEnded={() => {
@@ -119,21 +233,15 @@ export function VoiceRow({ voice, onError }: VoiceRowProps) {
       <button
         type="button"
         className="play"
-        disabled={!voice.url}
+        disabled={!voice.url && !voice.resource}
         aria-label={playing ? "Pause voice note" : "Play voice note"}
         onClick={() => {
           void toggle();
         }}
       >
-        <Icon name={playing ? "pause" : "play"} />
+        <Icon name={icon} />
       </button>
-      <span className="wave" aria-hidden="true">
-        {barHeights(voice.waveform).map((height, bar) => (
-          // The bar index is the identity: the bars never reorder.
-          // oxlint-disable-next-line react/no-array-index-key
-          <i key={bar} className={bar / BARS < done ? "on" : undefined} style={{ height }} />
-        ))}
-      </span>
+      <Waveform waveform={voice.waveform} progress={elapsed / voice.durationMs} />
       <span className="dur">
         {durationLabel(playing || elapsed > 0 ? elapsed : voice.durationMs)}
       </span>

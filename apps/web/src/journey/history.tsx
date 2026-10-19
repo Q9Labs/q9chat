@@ -59,7 +59,12 @@ function eventView(
     }
   }
 }
-function messageView(row: Row, group: Group, photos: ReadonlyMap<string, string>): MessageView {
+function messageView(
+  row: Row,
+  group: Group,
+  photos: ReadonlyMap<string, string>,
+  resources: ReturnType<typeof useMediaResources>,
+): MessageView {
   if (row.kind === "event") return { ...row, event: eventView(row.event, photos) };
   const person = author(row.author, photos);
   if (row.kind === "deleted") return { ...row, author: person };
@@ -70,8 +75,11 @@ function messageView(row: Row, group: Group, photos: ReadonlyMap<string, string>
     renderKey: row.author.isYou ? row.clientKey : row.id,
     mentions: group.members.filter((p) => mentionIds.has(p.id)).map((p) => p.name),
     attachments: row.attachments.map((file) => {
-      const url = photos.get(file.url) ?? "";
-      return file.kind === "image" ? { ...file, url, label: "Image" } : { ...file, url };
+      const url = resources.urls.get(file.url) ?? "";
+      const resource = { path: file.url, load: resources.load, release: resources.release };
+      return file.kind === "image"
+        ? { ...file, url, resource, label: "Image" }
+        : { ...file, url, resource };
     }),
     replyTo:
       row.replyTo === null
@@ -93,7 +101,6 @@ const handlers: MessageHandlers = {
   onRetry: displayOnly,
   onOpenQuote: displayOnly,
   onMediaError: displayOnly,
-  onTogglePlay: displayOnly,
   onMenuOpenChange: displayOnly,
 };
 
@@ -183,8 +190,9 @@ function historyMessages(
   photos: ReadonlyMap<string, string>,
   start: number,
   openedAt: number,
+  resources: ReturnType<typeof useMediaResources>,
 ) {
-  const messages = rows.map((row) => messageView(row, group, photos));
+  const messages = rows.map((row) => messageView(row, group, photos, resources));
   if (group.kind === "pair" && start === 1 && group.partner)
     messages.unshift({
       kind: "event",
@@ -383,13 +391,12 @@ function useHistory(group: Group, opened: Opening) {
   };
 }
 
+function hasTimeline(rows: readonly Row[], loading: boolean) {
+  return rows.length > 0 || !loading;
+}
+
 function pendingMessages(atLatest: boolean, text: readonly PostView[], media: readonly PostView[]) {
   return atLatest ? [...text, ...media].toSorted((a, b) => a.createdAt - b.createdAt) : [];
-}
-function historyMediaPaths(rows: readonly Row[]) {
-  return rows.flatMap((row) =>
-    row.kind === "post" ? row.attachments.map((file) => file.url) : [],
-  );
 }
 
 function historyPhotoPaths(rows: readonly Row[]) {
@@ -429,6 +436,29 @@ function HistoryNotice({
   );
 }
 
+function noticeKey(
+  issue: string | undefined,
+  playback: { readonly text: string; readonly event: string } | undefined,
+) {
+  return issue === playback?.text ? playback?.event : issue;
+}
+
+function usePlaybackErrors() {
+  const [playbackErrors, setPlaybackErrors] = useState<
+    ReadonlyMap<string, { readonly text: string; readonly event: string }>
+  >(() => new Map());
+  function reportPlaybackError(text: string, owner: string) {
+    const event = crypto.randomUUID();
+    setPlaybackErrors((current) => {
+      const next = new Map(current);
+      if (text) next.set(owner, { text, event });
+      else next.delete(owner);
+      return next;
+    });
+  }
+  return { issue: [...playbackErrors.values()][0], report: reportPlaybackError };
+}
+
 export function History({
   group,
   onMessage,
@@ -460,11 +490,9 @@ export function History({
   const { person: selectedPerson, select: setAuthor } = useAuthorSelection(rows, loading);
   const [error, setError] = useState("");
   const [mediaError, setMediaError] = useState("");
+  const { issue: playbackIssue, report: reportPlaybackError } = usePlaybackErrors();
   const { photos } = usePhotos(historyPhotoPaths(rows), setError);
-  const { urls: mediaUrls, refresh: reloadMedia } = useMediaResources(
-    historyMediaPaths(rows),
-    setMediaError,
-  );
+  const resources = useMediaResources(setMediaError);
   const onVisible = useRead(group, opened.read, {
     setError,
     covered,
@@ -476,7 +504,7 @@ export function History({
   const senderTyping = useSenderTyping(group.groupId);
   const [latestRequest, requestLatest] = useState(0);
   const messages = [
-    ...historyMessages(rows, group, new Map([...photos, ...mediaUrls]), start, opened.at),
+    ...historyMessages(rows, group, photos, start, opened.at, resources),
     ...pendingMessages(atLatest, outbox.messages, media.messages),
   ];
   function toLatest() {
@@ -488,7 +516,14 @@ export function History({
     senderTyping.clear();
     toLatest();
   }
-  const issue = [error, mediaError, media.error, outbox.error, senderTyping.error].find(Boolean);
+  const issue = [
+    error,
+    mediaError,
+    playbackIssue?.text,
+    media.error,
+    outbox.error,
+    senderTyping.error,
+  ].find(Boolean);
   function changeDraft(value: string) {
     outbox.change(value);
     senderTyping.change(value);
@@ -498,14 +533,19 @@ export function History({
     media.retry(message.renderKey ?? message.id);
     toLatest();
   }
-  const showTimeline = rows.length > 0 || !loading;
+  const showTimeline = hasTimeline(rows, loading);
   function retryMedia() {
     setMediaError("");
-    reloadMedia();
+    resources.retry();
   }
   return (
     <>
-      <HistoryNotice issue={issue} mediaFailed={mediaError !== ""} reload={retryMedia} />
+      <HistoryNotice
+        key={noticeKey(issue, playbackIssue)}
+        issue={issue}
+        mediaFailed={mediaError !== ""}
+        reload={retryMedia}
+      />
       <output
         className="send-announcement"
         aria-label="Send status"
@@ -523,12 +563,11 @@ export function History({
           handlers={{
             ...handlers,
             onRetry: retry,
-            onMediaError: media.setError,
+            onMediaError: reportPlaybackError,
           }}
           onOpenAuthor={(person) => setAuthor(person.id)}
           menuMessageId={null}
           highlightId={null}
-          playing={null}
           readOnly
           reading={{
             onVisible,

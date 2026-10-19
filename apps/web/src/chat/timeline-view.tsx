@@ -129,12 +129,11 @@ export interface TimelineProps {
   readonly menuMessageId: string | null;
   /** The message to flash after a jump. */
   readonly highlightId: string | null;
-  readonly playing: { readonly messageId: string; readonly progress: number } | null;
 }
 
 type EntryProps = Pick<
   TimelineProps,
-  "onOpenAuthor" | "highlightId" | "menuMessageId" | "playing" | "handlers" | "readOnly"
+  "onOpenAuthor" | "highlightId" | "menuMessageId" | "handlers" | "readOnly"
 > & {
   readonly item: TimelineItem;
   readonly timeZone: ReturnType<typeof useRoot>["clock"]["timeZone"];
@@ -147,7 +146,6 @@ function TimelineEntry({
   onOpenAuthor,
   highlightId,
   menuMessageId,
-  playing,
   handlers,
   readOnly = false,
 }: EntryProps) {
@@ -169,7 +167,6 @@ function TimelineEntry({
           compact={compact}
           highlighted={highlightId === message.id}
           menuOpen={menuMessageId === message.id}
-          playProgress={playing?.messageId === message.id ? playing.progress : null}
           handlers={handlers}
           readOnly={readOnly}
         />
@@ -233,7 +230,6 @@ export function Timeline({
   onOpenAuthor,
   menuMessageId,
   highlightId,
-  playing,
   readOnly = false,
   reading = STATIC_READING,
 }: TimelineProps) {
@@ -285,7 +281,6 @@ export function Timeline({
             onOpenAuthor={onOpenAuthor}
             highlightId={highlightId}
             menuMessageId={menuMessageId}
-            playing={playing}
             handlers={handlers}
             readOnly={readOnly}
           />

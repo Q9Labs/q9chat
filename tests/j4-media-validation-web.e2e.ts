@@ -64,15 +64,14 @@ test(
       expect(
         images?.every((file) => file.kind === "image" && file.width === 480 && file.height === 240),
       ).toBe(true);
-      await expect
-        .poll(() =>
-          page
-            .locator("img.photo")
-            .evaluateAll((nodes) =>
-              nodes.every((node) => node instanceof HTMLImageElement && node.naturalWidth === 480),
-            ),
-        )
-        .toBe(true);
+      for (const image of await page.locator("img.photo").all()) {
+        await image.scrollIntoViewIfNeeded();
+        await expect
+          .poll(() =>
+            image.evaluate((node) => node instanceof HTMLImageElement && node.naturalWidth),
+          )
+          .toBe(480);
+      }
       const jpeg = files[1];
       if (!jpeg) throw new Error("Missing JPEG fixture");
       await page.getByLabel("Choose files", { exact: true }).setInputFiles(jpeg);

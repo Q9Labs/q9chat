@@ -275,8 +275,8 @@ export const STATES: readonly GalleryState[] = [
   { id: "chat-attach", title: "Chat, attach menu", render: () => <ChatScene attachOpen /> },
   {
     id: "chat-voice-playing",
-    title: "Chat, voice note playing",
-    render: () => <ChatScene playing={{ messageId: "l10", progress: 0.5 }} />,
+    title: "Chat, voice playback controls (activate to play)",
+    render: () => <ChatScene />,
   },
   {
     id: "chat-system",

@@ -70,6 +70,7 @@ test(
         await expect.poll(async () => (await posts()).length).toBe(1);
         const stored = (await posts())[0];
         expect(stored?.attachments[0]?.kind).toBe("file");
+        await page.locator("a.file").click();
         await expect.poll(() => page.locator("a.file").getAttribute("href")).toMatch(/^blob:/);
         const downloaded = await page
           .locator("a.file")

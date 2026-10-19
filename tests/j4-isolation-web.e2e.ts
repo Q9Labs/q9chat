@@ -43,6 +43,12 @@ async function fixture() {
     if (!post || post.kind !== "post") throw new Error("Missing unique committed post");
     return post;
   }
+  async function sendText(body: string) {
+    await field.waitFor();
+    await field.fill(body);
+    await field.press("Enter");
+    return onePost(body);
+  }
   async function newTab() {
     const tab = await context.newPage();
     await tab.goto(path, { waitUntil: "commit" });
@@ -116,6 +122,7 @@ async function fixture() {
     field,
     posts,
     onePost,
+    sendText,
     newTab,
     seedPosts,
     open,
@@ -192,14 +199,7 @@ isolationTest("J4 account transport: disconnected A never replays as B", async (
   await f.signOut();
   await f.signIn(f.bEmail);
   blocked = false;
-  await f.field.waitFor();
-  await f.field.fill("B reconnect sentinel");
-  await f.field.press("Enter");
-  await expect
-    .poll(async () =>
-      (await f.posts()).some((row) => row.kind === "post" && row.body === "B reconnect sentinel"),
-    )
-    .toBe(true);
+  await f.sendText("B reconnect sentinel");
   expect(
     (await f.posts()).filter(
       (row) => row.kind === "post" && row.body === "A private queued composition",
@@ -633,10 +633,7 @@ isolationTest("J4B account transport: queued attachment never becomes B's send",
   await f.signOut();
   await f.signIn(f.bEmail);
   blocked = false;
-  await f.field.waitFor();
-  await f.field.fill("B media isolation sentinel");
-  await f.field.press("Enter");
-  await f.onePost("B media isolation sentinel");
+  await f.sendText("B media isolation sentinel");
   expect(await attachmentPosts(f)).toEqual([]);
   expect(await f.page.getByRole("button", { name: "Retry", exact: true }).count()).toBe(0);
   await f.signOut();

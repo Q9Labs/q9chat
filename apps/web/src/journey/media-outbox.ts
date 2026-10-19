@@ -113,19 +113,23 @@ export function useMediaOutbox(group: Group, rows: readonly Row[]) {
     operation.current = controller;
     void loadMedia(scope)
       .then((saved) => {
-        if (!controller.signal.aborted)
-          setPosts((current) => [
-            ...current,
-            ...saved
-              .filter((post) => !current.some((item) => item.clientKey === post.clientKey))
-              .map((post): Pending => ({
-                ...post,
-                status: "failed",
-                receipt: null,
-                afterSequence: openedAtSequence,
-                previews: post.files.map((file) => localAttachment(file, localUrl(file.blob))),
-              })),
-          ]);
+        if (controller.signal.aborted) return;
+        if (saved.damaged)
+          setError(
+            "Some unsent attachments could not be restored. Healthy attachments are available to retry; damaged data was kept on this device.",
+          );
+        setPosts((current) => [
+          ...current,
+          ...saved.posts
+            .filter((post) => !current.some((item) => item.clientKey === post.clientKey))
+            .map((post): Pending => ({
+              ...post,
+              status: "failed",
+              receipt: null,
+              afterSequence: openedAtSequence,
+              previews: post.files.map((file) => localAttachment(file, localUrl(file.blob))),
+            })),
+        ]);
       })
       .catch(() => {
         if (!controller.signal.aborted)

@@ -367,7 +367,12 @@ export function launchMessages(options: Options = {}): readonly MessageView[] {
         time: "10:31",
         body: "",
         attachments: [
-          { kind: "voice", url: "/voice/l10", durationMs: 24_000, waveform: waveformFor("l10") },
+          {
+            kind: "voice",
+            url: "/fixtures/voice.wav",
+            durationMs: 2_000,
+            waveform: waveformFor("l10"),
+          },
         ],
       },
       10,

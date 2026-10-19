@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import { Either, Schema } from "effect";
 
 const positive = Schema.Number.pipe(Schema.finite(), Schema.positive());
 const bytes = Schema.instanceOf(Blob).pipe(
@@ -32,6 +32,7 @@ const saved = Schema.Struct({
   files: Schema.Array(media).pipe(Schema.minItems(1), Schema.maxItems(10)),
 });
 export type SavedMedia = typeof saved.Type;
+const decodeSavedMedia = Schema.decodeUnknownEither(saved);
 
 async function database() {
   return new Promise<IDBDatabase>((resolve, reject) => {
@@ -65,11 +66,48 @@ async function transaction<T>(
   }
 }
 const entryKey = (scope: string, clientKey: string) => `${scope}:${clientKey}`;
-export async function loadMedia(scope: string): Promise<readonly SavedMedia[]> {
-  const values: unknown = await transaction("readonly", (store) =>
-    store.getAll(IDBKeyRange.bound(`${scope}:`, `${scope}:\uffff`)),
-  );
-  return Schema.decodeUnknownSync(Schema.Array(saved))(values);
+export async function loadMedia(scope: string): Promise<{
+  readonly posts: readonly SavedMedia[];
+  readonly damaged: boolean;
+}> {
+  const range = IDBKeyRange.bound(`${scope}:`, `${scope}:\uffff`);
+  let keys: readonly IDBValidKey[] = [];
+  const values: readonly unknown[] = await transaction("readonly", (store) => {
+    const request = store.getAllKeys(range);
+    request.onsuccess = () => {
+      keys = request.result;
+    };
+    return store.getAll(range);
+  });
+  const posts: SavedMedia[] = [];
+  let damaged = false;
+  for (const [index, value] of values.entries()) {
+    const decoded = decodeSavedMedia(value);
+    if (Either.isRight(decoded)) {
+      posts.push(decoded.right);
+      continue;
+    }
+    damaged = true;
+    const key = keys[index];
+    if (typeof key !== "string") continue;
+    // Preserve damaged bytes outside the active prefix. Quarantine failure never hides healthy retries.
+    try {
+      await transaction("readwrite", (store) => {
+        const request = store.get(key);
+        request.onsuccess = () => {
+          const current: unknown = request.result;
+          if (current === undefined || Either.isRight(decodeSavedMedia(current))) return;
+          store.put(current, `quarantine:${key}`);
+          store.delete(key);
+        };
+        return request;
+      });
+    } catch {
+      // The raw record remains recoverable; it is independently rejected on the next load.
+      damaged = true;
+    }
+  }
+  return { posts, damaged };
 }
 export async function saveMedia(scope: string, post: SavedMedia) {
   await transaction("readwrite", (store) => store.put(post, entryKey(scope, post.clientKey)));
