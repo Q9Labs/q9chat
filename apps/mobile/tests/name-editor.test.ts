@@ -9,6 +9,7 @@ function setup(initial = "Nadia") {
   const inputs = {
     saved: initial,
     connected: true,
+    photoBusy: false,
     save: (name: string) =>
       new Promise((resolve, reject) => {
         saves.push({
@@ -26,6 +27,10 @@ function setup(initial = "Nadia") {
     },
     set connected(up: boolean) {
       inputs.connected = up;
+      editor.sync(inputs);
+    },
+    set photoBusy(busy: boolean) {
+      inputs.photoBusy = busy;
       editor.sync(inputs);
     },
   };
@@ -177,4 +182,38 @@ void test("a change typed while the save was out keeps the screen and is not sav
   await leaving;
   assert.deepEqual(left, []);
   assert.equal(editor.snapshot().draft, "Nadia Jones");
+});
+
+void test("a photo change that has not finished asks before leaving, and Stay here keeps the screen", async () => {
+  const { world, editor, left, leave } = setup();
+  world.photoBusy = true;
+  await editor.exit(leave("back"));
+  assert.deepEqual(left, []);
+  assert.equal(editor.snapshot().unsaved?.confirmLabel, "Leave anyway");
+  editor.keepEditing();
+  assert.deepEqual(left, []);
+
+  world.photoBusy = false;
+  await editor.exit(leave("back"));
+  assert.deepEqual(left, ["back"]);
+});
+
+void test("Leave anyway lets go of a photo change that has not finished", async () => {
+  const { world, editor, left, leave } = setup();
+  world.photoBusy = true;
+  await editor.exit(leave("sign out"));
+  editor.discard();
+  assert.deepEqual(left, ["sign out"]);
+});
+
+void test("a saved name still asks about the photo change before leaving", async () => {
+  const { world, editor, saves, left, leave } = setup();
+  editor.change("Nadia Jo");
+  world.photoBusy = true;
+  const exiting = editor.exit(leave("back"));
+  await tick();
+  saves[0]?.settle("ok");
+  await exiting;
+  assert.deepEqual(left, []);
+  assert.equal(editor.snapshot().unsaved?.cancelLabel, "Stay here");
 });

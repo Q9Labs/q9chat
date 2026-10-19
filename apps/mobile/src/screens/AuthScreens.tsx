@@ -110,7 +110,7 @@ export function SignInScreen({
   onGoogle: () => void;
   onApple: () => void;
   onEmailCode: () => void;
-  /** Sign-in stays off while a sign-out is still being confirmed by the server. */
+  /** Every way to sign in stays off. */
   disabled?: boolean;
   notice?: ToastNotice | null;
 }) {

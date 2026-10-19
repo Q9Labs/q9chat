@@ -24,6 +24,8 @@ export type NameEditorInputs = {
   /** Whether the live connection to Convex is up now. */
   connected: boolean;
   save: (name: string) => Promise<unknown>;
+  /** A photo change (remove or upload) has not finished; leaving would drop it. */
+  photoBusy: boolean;
 };
 
 const ASK = {
@@ -48,6 +50,11 @@ const ASK = {
     confirmLabel: "Leave anyway",
     cancelLabel: "Stay here",
   },
+  photo: {
+    text: "Your photo change isn't done yet. If you leave now, it may not be saved.",
+    confirmLabel: "Leave anyway",
+    cancelLabel: "Stay here",
+  },
 } as const;
 
 /** True when the field holds a change from the saved name. */
@@ -68,15 +75,12 @@ function problemWith(name: string, connected: boolean, inFlight: boolean): keyof
   return null;
 }
 
-/** What an exit does, from the field, the saved name, the connection and whether a save is out. */
-function planExit(
-  draft: string | null,
-  { saved, connected }: NameEditorInputs,
-  inFlight: boolean,
-): Plan {
+/** What an exit does, from the field, the saved name, the connection, a photo change and whether a save is out. */
+function planExit(draft: string | null, inputs: NameEditorInputs, inFlight: boolean): Plan {
   const name = draft?.trim();
-  if (name === undefined || name === saved) return { kind: "leave" };
-  const ask = problemWith(name, connected, inFlight);
+  if (name === undefined || name === inputs.saved)
+    return inputs.photoBusy ? { kind: "ask", ask: "photo" } : { kind: "leave" };
+  const ask = problemWith(name, inputs.connected, inFlight);
   if (ask) return { kind: "ask", ask };
   return inFlight ? { kind: "wait" } : { kind: "save", name };
 }
@@ -85,7 +89,7 @@ function planExit(
  * The name field on Account, without React. The screen leaves only when nothing is left to save:
  * a field that was not changed never saves, a change is saved first, and when it cannot be (invalid,
  * rejected, no connection, or a save that is still waiting for one) `unsaved` asks the person whether
- * to keep editing or leave without it. An exit that the person answered, or that a newer one
+ * to keep editing or leave without it. A photo change that has not finished is asked about the same way. An exit that the person answered, or that a newer one
  * replaced, does nothing when its save ends later.
  */
 export function createNameEditor(initial: NameEditorInputs) {
@@ -120,8 +124,10 @@ export function createNameEditor(initial: NameEditorInputs) {
       set({ saving: false });
     }
     if (mine !== turn) return;
-    if (outcome === "saved") leave();
-    else if (outcome === "failed") ask("failed", leave);
+    if (outcome === "saved") {
+      if (inputs.photoBusy) ask("photo", leave);
+      else leave();
+    } else if (outcome === "failed") ask("failed", leave);
   }
 
   async function exit(leave: () => void) {

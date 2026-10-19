@@ -1,24 +1,20 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 
-import { createNameEditor, isDirty } from "./nameEditor";
+import { createNameEditor, isDirty, type NameEditorInputs } from "./nameEditor";
 
 /** The name field on the account screen; the rules live in `createNameEditor`. */
-export function useNameEditing(
-  savedName: string,
-  connected: boolean,
-  save: (name: string) => Promise<unknown>,
-) {
-  const [editor] = useState(() => createNameEditor({ saved: savedName, connected, save }));
+export function useNameEditing(inputs: NameEditorInputs) {
+  const [editor] = useState(() => createNameEditor(inputs));
   // The editor outlives renders, so it is handed the latest values after each one.
   useEffect(() => {
-    editor.sync({ saved: savedName, connected, save });
+    editor.sync(inputs);
   });
   const { draft, saving, unsaved } = useSyncExternalStore(editor.subscribe, editor.snapshot);
   return {
-    name: draft ?? savedName,
+    name: draft ?? inputs.saved,
     change: editor.change,
     saving,
-    dirty: isDirty(draft, savedName),
+    dirty: isDirty(draft, inputs.saved),
     exit: editor.exit,
     clear: editor.clear,
     unsaved,

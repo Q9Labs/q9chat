@@ -249,12 +249,13 @@ export function PermissionBanner({
 }
 
 /** What Groups shows before its first load while the live connection is down. */
-export function CantConnectYet() {
+export function CantConnectYet({ action }: { action?: ReactNode }) {
   return (
     <CenterState
       icon="wifiOff"
       title="Can't connect"
       text="Your groups will load when you're back online."
+      action={action}
     />
   );
 }

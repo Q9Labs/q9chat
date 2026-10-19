@@ -209,7 +209,6 @@ void test("a held refresh write, then sign-out, then another sign-in: the new ac
   await tick();
 
   const signingOut = client.signOut();
-  assert.equal(statusOf(client), "unauthenticated");
   worker.auto("email/verify", () => json(phoneSession("b")));
   const signingInAsB = client.verifyEmail("b@example.net", "123456");
 
@@ -220,93 +219,7 @@ void test("a held refresh write, then sign-out, then another sign-in: the new ac
   await Promise.all([restoring, signingOut, signingInAsB]);
 
   assert.equal(keychain.value("refreshToken"), "refresh-b");
-  assert.equal(keychain.value("pendingRevoke"), null);
   assert.equal(accessTokenOf(client), "access-b");
-  assert.equal(client.revokeStatus(), "idle");
-});
-
-void test("a failed revoke keeps the token it needs, and a later retry revokes it", async () => {
-  const { worker, keychain, client } = harness({ refreshToken: "refresh-a" });
-  worker.auto("token", () => json(phoneSession("a")));
-  await client.bootstrap();
-
-  const signingOut = client.signOut();
-  (await worker.next("sign-out")).reply(json({}, 503));
-  await assert.rejects(signingOut);
-  assert.equal(statusOf(client), "unauthenticated");
-  assert.equal(client.revokeStatus(), "failed");
-  assert.equal(keychain.value("refreshToken"), null);
-  assert.equal(keychain.value("pendingRevoke"), JSON.stringify(["refresh-a"]));
-
-  const retrying = client.retry();
-  const revoke = await worker.next("sign-out");
-  assert.equal(revoke.body.refreshToken, "refresh-a");
-  revoke.reply(json({}));
-  await retrying;
-  assert.equal(client.revokeStatus(), "idle");
-  assert.equal(keychain.value("pendingRevoke"), null);
-});
-
-void test("a failed revoke, then a new sign-in, then a later retry: the old token is revoked and the new session is intact", async () => {
-  const { worker, keychain, client } = harness({ refreshToken: "refresh-a" });
-  worker.auto("token", () => json(phoneSession("a")));
-  await client.bootstrap();
-  const signingOut = client.signOut();
-  (await worker.next("sign-out")).reply(new TypeError("Network request failed"));
-  await assert.rejects(signingOut);
-
-  worker.auto("email/verify", () => json(phoneSession("b")));
-  await client.verifyEmail("b@example.net", "123456");
-  assert.equal(accessTokenOf(client), "access-b");
-  assert.equal(keychain.value("refreshToken"), "refresh-b");
-  assert.equal(keychain.value("pendingRevoke"), JSON.stringify(["refresh-a"]));
-  assert.equal(client.revokeStatus(), "failed");
-
-  const retrying = client.retry();
-  const revoke = await worker.next("sign-out");
-  assert.equal(revoke.body.refreshToken, "refresh-a");
-  revoke.reply(json({}));
-  await retrying;
-  assert.equal(client.revokeStatus(), "idle");
-  assert.equal(keychain.value("pendingRevoke"), null);
-  assert.equal(keychain.value("refreshToken"), "refresh-b");
-  assert.equal(accessTokenOf(client), "access-b");
-});
-
-void test("a restarted app retries the sign-out the server never confirmed", async () => {
-  const { worker, keychain, restart } = harness({ pendingRevoke: JSON.stringify(["refresh-old"]) });
-  worker.auto("token", () => json(phoneSession("a")));
-  const starting = restart().bootstrap();
-  const revoke = await worker.next("sign-out");
-  assert.equal(revoke.body.refreshToken, "refresh-old");
-  revoke.reply(json({}, 503));
-  await starting;
-  assert.equal(keychain.value("pendingRevoke"), JSON.stringify(["refresh-old"]));
-
-  const again = restart();
-  const second = again.bootstrap();
-  (await worker.next("sign-out")).reply(json({}));
-  await second;
-  assert.equal(keychain.value("pendingRevoke"), null);
-  assert.equal(again.revokeStatus(), "idle");
-});
-
-void test("a crash between the pending write and the active delete leaves the person signed out, and the revoke is retried", async () => {
-  const { worker, keychain, restart } = harness({
-    refreshToken: "refresh-a",
-    pendingRevoke: JSON.stringify(["refresh-a"]),
-  });
-  const client = restart();
-  const starting = client.bootstrap();
-  const revoke = await worker.next("sign-out");
-  assert.equal(revoke.body.refreshToken, "refresh-a");
-  revoke.reply(json({}));
-  await starting;
-  assert.equal(worker.count("token"), 0);
-  assert.equal(statusOf(client), "unauthenticated");
-  assert.equal(keychain.value("refreshToken"), null);
-  assert.equal(keychain.value("pendingRevoke"), null);
-  assert.equal(client.revokeStatus(), "idle");
 });
 
 void test("signing out cancels the refresh in flight and revokes the token it was using", async () => {
@@ -322,46 +235,6 @@ void test("signing out cancels the refresh in flight and revokes the token it wa
   await Promise.all([starting, signingOut]);
   assert.equal(statusOf(client), "unauthenticated");
   assert.equal(keychain.value("refreshToken"), null);
-});
-
-void test("a stalled revoke times out, keeps the token, and a retry then works", async () => {
-  const { worker, keychain, client } = harness(
-    { refreshToken: "refresh-a" },
-    { requestTimeoutMs: 30 },
-  );
-  worker.auto("token", () => json(phoneSession("a")));
-  await client.bootstrap();
-
-  const signingOut = client.signOut();
-  const stalled = await worker.next("sign-out");
-  await assert.rejects(signingOut);
-  assert.equal(stalled.signal?.aborted, true);
-  assert.equal(client.revokeStatus(), "failed");
-  assert.equal(keychain.value("pendingRevoke"), JSON.stringify(["refresh-a"]));
-
-  const retrying = client.retry();
-  (await worker.next("sign-out")).reply(json({}));
-  await retrying;
-  assert.equal(client.revokeStatus(), "idle");
-  assert.equal(keychain.value("pendingRevoke"), null);
-});
-
-void test("a stalled revoke does not lock sign-in for longer than the deadline", async () => {
-  const { worker, keychain, client } = harness(
-    { refreshToken: "refresh-a" },
-    { requestTimeoutMs: 30 },
-  );
-  worker.auto("token", () => json(phoneSession("a")));
-  await client.bootstrap();
-  const signingOut = client.signOut();
-  signingOut.catch(() => {});
-  await worker.next("sign-out");
-
-  worker.auto("email/verify", () => json(phoneSession("b")));
-  await client.verifyEmail("b@example.net", "123456");
-  assert.equal(accessTokenOf(client), "access-b");
-  assert.equal(keychain.value("refreshToken"), "refresh-b");
-  assert.equal(keychain.value("pendingRevoke"), JSON.stringify(["refresh-a"]));
 });
 
 void test("a launch refresh that never answers goes offline with the token kept, and a late answer changes nothing", async () => {
@@ -466,7 +339,7 @@ void test("a keychain read failure at launch is offline and retryable, not signe
   assert.equal(accessTokenOf(client), "access-a2");
 });
 
-void test("retry does nothing unless the session is offline or a sign-out failed", async () => {
+void test("retry does nothing unless the session is offline", async () => {
   const { worker, client } = harness({ refreshToken: "refresh-a" });
   worker.auto("token", () => json(phoneSession("a")));
   await client.bootstrap();
@@ -717,142 +590,6 @@ void test("a saved email code expires after ten minutes, and a different email d
   assert.equal(await restart().resumeEmail(), null);
 });
 
-void test("signing out while an older sign-out is still revoking is not ignored: it runs after the old revoke", async () => {
-  const { worker, keychain, client } = harness({
-    refreshToken: "refresh-b",
-    pendingRevoke: JSON.stringify(["refresh-old"]),
-  });
-  worker.auto("token", () => json(phoneSession("b2")));
-  const starting = client.bootstrap();
-  const oldRevoke = await worker.next("sign-out");
-  assert.equal(oldRevoke.body.refreshToken, "refresh-old");
-  assert.equal(client.revokeStatus(), "revoking");
-
-  const signingOut = client.signOut();
-  assert.equal(statusOf(client), "unauthenticated");
-  oldRevoke.reply(json({}));
-  const ownRevoke = await worker.next("sign-out");
-  assert.equal(ownRevoke.body.refreshToken, "refresh-b2");
-  ownRevoke.reply(json({}));
-  await Promise.all([starting, signingOut]);
-
-  assert.equal(keychain.value("refreshToken"), null);
-  assert.equal(keychain.value("pendingRevoke"), null);
-  assert.equal(client.revokeStatus(), "idle");
-});
-
-void test("crash recovery that met a keychain read failure still signs the account out when the retry runs", async () => {
-  const { worker, keychain, client } = harness({
-    refreshToken: "refresh-a",
-    pendingRevoke: JSON.stringify(["refresh-a"]),
-  });
-  worker.auto("token", () => json(phoneSession("a")));
-  keychain.failReads(true);
-  await client.bootstrap();
-  assert.equal(statusOf(client), "offline");
-
-  keychain.failReads(false);
-  const retrying = client.retry();
-  (await worker.next("sign-out")).reply(json({}));
-  await retrying;
-  assert.equal(worker.count("token"), 0);
-  assert.equal(statusOf(client), "unauthenticated");
-  assert.equal(keychain.value("refreshToken"), null);
-  assert.equal(keychain.value("pendingRevoke"), null);
-  assert.equal(client.revokeStatus(), "idle");
-});
-
-/** A phone that signed in as A, then lost its keychain writes for `keys` during sign-out. */
-async function signedOutWithFailedMove(keys: readonly StoreKey[]) {
-  const setup = harness({ refreshToken: "refresh-a" });
-  setup.worker.auto("token", () => json(phoneSession("a")));
-  await setup.client.bootstrap();
-  assert.equal(statusOf(setup.client), "authenticated");
-  setup.keychain.failWrites(keys);
-  await assert.rejects(setup.client.signOut());
-  assert.equal(statusOf(setup.client), "unauthenticated");
-  assert.equal(setup.client.revokeStatus(), "failed");
-  return setup;
-}
-
-void test("a sign-out whose pending write failed is finished by the next retry, and a restart stays signed out", async () => {
-  const { worker, keychain, restart, client } = await signedOutWithFailedMove([
-    "pendingRevoke",
-    "refreshToken",
-  ]);
-  assert.equal(keychain.value("refreshToken"), "refresh-a");
-
-  keychain.failWrites([]);
-  const retrying = client.retry();
-  const revoke = await worker.next("sign-out");
-  assert.equal(revoke.body.refreshToken, "refresh-a");
-  revoke.reply(json({}));
-  await retrying;
-  assert.equal(keychain.value("refreshToken"), null);
-  assert.equal(keychain.value("pendingRevoke"), null);
-  assert.equal(client.revokeStatus(), "idle");
-
-  const restarted = restart();
-  await restarted.bootstrap();
-  assert.equal(statusOf(restarted), "unauthenticated");
-  assert.equal(worker.count("token"), 1);
-});
-
-void test("a sign-out that listed the token but could not delete it is finished without listing it twice", async () => {
-  const { worker, keychain, client } = await signedOutWithFailedMove(["refreshToken"]);
-  assert.equal(keychain.value("pendingRevoke"), JSON.stringify(["refresh-a"]));
-
-  keychain.failWrites([]);
-  const retrying = client.retry();
-  (await worker.next("sign-out")).reply(json({}));
-  await retrying;
-  assert.equal(worker.count("sign-out"), 1);
-  assert.equal(keychain.value("refreshToken"), null);
-  assert.equal(keychain.value("pendingRevoke"), null);
-});
-
-void test("a refresh after a failed sign-out move does not bring the account back", async () => {
-  const { worker, keychain, client } = await signedOutWithFailedMove([
-    "pendingRevoke",
-    "refreshToken",
-  ]);
-  keychain.failWrites([]);
-
-  assert.equal(await client.fetchAccessToken({ forceRefreshToken: true }), null);
-  assert.equal(statusOf(client), "unauthenticated");
-  assert.equal(worker.count("token"), 1);
-  assert.equal(keychain.value("refreshToken"), null);
-  assert.equal(keychain.value("pendingRevoke"), JSON.stringify(["refresh-a"]));
-});
-
-void test("a sign-in after a failed sign-out move lists the old token first and never moves the new one", async () => {
-  const { worker, keychain, client } = await signedOutWithFailedMove([
-    "pendingRevoke",
-    "refreshToken",
-  ]);
-  worker.auto("email/verify", () => json(phoneSession("b")));
-
-  // While the keychain still fails, the sign-in fails before it spends the code.
-  await assert.rejects(client.verifyEmail("b@example.net", "123456"));
-  assert.equal(worker.count("email/verify"), 0);
-  assert.equal(keychain.value("refreshToken"), "refresh-a");
-
-  keychain.failWrites([]);
-  await client.verifyEmail("b@example.net", "123456");
-  assert.equal(accessTokenOf(client), "access-b");
-  assert.equal(keychain.value("refreshToken"), "refresh-b");
-  assert.equal(keychain.value("pendingRevoke"), JSON.stringify(["refresh-a"]));
-
-  worker.auto("sign-out", () => json({}));
-  await client.retry();
-  assert.deepEqual(
-    worker.log.filter((entry) => entry.path === "sign-out").map((entry) => entry.body.refreshToken),
-    ["refresh-a"],
-  );
-  assert.equal(keychain.value("refreshToken"), "refresh-b");
-  assert.equal(accessTokenOf(client), "access-b");
-});
-
 void test("an expired saved attempt is deleted at launch and when the app returns to the foreground", async () => {
   const gone = { state: "s", verifier: "v", expiresAt: 1, cookies: [] };
   const { worker, keychain, client, clock } = harness({
@@ -932,46 +669,6 @@ void test("the epoch moves when a session ends or another account takes over, an
   assert.equal(client.epoch(), first + 1);
 });
 
-/** A phone signed in as A whose keychain cannot save the pending list; the server revoke is answered by `revoke`. */
-async function signedOutWithoutPendingList(revoke: () => Response) {
-  const setup = harness({ refreshToken: "refresh-a" });
-  setup.worker.auto("token", () => json(phoneSession("a")));
-  await setup.client.bootstrap();
-  setup.keychain.failWrites(["pendingRevoke"]);
-  setup.worker.auto("sign-out", revoke);
-  return setup;
-}
-
-void test("when the pending list cannot be saved, the active token is still removed: a restart stays signed out and sends no refresh", async () => {
-  const { worker, keychain, restart, client } = await signedOutWithoutPendingList(() =>
-    json({}, 503),
-  );
-  await assert.rejects(client.signOut());
-  assert.equal(statusOf(client), "unauthenticated");
-  assert.equal(client.revokeStatus(), "failed");
-  assert.equal(keychain.value("refreshToken"), null);
-  assert.equal(keychain.value("pendingRevoke"), null);
-
-  const restarted = restart();
-  await restarted.bootstrap();
-  assert.equal(statusOf(restarted), "unauthenticated");
-  assert.equal(worker.count("token"), 1);
-});
-
-void test("when the pending list cannot be saved, the process still revokes the token it holds in memory", async () => {
-  const { worker, keychain, client } = await signedOutWithoutPendingList(() => json({}, 503));
-  await assert.rejects(client.signOut());
-
-  worker.auto("sign-out", () => json({}));
-  await client.retry();
-  assert.deepEqual(
-    worker.log.filter((entry) => entry.path === "sign-out").map((entry) => entry.body.refreshToken),
-    ["refresh-a", "refresh-a"],
-  );
-  assert.equal(client.revokeStatus(), "idle");
-  assert.equal(keychain.value("refreshToken"), null);
-});
-
 void test("a provider refusal returned to the app ends the attempt with the sign-in error and exchanges nothing", async () => {
   const { worker, keychain, client, authWindow } = harness({});
   const signingIn = client.startOAuth("google");
@@ -1005,71 +702,129 @@ void test("an account that signs out and back in is a new session, so what a scr
   assert.notEqual(client.epoch(), before);
 });
 
-void test("an older revoke in flight does not keep the current account signed in on disk: killed before it ends, the restart is signed out", async () => {
-  const { worker, keychain, restart, client } = harness({
-    refreshToken: "refresh-b",
-    pendingRevoke: JSON.stringify(["refresh-old"]),
-  });
-  worker.auto("token", () => json(phoneSession("b")));
-  const starting = client.bootstrap();
-  const oldRevoke = await worker.next("sign-out");
-  assert.equal(oldRevoke.body.refreshToken, "refresh-old");
+/** Waits until the Worker has been asked to revoke `count` times. */
+async function revokesAsked(worker: ReturnType<typeof createWorker>, count: number) {
+  for (let attempt = 0; attempt < 200 && worker.count("sign-out") < count; attempt += 1)
+    await tick();
+}
 
-  void client.signOut().catch(() => {});
-  await tick();
-  await tick();
-  // The older revoke is still waiting on the server, and the new sign-out is already on disk.
+void test("signing out deletes the active key: a new client starts signed out and sends no refresh request", async () => {
+  const { worker, keychain, restart, client } = harness(
+    { refreshToken: "refresh-a" },
+    { requestTimeoutMs: 30 },
+  );
+  worker.auto("token", () => json(phoneSession("a")));
+  await client.bootstrap();
+
+  // The revoke never answers, and the app is killed: the restart must still be signed out.
+  await client.signOut();
+  assert.equal(statusOf(client), "unauthenticated");
   assert.equal(keychain.value("refreshToken"), null);
-  assert.equal(keychain.value("pendingRevoke"), JSON.stringify(["refresh-old", "refresh-b"]));
 
-  // The process dies here: a new client on the same keychain is signed out and does not refresh.
   const restarted = restart();
-  worker.auto("sign-out", () => json({}));
   await restarted.bootstrap();
   assert.equal(statusOf(restarted), "unauthenticated");
   assert.equal(worker.count("token"), 1);
-  assert.equal(keychain.value("pendingRevoke"), null);
-  void starting.catch(() => {});
 });
 
-void test("the retry on the sign-in screen revokes only: a live email attempt survives it", async () => {
-  const { worker, keychain, client } = harness({ pendingRevoke: JSON.stringify(["refresh-old"]) });
-  startsEmailWithCookie(worker);
+void test("when the active key cannot be deleted, sign-out fails and the person stays signed in", async () => {
+  const { worker, keychain, client } = harness({ refreshToken: "refresh-a" });
+  worker.auto("token", () => json(phoneSession("a")));
+  worker.auto("sign-out", () => json({}));
+  await client.bootstrap();
+
+  keychain.failWrites(["refreshToken"]);
+  await assert.rejects(client.signOut());
+  assert.equal(statusOf(client), "authenticated");
+  assert.equal(keychain.value("refreshToken"), "refresh-a");
+  assert.equal(worker.count("sign-out"), 0);
+
+  // Nothing is owed: when the keychain works again, signing out simply works.
+  keychain.failWrites([]);
+  await client.signOut();
+  assert.equal(statusOf(client), "unauthenticated");
+  assert.equal(keychain.value("refreshToken"), null);
+});
+
+void test("when the active key cannot be read, it is still deleted and the person is signed out", async () => {
+  const { worker, keychain, restart, client } = harness({ refreshToken: "refresh-a" });
+  worker.auto("token", () => json(phoneSession("a")));
+  await client.bootstrap();
+
+  keychain.failReads(true);
+  await client.signOut();
+  assert.equal(statusOf(client), "unauthenticated");
+  assert.equal(keychain.value("refreshToken"), null);
+  assert.equal(worker.count("sign-out"), 0);
+
+  keychain.failReads(false);
+  const restarted = restart();
+  await restarted.bootstrap();
+  assert.equal(statusOf(restarted), "unauthenticated");
+  assert.equal(worker.count("token"), 1);
+});
+
+void test("revoke failures never sign the person back in", async () => {
+  const { worker, keychain, restart, client } = harness({ refreshToken: "refresh-a" });
+  worker.auto("token", () => json(phoneSession("a")));
   worker.auto("sign-out", () => json({}, 503));
   await client.bootstrap();
-  assert.equal(client.revokeStatus(), "failed");
 
-  await client.startEmail("b@example.net");
-  worker.auto("sign-out", () => json({}));
+  await client.signOut();
+  await revokesAsked(worker, 3);
+  await tick();
+  assert.equal(worker.count("sign-out"), 3);
+  assert.equal(statusOf(client), "unauthenticated");
+  assert.equal(keychain.value("refreshToken"), null);
+
   await client.retry();
-  assert.equal(client.revokeStatus(), "idle");
+  const restarted = restart();
+  await restarted.bootstrap();
+  assert.equal(statusOf(restarted), "unauthenticated");
+  assert.equal(worker.count("token"), 1);
+});
+
+void test("a revoke never blocks a new sign-in, and the new sign-in's attempt survives the old sign-out", async () => {
+  const { worker, keychain, client } = harness({ refreshToken: "refresh-a" });
+  worker.auto("token", () => json(phoneSession("a")));
+  startsEmailWithCookie(worker);
+  await client.bootstrap();
+
+  await client.signOut();
+  const revoke = await worker.next("sign-out");
+  assert.equal(revoke.body.refreshToken, "refresh-a");
+
+  // The revoke is still out when a new sign-in starts and saves its attempt.
+  await client.startEmail("b@example.net");
+  assert.notEqual(keychain.value("emailAttempt"), null);
+  worker.auto("sign-out", () => json({}, 503));
+  revoke.reply(json({}, 503));
+  await revokesAsked(worker, 3);
+  await tick();
   assert.notEqual(keychain.value("emailAttempt"), null);
 
   await client.verifyEmail("b@example.net", "123456");
   assert.equal(accessTokenOf(client), "access-b");
+  assert.equal(keychain.value("refreshToken"), "refresh-b");
   assert.equal(
     worker.log.findLast((entry) => entry.path === "email/verify")?.cookie,
     "q9_email=email-transaction-1",
   );
 });
 
-void test("from the offline restore screen, signing out works without the network and queues the revoke", async () => {
+void test("from the offline restore screen, signing out works without the network", async () => {
   const { worker, keychain, restart, client } = harness({ refreshToken: "refresh-a" });
   worker.auto("token", () => json({}, 503));
   worker.auto("sign-out", () => json({}, 503));
   await client.bootstrap();
   assert.equal(statusOf(client), "offline");
 
-  await assert.rejects(client.signOut());
+  await client.signOut();
   assert.equal(statusOf(client), "unauthenticated");
   assert.equal(keychain.value("refreshToken"), null);
-  assert.equal(keychain.value("pendingRevoke"), JSON.stringify(["refresh-a"]));
-  assert.equal(client.revokeStatus(), "failed");
 
-  // Back online, the next launch finishes the revoke and stays signed out.
   const restarted = restart();
-  worker.auto("sign-out", () => json({}));
   await restarted.bootstrap();
   assert.equal(statusOf(restarted), "unauthenticated");
-  assert.equal(keychain.value("pendingRevoke"), null);
+  assert.equal(worker.count("token"), 1);
 });

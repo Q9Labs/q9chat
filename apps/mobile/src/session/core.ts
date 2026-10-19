@@ -20,10 +20,8 @@ import {
   ATTEMPT_TTL_MS,
   readAttempt,
   readEmailAttempt,
-  readPending,
   writeAttempt,
   writeEmailAttempt,
-  writePending,
   type OAuthAttempt,
   type Store,
 } from "./storage.ts";
@@ -40,9 +38,6 @@ export type SessionState =
   /** A saved session could not be checked (no connection, or the keychain failed); the token is kept. */
   | { status: "offline" }
   | { status: "authenticated"; session: Session };
-
-/** A sign-out that the server has not confirmed yet: it is retried until it is. */
-export type RevokeStatus = "idle" | "revoking" | "failed";
 
 /** What the session needs from the phone: the keychain, the system auth window and secure randomness. */
 export type SessionEdges = {
@@ -62,6 +57,9 @@ export type SessionEdges = {
 /** Refresh when the access token has under this long to live. */
 const REFRESH_AHEAD_MS = 30_000;
 
+/** How many times a sign-out asks the server to revoke the token it held, while the app lives. */
+const REVOKE_TRIES = 3;
+
 const noop = () => {};
 
 /**
@@ -69,31 +67,22 @@ const noop = () => {};
  * refresh, sign-in, sign-out, the OAuth attempt) runs through one FIFO queue, start to finish:
  * keychain read, Worker request, keychain write, publish. So no write can land between another
  * operation's read and write, and a late answer can never undo a newer change. A sign-out cancels the
- * request in flight and hides the session at once, and its keychain step is the first thing in the
- * queue after that: server revokes are not queued. They run from the saved list, one at a time, each
- * with its own short keychain steps, so nothing that waits on the network ever stands in front of a
- * sign-out's durable write. The refresh token is read from the keychain inside each operation and
- * never kept here.
+ * request in flight, and its keychain step, deleting the active token, is the next one in the queue. The
+ * server revoke is not queued: it runs after that step, with the one token the sign-out held in memory.
+ * The refresh token is otherwise read from the keychain inside each operation and never kept here.
  */
 export function createSessionClient(edges: SessionEdges) {
   const { store } = edges;
   const timeoutMs = edges.requestTimeoutMs ?? authApi.REQUEST_TIMEOUT_MS;
   let state: SessionState = { status: "loading" };
-  let revoke: RevokeStatus = "idle";
   const jar: Jar = new Map();
   const listeners = new Set<() => void>();
 
   let tail: Promise<unknown> = Promise.resolve();
   /** Counts queued operations, so a refresh is shared only with callers that queued nothing after it. */
   let queued = 0;
-  /** Sign-outs whose keychain move is not done yet: nothing may publish a session meanwhile. */
+  /** Sign-outs whose keychain step is not done yet: nothing may publish a session meanwhile. */
   let leaving = 0;
-  /** Set when a sign-out could not finish moving the departing token; every restore and sign-in finishes that move first. */
-  let moveOwed = false;
-  /** The run of server revokes that is going, if any. */
-  let revoker: Promise<void> | null = null;
-  /** A signed-out token whose pending list could not be saved. Its credential is already gone from the keychain, so a restart cannot sign the person back in; it waits here for the server revoke. */
-  let unlisted: string | null = null;
   let cancelable: AbortController | null = null;
   let refreshing: { queued: number; promise: Promise<string | null> } | null = null;
   /** The open sign-in window of this process; a new one starts only when it is null. */
@@ -121,12 +110,6 @@ export function createSessionClient(edges: SessionEdges) {
   const publishUnlessLeaving = (next: SessionState) => {
     if (leaving === 0) publish(next);
   };
-  const setRevoke = (next: RevokeStatus) => {
-    if (revoke === next) return;
-    revoke = next;
-    for (const listener of listeners) listener();
-  };
-
   function enqueue<T>(work: () => Promise<T>): Promise<T> {
     queued += 1;
     const result = tail.then(work);
@@ -163,7 +146,6 @@ export function createSessionClient(edges: SessionEdges) {
   /** The restore or refresh body. It never throws: a failure that is not a confirmed 401 keeps the token and goes offline. */
   async function restore(): Promise<string | null> {
     try {
-      await settleSignOut();
       const token = await store.get("refreshToken");
       if (!token) {
         publishUnlessLeaving({ status: "unauthenticated" });
@@ -179,8 +161,7 @@ export function createSessionClient(edges: SessionEdges) {
       await adopt(next);
       return leaving === 0 ? next.accessToken : null;
     } catch {
-      // A sign-out that could not finish its move stays signed out; any other failure keeps the token and goes offline.
-      publishUnlessLeaving({ status: moveOwed ? "unauthenticated" : "offline" });
+      publishUnlessLeaving({ status: "offline" });
       return null;
     }
   }
@@ -194,89 +175,20 @@ export function createSessionClient(edges: SessionEdges) {
     return promise;
   }
 
-  /** The signed-out tokens still to revoke: the saved list, then one that could not be saved. */
-  async function waiting(): Promise<readonly string[]> {
-    const saved = await readPending(store);
-    return unlisted && !saved.includes(unlisted) ? [...saved, unlisted] : saved;
-  }
-
-  async function dropWaiting(token: string) {
-    const saved = await readPending(store);
-    if (saved.includes(token))
-      await writePending(
-        store,
-        saved.filter((other) => other !== token),
-      );
-    if (unlisted === token) unlisted = null;
-  }
-
-  /**
-   * Revokes the waiting tokens one at a time, oldest first, each read from the saved list. Only the
-   * keychain steps go through the queue; the Worker request does not, so a sign-out never waits behind
-   * one. The step that finds the list empty also ends the run, so a sign-out that lists a token after
-   * it starts a new run.
-   */
-  async function revokeNext(): Promise<void> {
-    const token = await enqueue(async () => {
-      await settleSignOut();
-      const [first] = await waiting();
-      if (first === undefined) {
-        revoker = null;
-        setRevoke("idle");
-      } else setRevoke("revoking");
-      return first;
-    });
-    if (token === undefined) return;
-    await request((options) => authApi.revokeSession(token, options), false);
-    await enqueue(() => dropWaiting(token));
-    await revokeNext();
-  }
-
-  /** Starts a run of server revokes, or joins the one that is going; rejects when the server did not confirm one. */
-  function revokeOrFail(): Promise<void> {
-    if (revoker) return revoker;
-    const run: Promise<void> = revokeNext().catch((error: unknown) => {
-      if (revoker === run) revoker = null;
-      setRevoke("failed");
-      throw error;
-    });
-    revoker = run;
-    return run;
-  }
-
-  /**
-   * Keeps a signed-out session out of the keychain's active slot, in every restore and revoke retry.
-   * A sign-out whose move failed finishes it now; and after a crash between a sign-out's pending
-   * write and its delete, the pending token wins. Only the token that is active now is moved, so a
-   * newer account's token is never taken for the old one. It throws when the keychain cannot be
-   * read or written, which leaves the session unpublished.
-   */
-  async function settleSignOut() {
-    if (moveOwed) {
-      await moveActiveToPending();
-      moveOwed = false;
-      return;
-    }
-    const active = await store.get("refreshToken");
-    if (active && (await readPending(store)).includes(active)) await store.delete("refreshToken");
-  }
-
-  /** Restores the saved session at launch, then retries any sign-out the server never confirmed. */
+  /** Restores the saved session at launch. */
   async function bootstrap() {
     await enqueue(async () => {
       await sweepAttempts().catch(noop);
       return restore();
     });
-    await revokeOrFail().catch(noop);
   }
 
-  /** Tries again after "Can't connect" or a failed revoke: on the button and when the app returns to the foreground. */
+  /** Tries again after "Can't connect": on the button and when the app returns to the foreground. */
   async function retry() {
     if (state.status === "offline") {
       publish({ status: "loading" });
       await refresh();
     }
-    if (revoke === "failed") await revokeOrFail().catch(noop);
     await enqueue(sweepAttempts).catch(noop);
   }
 
@@ -339,7 +251,6 @@ export function createSessionClient(edges: SessionEdges) {
 
   const verifyEmail = (email: string, code: string) =>
     enqueue(async () => {
-      await settleSignOut();
       await restoreEmailCookie(email);
       const next = await request((options) => authApi.verifyEmail(email, code, jar, options));
       await signIn(next);
@@ -378,7 +289,6 @@ export function createSessionClient(edges: SessionEdges) {
   }
 
   async function exchangeAttempt(params: CallbackParams | null) {
-    await settleSignOut();
     const attempt = params ? await readAttempt(store, edges.now()) : null;
     // A link that does not match the saved attempt is refused and leaves it alone.
     if (!params || !attempt || attempt.state !== params.state) throw new SignInIncompleteError();
@@ -440,57 +350,38 @@ export function createSessionClient(edges: SessionEdges) {
     }
   }
 
-  /**
-   * Moves the active session's token to the pending list, so a failed revoke can be retried later,
-   * and forgets the started sign-ins. Every step can run again after a failure: the token is listed
-   * once, and the active one is deleted only after it is listed.
-   */
-  async function moveActiveToPending() {
-    const active = await store.get("refreshToken");
-    if (active) await listAsSignedOut(active);
-    await clearAttempts();
-  }
-
-  /**
-   * Lists the token as signed out, then removes it as the active one. When the list cannot be
-   * written, the active credential is removed anyway (the person left, so a restart must not sign
-   * them back in) and the token is kept in memory for the revoke; if that delete fails too, this throws.
-   */
-  async function listAsSignedOut(active: string) {
-    const pending = await readPending(store);
+  /** Asks the server to revoke a signed-out token. Nothing is saved: if the app ends first, the server session runs out by itself. */
+  async function revokeQuietly(token: string, triesLeft = REVOKE_TRIES): Promise<void> {
     try {
-      if (!pending.includes(active)) await writePending(store, [...pending, active]);
+      await request((options) => authApi.revokeSession(token, options), false);
     } catch {
-      await store.delete("refreshToken");
-      unlisted = active;
-      return;
+      if (triesLeft > 1) await revokeQuietly(token, triesLeft - 1);
     }
-    await store.delete("refreshToken");
   }
 
   /**
-   * Signs out of this phone at once; the promise rejects when the server did not confirm the revocation.
-   * The token stays pending in the keychain until it does, across restarts, and a new sign-in does not touch it.
-   * When the move itself fails, the person is still signed out here, and the next restore, sign-in or retry finishes the move.
+   * Signs out of this phone. Its keychain step is next in the queue: the active token is read into
+   * memory (a failed read is skipped) and its key deleted. If the delete fails the person stays signed
+   * in and this rejects. Once it succeeds they are signed out for good, and the server revoke runs on
+   * its own, outside the queue.
    */
-  function signOut() {
+  async function signOut(): Promise<void> {
     leaving += 1;
     cancelable?.abort(new Error("signed_out"));
     liveWindow = null;
     delivered = null;
-    publish({ status: "unauthenticated" });
-    setRevoke("revoking");
-    return enqueue(async () => {
+    const token = await enqueue(async () => {
       try {
-        await moveActiveToPending();
-      } catch (error) {
-        moveOwed = true;
-        setRevoke("failed");
-        throw error;
+        const active = await store.get("refreshToken").catch(() => null);
+        await store.delete("refreshToken");
+        await clearAttempts().catch(noop);
+        publish({ status: "unauthenticated" });
+        return active;
       } finally {
         leaving -= 1;
       }
-    }).then(revokeOrFail);
+    });
+    if (token) void revokeQuietly(token);
   }
 
   const subscribe = (listener: () => void) => {
@@ -513,7 +404,6 @@ export function createSessionClient(edges: SessionEdges) {
     signOut,
     subscribe,
     snapshot: () => state,
-    revokeStatus: () => revoke,
     epoch: () => epoch,
   };
 }

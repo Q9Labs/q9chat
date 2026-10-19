@@ -762,6 +762,28 @@ export const STATES: GalleryState[] = [
       />
     ),
   },
+  {
+    id: "account-photo-pending",
+    title: "Photo change not finished, on leaving",
+    group: "Account",
+    render: () => (
+      <AccountScreen
+        {...accountHandlers}
+        me={{ person: personOf(ME, w), signedInWith: "Google" }}
+        name="Nadia"
+        hasPhoto={false}
+        confirmDelete={false}
+        toast={null}
+        unsaved={{
+          text: "Your photo change isn't done yet. If you leave now, it may not be saved.",
+          confirmLabel: "Leave anyway",
+          cancelLabel: "Stay here",
+          onKeepEditing: noop,
+          onDiscard: noop,
+        }}
+      />
+    ),
+  },
 ];
 
 export const stateById = (id: string): GalleryState | undefined =>

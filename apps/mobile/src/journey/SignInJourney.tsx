@@ -4,7 +4,7 @@ import type { ToastNotice } from "../kit/Overlays";
 import { useToast } from "../kit/useToast";
 import { CodeScreen, SignInScreen } from "../screens/AuthScreens";
 import { isComplete } from "../screens/codeInput";
-import { sessionClient, useRevokeStatus, type RevokeStatus } from "../session/client";
+import { sessionClient } from "../session/client";
 import { EmailVerificationError, SignInIncompleteError } from "../session/contracts";
 import type { Provider } from "../session/pkce";
 import { postNotice, takeNotice } from "./notice";
@@ -13,18 +13,8 @@ import { useSignOut } from "./SignOut";
 const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
 const INCOMPLETE = new SignInIncompleteError().message;
 
-/** One line under the form: an unconfirmed sign-out wins, then a fresh toast, then "Signed out". */
-function noticeOf(
-  revoke: RevokeStatus,
-  complete: boolean,
-  retry: () => void,
-  toast: string | null,
-): ToastNotice | null {
-  if (revoke === "failed")
-    return {
-      text: "Couldn't sign out of your last session. Try again.",
-      action: { label: "Try again", onPress: retry },
-    };
+/** One line under the form: a fresh toast, then "Signed out". */
+function noticeOf(complete: boolean, toast: string | null): ToastNotice | null {
   if (toast) return { text: toast };
   return complete ? { text: "Signed out" } : null;
 }
@@ -32,7 +22,6 @@ function noticeOf(
 /** Sign in by email code, or through Google or Apple in the system auth session; behaves as the web journey does. */
 export function SignInJourney() {
   const signOut = useSignOut();
-  const revoke = useRevokeStatus();
   const [email, setEmail] = useState("");
   const [codeEmail, setCodeEmail] = useState<string | null>(null);
   const [code, setCode] = useState("");
@@ -40,8 +29,6 @@ export function SignInJourney() {
   const [focusKey, setFocusKey] = useState(0);
   const [toast, showToast] = useToast();
   const busy = useRef(false);
-  // A sign-out still waiting for the server blocks every way to sign in.
-  const locked = () => busy.current || revoke === "revoking";
 
   useEffect(() => {
     const notice = takeNotice();
@@ -60,7 +47,7 @@ export function SignInJourney() {
   }, []);
 
   async function sendCode(resend = false) {
-    if (locked()) return;
+    if (busy.current) return;
     signOut.clear();
     const target = resend ? codeEmail : email.trim();
     if (!target || !EMAIL_SHAPE.test(target)) {
@@ -102,7 +89,7 @@ export function SignInJourney() {
   }
 
   async function signInWith(provider: Provider) {
-    if (locked()) return;
+    if (busy.current) return;
     signOut.clear();
     busy.current = true;
     try {
@@ -116,7 +103,7 @@ export function SignInJourney() {
     }
   }
 
-  const notice = noticeOf(revoke, signOut.complete, () => void sessionClient.retry(), toast);
+  const notice = noticeOf(signOut.complete, toast);
 
   if (codeEmail === null)
     return (
@@ -129,7 +116,6 @@ export function SignInJourney() {
         onGoogle={() => void signInWith("google")}
         onApple={() => void signInWith("apple")}
         onEmailCode={() => void sendCode()}
-        disabled={revoke === "revoking"}
         notice={notice}
       />
     );

@@ -38,10 +38,11 @@ function CantConnect() {
 
 /** The account is still loading and the connection is down: the same offline line and message as Groups. */
 function Disconnected() {
+  const signOut = useSignOut();
   return (
     <Screen>
       <OfflinePill />
-      <CantConnectYet />
+      <CantConnectYet action={<PillButton label="Sign out" onPress={signOut.leave} />} />
     </Screen>
   );
 }

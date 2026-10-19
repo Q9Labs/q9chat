@@ -7,12 +7,15 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { View } from "react-native";
 
+import { Toast } from "../kit/Overlays";
+import { useToast } from "../kit/useToast";
 import { sessionClient } from "../session/client";
 
 type SignOutApi = {
   complete: boolean;
-  /** This account's sign-out is under way: the session is already gone, the server has not confirmed. */
+  /** The keychain step of a sign-out is under way. */
   signingOut: boolean;
   leave: () => void;
   clear: () => void;
@@ -27,16 +30,14 @@ export function useSignOut(): SignOutApi {
 }
 
 /**
- * Signing out takes the person to Sign in at once. "Signed out" shows once the server confirms; until
- * then the session client keeps the revocation pending (its status is `useRevokeStatus`), so it survives
- * a failure, new sign-in attempts and a restart.
+ * Signing out takes the person to Sign in as soon as the phone has forgotten the session, and "Signed
+ * out" shows there. When the phone cannot forget it, they stay signed in and a toast says so.
  */
 export function SignOutProvider({ children }: { children: ReactNode }) {
   const [complete, setComplete] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [toast, showToast] = useToast();
   const latest = useRef(0);
-  // Only a second tap on a sign-out already under way is dropped. An older revoke still waiting on the
-  // server does not stop this one: the session client queues it behind that revoke.
   const leave = useCallback(() => {
     if (signingOut) return;
     const started = ++latest.current;
@@ -48,10 +49,10 @@ export function SignOutProvider({ children }: { children: ReactNode }) {
         () => {
           if (started === latest.current) setComplete(true);
         },
-        () => {},
+        () => showToast("Couldn't sign out. Try again."),
       )
       .finally(() => setSigningOut(false));
-  }, [signingOut]);
+  }, [signingOut, showToast]);
   const clear = useCallback(() => {
     latest.current += 1;
     setComplete(false);
@@ -60,5 +61,12 @@ export function SignOutProvider({ children }: { children: ReactNode }) {
     () => ({ complete, signingOut, leave, clear }),
     [complete, signingOut, leave, clear],
   );
-  return <SignOutContext.Provider value={value}>{children}</SignOutContext.Provider>;
+  return (
+    <SignOutContext.Provider value={value}>
+      <View style={{ flex: 1 }}>
+        {children}
+        {toast ? <Toast text={toast} /> : null}
+      </View>
+    </SignOutContext.Provider>
+  );
 }

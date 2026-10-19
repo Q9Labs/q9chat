@@ -2,7 +2,7 @@ import { api } from "@q9chat/convex";
 import { firstName } from "@q9chat/domain";
 import { useConvexConnectionState, useMutation } from "convex/react";
 import { usePreventRemove, useRouter } from "expo-router";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 
 import { useToast } from "../kit/useToast";
 import { AccountScreen } from "../screens/AccountScreen";
@@ -33,15 +33,21 @@ export function AccountJourney({
   const signOut = useSignOut();
   const update = useMutation(api.profiles.update);
   const { isWebSocketConnected } = useConvexConnectionState();
-  const editing = useNameEditing(profile.displayName, isWebSocketConnected, (displayName) =>
-    update({ displayName }),
-  );
-  const [toast, showToast] = useToast();
+  // A photo change in progress is held back like a name change: leaving would drop it.
+  const [photoBusy, setPhotoBusy] = useState(false);
   const busy = useRef(false);
+  const editing = useNameEditing({
+    saved: profile.displayName,
+    connected: isWebSocketConnected,
+    save: (displayName) => update({ displayName }),
+    photoBusy,
+  });
+  const [toast, showToast] = useToast();
 
   async function changePhoto() {
     if (busy.current) return;
     busy.current = true;
+    setPhotoBusy(true);
     try {
       if (profile.photo) {
         await update({ photoUploadId: null });
@@ -56,11 +62,12 @@ export function AccountJourney({
       showToast(photoNoticeOf(error) ?? "Couldn't update your photo. Try again.");
     } finally {
       busy.current = false;
+      setPhotoBusy(false);
     }
   }
 
-  // Every way out (the header arrow, the iOS swipe, the Android Back) is held here until the name is saved.
-  usePreventRemove(editing.dirty, ({ repeat }) => {
+  // Every way out (the header arrow, the iOS swipe, the Android Back) is held here until the name is saved and the photo change is done.
+  usePreventRemove(editing.dirty || photoBusy, ({ repeat }) => {
     void editing.exit(repeat);
   });
 

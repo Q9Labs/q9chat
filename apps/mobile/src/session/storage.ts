@@ -1,7 +1,7 @@
 import { Either, Schema } from "effect";
 
 /** The secrets the session keeps in the keychain, each under its own key. */
-export type StoreKey = "refreshToken" | "pendingRevoke" | "oauthAttempt" | "emailAttempt";
+export type StoreKey = "refreshToken" | "oauthAttempt" | "emailAttempt";
 
 export type Store = {
   get: (key: StoreKey) => Promise<string | null>;
@@ -9,7 +9,6 @@ export type Store = {
   delete: (key: StoreKey) => Promise<void>;
 };
 
-const Tokens = Schema.Array(Schema.String);
 const Attempt = Schema.Struct({
   state: Schema.String,
   verifier: Schema.String,
@@ -37,17 +36,6 @@ function parseJson(text: string | null): unknown {
   } catch {
     return null;
   }
-}
-
-/** Refresh tokens of sessions that were signed out here but not yet revoked on the server. */
-export async function readPending(store: Store): Promise<readonly string[]> {
-  const decoded = Schema.decodeUnknownEither(Tokens)(parseJson(await store.get("pendingRevoke")));
-  return Either.isRight(decoded) ? decoded.right : [];
-}
-
-export async function writePending(store: Store, tokens: readonly string[]) {
-  if (tokens.length === 0) await store.delete("pendingRevoke");
-  else await store.set("pendingRevoke", JSON.stringify(tokens));
 }
 
 /** The started OAuth attempt, or null when there is none. One that is unreadable or has expired is deleted. */
