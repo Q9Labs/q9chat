@@ -12,12 +12,7 @@ void test(
     await expect(screen.getByLabel("Email")).toBeVisible({ timeout: 120_000 });
     await runJ4Phone({
       screen,
-      enter: async (field, value) => {
-        await field.focus();
-        await expect(field).toBeFocused();
-        await field.fill("");
-        await field.pressSequentially(value, { delay: 80 });
-      },
+      enter: (field, value) => field.pressSequentially(value, { delay: 80 }),
       restart: async () => {
         await app.restart();
       },

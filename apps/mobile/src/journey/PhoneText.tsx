@@ -87,8 +87,8 @@ export function TextComposer({
             onSent();
           }
         }}
-        onAttach={() => text.notice("Attachments are coming in the next journey.")}
-        onRecord={() => text.notice("Voice notes are coming in the next journey.")}
+        onAttach={() => text.notice("Photos and files aren't available yet.")}
+        onRecord={() => text.notice("Voice notes aren't available yet.")}
         onCancelMode={noop}
         onRecordCancel={noop}
         onRecordSend={noop}

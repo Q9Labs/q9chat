@@ -16,6 +16,10 @@ Run the native transport proxy from the repository root:
 node tests/support/phone-network.ts
 ```
 
+To use a different Worker port, set `J1_AUTH_ORIGIN` for the test and
+`EXPO_PUBLIC_AUTH_ORIGIN` for the app to that Worker's origin. Set
+`J1_PHONE_METRO` to the chosen Metro origin. Do not reuse another lane's servers.
+
 It forwards HTTP and WebSocket traffic to dev Convex. The journey cuts the app's
 connection through its loopback control endpoint, sends offline, restores the
 connection, restarts the app and retries. It does not substitute backend functions.

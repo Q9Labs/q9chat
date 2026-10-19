@@ -46,7 +46,7 @@ export async function runJ4Phone(p: {
     const group = p.screen.getByRole("button", new RegExp(title));
     await expect(group).toBeVisible({ timeout: 30_000 });
     await group.tap();
-    const composer = p.screen.getByLabel(`Message ${title}`);
+    const composer = p.screen.getByRole("textbox", new RegExp(`^Message ${title}`));
     await expect(composer).toBeVisible();
     await p.shot("j4-before");
     await p.enter(composer, "Phone live text");
@@ -70,6 +70,8 @@ export async function runJ4Phone(p: {
     await group.tap();
     await expect(composer).toHaveValue("Keep this group draft");
     await p.shot("j4-draft");
+    await p.screen.getByRole("button", "Send", { exact: true }).tap();
+    await expect.poll(() => received("Keep this group draft")).toBe(1);
     await p.enter(composer, "Retry this phone text");
     await fetch("http://localhost:8321/__fault", { method: "POST" });
     await expect(
@@ -82,6 +84,7 @@ export async function runJ4Phone(p: {
     await p.restart();
     await expect(group).toBeVisible({ timeout: 60_000 });
     await group.tap();
+    await expect(p.screen.getByText("Loading messages…")).not.toBeVisible();
     await expect(p.screen.getByRole("button", "Retry", { exact: true })).toBeVisible();
     await p.screen.getByRole("button", "Retry", { exact: true }).tap();
     await expect.poll(() => received("Retry this phone text")).toBe(1);

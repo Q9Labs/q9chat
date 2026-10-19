@@ -48,11 +48,13 @@ server.on("upgrade", (req, socket, head) => {
     socket.pipe(target);
   });
   sockets.add(socket);
+  socket.on("error", () => target.destroy());
   socket.on("close", () => {
     sockets.delete(socket);
     target.destroy();
   });
   target.on("error", () => socket.destroy());
+  target.on("close", () => socket.destroy());
 });
 server.listen(8321, "127.0.0.1");
 const shutdown = () => {
