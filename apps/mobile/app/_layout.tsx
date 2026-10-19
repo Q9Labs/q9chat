@@ -36,14 +36,17 @@ function Navigator() {
     <>
       <StatusBar style={scheme === "dark" ? "light" : "dark"} />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.s0 } }}>
+        {/* Open to everyone: a signed-out person signs in first, then lands on the invite. */}
+        <Stack.Screen name="join/[token]" />
         <Stack.Protected guard={ready}>
           <Stack.Screen name="account" />
-        </Stack.Protected>
-        {/* Still backed by sample data until their journeys are wired: a link to them lands on Groups, never on fake groups. */}
-        <Stack.Protected guard={false}>
-          <Stack.Screen name="g/[groupId]" />
-          <Stack.Screen name="g/[groupId]/info" />
           <Stack.Screen name="new-group" />
+          <Stack.Screen name="g/[groupId]/index" />
+          <Stack.Screen name="g/[groupId]/info" />
+          <Stack.Screen name="g/[groupId]/add" />
+        </Stack.Protected>
+        {/* Still backed by sample data until its journey is wired: a link to it lands on Groups, never on fake data. */}
+        <Stack.Protected guard={false}>
           <Stack.Screen name="search" />
         </Stack.Protected>
       </Stack>

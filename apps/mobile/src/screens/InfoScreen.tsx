@@ -88,9 +88,11 @@ function Hero({ avatar, title, line }: { avatar: AvatarData; title: string; line
       >
         {title}
       </T>
-      <T size={13} color="mu" style={{ textAlign: "center" }}>
-        {line}
-      </T>
+      {line ? (
+        <T size={13} color="mu" style={{ textAlign: "center" }}>
+          {line}
+        </T>
+      ) : null}
     </View>
   );
 }
@@ -211,9 +213,11 @@ function MemberRow({ member, onOptions }: { member: Member; onOptions: () => voi
         <T weight={600} numberOfLines={1}>
           {member.isYou ? `${member.fullName} (you)` : member.fullName}
         </T>
-        <T size={12} color="mu" numberOfLines={1}>
-          {member.email}
-        </T>
+        {member.email ? (
+          <T size={12} color="mu" numberOfLines={1}>
+            {member.email}
+          </T>
+        ) : null}
       </View>
       {member.isYou ? null : (
         <IconButton
@@ -331,17 +335,20 @@ function MemberOptions({ member, props }: { member: Member; props: InfoScreenPro
           <T size={14} weight={600}>
             {member.name}
           </T>
-          {` · ${member.email}`}
+          {member.email ? ` · ${member.email}` : ""}
         </T>
       </View>
-      <SheetRow
-        first
-        icon="chat"
-        label={`Message ${member.name}`}
-        onPress={() => props.onMessageMember(member.id)}
-      />
+      {member.deleted ? null : (
+        <SheetRow
+          first
+          icon="chat"
+          label={`Message ${member.name}`}
+          onPress={() => props.onMessageMember(member.id)}
+        />
+      )}
       <SheetRow
         danger
+        first={!!member.deleted}
         icon="ban"
         label="Remove from group"
         onPress={() => props.onAskRemove(member.id)}

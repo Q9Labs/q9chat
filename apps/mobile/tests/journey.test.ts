@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { groupRows, msUntilMidnight, photoUrlOf, rowStamp } from "../src/journey/groupRows.ts";
+import { groupRows, msUntilMidnight, rowStamp } from "../src/journey/groupRows.ts";
+import { photoUrlOf } from "../src/journey/livePeople.ts";
 import { saveThenCheck } from "../src/journey/nameRules.ts";
 import { MAX_PHOTO_BYTES, photoTooLarge } from "../src/journey/photoRules.ts";
 import { saveSetup, savingSetup } from "../src/journey/setupRules.ts";

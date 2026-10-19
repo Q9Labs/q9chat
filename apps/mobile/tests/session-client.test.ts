@@ -828,3 +828,23 @@ void test("from the offline restore screen, signing out works without the networ
   assert.equal(statusOf(restarted), "unauthenticated");
   assert.equal(worker.count("token"), 1);
 });
+
+void test("signing out forgets a saved invite, and a sign-in keeps it", async () => {
+  const record = JSON.stringify({ token: "inviteFixtureToken", expiresAt: Date.now() + 600_000 });
+  const { worker, keychain, client } = harness({
+    refreshToken: "refresh-a",
+    pendingInvite: record,
+  });
+  worker.auto("token", () => json(phoneSession("a")));
+  worker.auto("sign-out", () => json({}));
+  worker.auto("email/verify", () => json(phoneSession("b")));
+  await client.bootstrap();
+  assert.equal(keychain.value("pendingInvite"), record);
+
+  await client.signOut();
+  assert.equal(keychain.value("pendingInvite"), null);
+
+  await keychain.store.set("pendingInvite", record);
+  await client.verifyEmail("b@example.net", "123456");
+  assert.equal(keychain.value("pendingInvite"), record);
+});

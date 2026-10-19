@@ -21,9 +21,12 @@ export type Person = {
   name: string;
   /** Full name: member lists and the account screen. */
   fullName: string;
+  /** Empty unless the person was found by this exact address: members are shown without one. */
   email: string;
   avatar: Avatar;
   isYou: boolean;
+  /** A deleted account: it has no pair to open. */
+  deleted?: boolean;
 };
 
 export type Emoji = "👍" | "❤️" | "😂" | "😮" | "🙏";

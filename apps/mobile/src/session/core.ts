@@ -379,6 +379,7 @@ export function createSessionClient(edges: SessionEdges) {
         const active = await store.get("refreshToken").catch(() => null);
         await store.delete("refreshToken");
         await clearAttempts().catch(noop);
+        await store.delete("pendingInvite").catch(noop);
         publish({ status: "unauthenticated" });
         return active;
       } finally {

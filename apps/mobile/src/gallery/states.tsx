@@ -115,6 +115,8 @@ function newGroup(over: Partial<NewGroupScreenProps>): ReactElement {
     copied: false,
     primaryLabel: "Create",
     primaryEnabled: false,
+    pending: false,
+    error: null,
     ...over,
   };
   return <NewGroupScreen {...props} />;

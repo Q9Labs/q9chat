@@ -1,11 +1,16 @@
 import { firstName, initials } from "@q9chat/domain";
 
 import type { Avatar, GroupRow, Notify } from "../types";
+import { liveAvatar, photoUrlOf } from "./livePeople.ts";
 
 // What `groups.list` returns, as far as the list needs it. The Convex result is assignable to it.
-type LiveAvatar = { color: string; lightColor: string; initials: string; photo: string | null };
 type LivePerson = { name: string; isYou: boolean };
-type LiveBase = { groupId: string; kind: "group" | "pair"; title: string; avatar: LiveAvatar };
+type LiveBase = {
+  groupId: string;
+  kind: "group" | "pair";
+  title: string;
+  avatar: Parameters<typeof liveAvatar>[0];
+};
 export type LiveRow =
   | (LiveBase & {
       status: "member";
@@ -53,10 +58,6 @@ export function rowStamp(at: number, now: Date): string {
 export const msUntilMidnight = (now: Date) =>
   new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime() - now.getTime();
 
-/** The URL of a protected photo on the Convex HTTP origin; the Avatar sends the access token with it. */
-export const photoUrlOf = (siteUrl: string, path: string | null) =>
-  path ? `${siteUrl}${path}` : null;
-
 /** The signed-in person's avatar from `profiles.me`. */
 export const profileAvatar = (
   profile: { displayName: string; photo: string | null; color: string; lightColor: string },
@@ -69,17 +70,6 @@ export const profileAvatar = (
   photoUrl: photoUrlOf(siteUrl, profile.photo),
 });
 
-const avatarOf = (row: LiveRow, siteUrl: string): Avatar =>
-  row.kind === "group"
-    ? { kind: "group", initials: row.avatar.initials }
-    : {
-        kind: "person",
-        initials: row.avatar.initials,
-        color: row.avatar.color,
-        colorOnDark: row.avatar.lightColor,
-        photoUrl: photoUrlOf(siteUrl, row.avatar.photo),
-      };
-
 /** A pair with no message yet shows the same start line as the web list. */
 function previewOf(row: Extract<LiveRow, { status: "member" }>) {
   if (row.kind === "pair" && row.preview.summary === "")
@@ -91,7 +81,11 @@ function previewOf(row: Extract<LiveRow, { status: "member" }>) {
 /** `groups.list` results as the list screen's rows, newest activity first as the server sends them. */
 export function groupRows(list: readonly LiveRow[], siteUrl: string, now: Date): GroupRow[] {
   return list.map((row): GroupRow => {
-    const base = { groupId: row.groupId, title: row.title, avatar: avatarOf(row, siteUrl) };
+    const base = {
+      groupId: row.groupId,
+      title: row.title,
+      avatar: liveAvatar(row.avatar, row.kind, siteUrl),
+    };
     if (row.status === "removed")
       return {
         ...base,
