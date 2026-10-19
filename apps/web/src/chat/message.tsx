@@ -101,12 +101,21 @@ function QuoteBar({
 }
 
 /** Borderless reaction pills on a soft fill with a count; your own carries the accent wash. */
+function reactionPeople(reaction: Reaction) {
+  const names = reactorNames(reaction.people);
+  const others = reaction.count - reaction.people.length;
+  if (others <= 0) return names;
+  return `${names}${names ? " and " : ""}${others} ${others === 1 ? "other" : "others"}`;
+}
+
 function ReactionPills({
   reactions,
   mine,
   onToggle,
   readOnly,
+  onInspect,
 }: {
+  readonly onInspect: () => void;
   readonly reactions: readonly Reaction[];
   readonly mine: boolean;
   readonly onToggle: (emoji: Emoji) => void;
@@ -119,13 +128,15 @@ function ReactionPills({
   return (
     <div className="rx">
       {shown.map((reaction) => {
-        const who = reactorNames(reaction.people);
+        const who = reactionPeople(reaction);
         return (
           <button
             key={reaction.emoji}
             type="button"
             className={`chip${reaction.mine ? " me" : ""}`}
             disabled={readOnly}
+            onMouseEnter={onInspect}
+            onFocus={onInspect}
             aria-pressed={reaction.mine}
             aria-label={
               readOnly
@@ -146,6 +157,7 @@ function ReactionPills({
 }
 
 export interface MessageHandlers {
+  readonly onInspectReactions?: (message: PostView) => void;
   readonly onReact: (message: PostView, emoji: Emoji) => void;
   readonly onReply: (message: PostView) => void;
   readonly onEdit: (message: PostView) => void;
@@ -407,6 +419,9 @@ function MessageMenu({
       onClose={() => handlers.onMenuOpenChange(message, false)}
     >
       {compact ? <ReactionRow message={message} onReact={handlers.onReact} /> : null}
+      <MenuItem icon="reply" onSelect={() => handlers.onReply(message)}>
+        Reply
+      </MenuItem>
       {hasText ? <TextActions message={message} editable={editable} handlers={handlers} /> : null}
       {mine ? (
         <MenuItem icon="trash" danger onSelect={() => handlers.onDelete(message)}>
@@ -463,12 +478,13 @@ export function Message({
   highlighted = false,
   menuOpen,
   handlers,
-  readOnly = false,
+  readOnly: screenReadOnly = false,
 }: MessageProps) {
   if (message.kind === "deleted") {
     return <DeletedMessage message={message} highlighted={highlighted} />;
   }
   const sendState = message.sendState;
+  const readOnly = screenReadOnly || message.actionsDisabled === true;
   return (
     <div
       className={messageClass(sendState, highlighted, menuOpen)}
@@ -483,6 +499,7 @@ export function Message({
       ))}
       <Attachments message={message} onMediaError={handlers.onMediaError} />
       <ReactionPills
+        onInspect={() => handlers.onInspectReactions?.(message)}
         readOnly={readOnly}
         reactions={message.reactions}
         mine={message.author.isYou}

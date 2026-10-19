@@ -25,7 +25,18 @@ void test("a full quarantine preserves the draft and valid retries and removes t
   const previousSession = Object.getOwnPropertyDescriptor(globalThis, "sessionStorage");
   const key = "text:account:group";
   session.setItem(`${key}:draft`, "Newer unsent draft");
-  const first = { clientKey: "first", body: "First retry", createdAt: 1, status: "sending" };
+  const first = {
+    clientKey: "first",
+    body: "First retry",
+    createdAt: 1,
+    status: "sending",
+    reply: {
+      id: "original",
+      sequence: 12,
+      summary: "Original plan",
+      author: { id: "peer", name: "Bilal", isYou: false },
+    },
+  };
   const second = { clientKey: "second", body: "Second retry", createdAt: 2, status: "failed" };
   local.setItem(`${key}:pending:first`, JSON.stringify(first));
   local.setItem(`${key}:pending:broken`, "{broken");

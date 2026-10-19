@@ -251,6 +251,31 @@ test(
       ).toBe("off");
       // Reload restores the browser API before disposable-profile cleanup.
       await page.reload();
+      await signInDevAccount(context, email, "Amal Journey");
+      await page.goto(`http://localhost:3000/?group=${groupId}`);
+      await page
+        .getByRole("region", { name: "Turn on notifications" })
+        .getByRole("button", { name: "Turn on", exact: true })
+        .click();
+      await page.getByText("Desktop notifications are on", { exact: true }).waitFor();
+      await page.getByRole("button", { name: "Account" }).click();
+      await page.getByRole("button", { name: "Delete account", exact: true }).click();
+      await page
+        .getByRole("dialog", { name: "Delete your account?" })
+        .getByRole("button", { name: "Delete account", exact: true })
+        .click();
+      await page.getByRole("button", { name: "Email me a code" }).waitFor();
+      expect(
+        await page
+          .getByText("Signed out. Notification cleanup failed. Quit this browser.", { exact: true })
+          .count(),
+      ).toBe(0);
+      expect(
+        await page.evaluate(
+          async () =>
+            (await (await navigator.serviceWorker.ready).pushManager.getSubscription()) === null,
+        ),
+      ).toBe(true);
     } catch (error) {
       await page.screenshot({ path: "artifacts/j8/failure.png" });
       throw error;
@@ -265,7 +290,10 @@ test(
         }),
       ]);
       const profiles = await Promise.allSettled(
-        accounts.map(({ client }) => client.mutation(api.profiles.deleteAccount, {})),
+        accounts.map(async ({ client }) => {
+          const profile = await client.query(api.profiles.me, {});
+          if (profile?.status === "ready") await client.mutation(api.profiles.deleteAccount, {});
+        }),
       );
       const users = await Promise.allSettled([removeTestUser(email), removeTestUser(peerEmail)]);
       const browsers = await Promise.allSettled([peer.close(), context.close()]);

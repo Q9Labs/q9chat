@@ -168,6 +168,7 @@ interface MessageBase {
 export type SendState = "sending" | "queued" | "failed";
 
 export interface PostView extends MessageBase {
+  readonly actionsDisabled?: boolean;
   readonly kind: "post";
   readonly author: Author;
   readonly body: string;
