@@ -132,9 +132,13 @@ export function oauthExchange(request: Request) {
     return response;
   });
 }
+/**
+ * The page WorkOS returns the phone's auth session to. A code or a refusal (`error` with the state) goes
+ * back to the app through its link, so the system window closes at once; anything else shows the web page.
+ */
 export function phoneCallback(request: Request) {
   const params = new URL(request.url).searchParams;
-  const query = Schema.decodeUnknownEither(Success)(Object.fromEntries(params));
+  const query = Schema.decodeUnknownEither(Callback)(Object.fromEntries(params));
   if (Either.isLeft(query))
     return redirect(`${new URL(request.url).origin}/auth/error?reason=phone_failed`);
   return redirect(`q9chat://auth/callback?${new URLSearchParams(query.right)}`);

@@ -20,7 +20,12 @@ import {
 import photoAsset from "../fixtures/photo.png";
 import { noop } from "../kit/noop";
 import { AccountScreen } from "../screens/AccountScreen";
-import { CodeScreen, ProfileScreen, SignInScreen } from "../screens/AuthScreens";
+import {
+  CodeScreen,
+  OfflineRestoreScreen,
+  ProfileScreen,
+  SignInScreen,
+} from "../screens/AuthScreens";
 import { ChatScreen, type ChatScreenProps } from "../screens/ChatScreen";
 import { GroupsScreen } from "../screens/GroupsScreen";
 import { InfoScreen, type InfoScreenProps } from "../screens/InfoScreen";
@@ -202,7 +207,7 @@ export const STATES: GalleryState[] = [
         email="hasan@q9labs.ai"
         code="481"
         onCodeChange={noop}
-        bad={false}
+        error=""
         onResend={noop}
         onChangeEmail={noop}
       />
@@ -217,7 +222,7 @@ export const STATES: GalleryState[] = [
         email="hasan@q9labs.ai"
         code=""
         onCodeChange={noop}
-        bad
+        error="That code didn't work. Check it and try again."
         onResend={noop}
         onChangeEmail={noop}
       />
@@ -236,6 +241,7 @@ export const STATES: GalleryState[] = [
         hasPhoto={false}
         onTogglePhoto={noop}
         onContinue={noop}
+        onSignOut={noop}
       />
     ),
   },
@@ -252,6 +258,7 @@ export const STATES: GalleryState[] = [
         hasPhoto
         onTogglePhoto={noop}
         onContinue={noop}
+        onSignOut={noop}
       />
     ),
   },
@@ -262,6 +269,21 @@ export const STATES: GalleryState[] = [
     title: "Groups, offline",
     group: "Groups",
     render: () => groupsScreen({ offline: true }),
+  },
+  {
+    id: "groups-offline-unloaded",
+    title: "Groups, offline before the first load",
+    group: "Groups",
+    render: () => (
+      <GroupsScreen
+        {...groupsHandlers}
+        me={avatarOf(ME)}
+        rows={null}
+        offline
+        showPermissionBanner={false}
+        toast={null}
+      />
+    ),
   },
   {
     id: "groups-long",
@@ -665,6 +687,104 @@ export const STATES: GalleryState[] = [
         hasPhoto={false}
         confirmDelete
         toast={null}
+      />
+    ),
+  },
+  {
+    id: "offline-restore",
+    title: "Saved session cannot be refreshed",
+    group: "Auth",
+    render: () => <OfflineRestoreScreen onRetry={noop} onSignOut={noop} />,
+  },
+  {
+    id: "account-unsaved",
+    title: "Name not saved, on leaving",
+    group: "Account",
+    render: () => (
+      <AccountScreen
+        {...accountHandlers}
+        me={{ person: personOf(ME, w), signedInWith: "Google" }}
+        name=""
+        hasPhoto={false}
+        confirmDelete={false}
+        toast={null}
+        unsaved={{
+          title: "Your name isn't saved",
+          text: "Enter a name of 1 to 60 characters, or discard your change.",
+          confirmLabel: "Discard changes",
+          cancelLabel: "Keep editing",
+          onKeepEditing: noop,
+          onDiscard: noop,
+        }}
+      />
+    ),
+  },
+  {
+    id: "account-unsaved-offline",
+    title: "Name not saved, offline before saving",
+    group: "Account",
+    render: () => (
+      <AccountScreen
+        {...accountHandlers}
+        me={{ person: personOf(ME, w), signedInWith: "Google" }}
+        name="Nadia Jo"
+        hasPhoto={false}
+        confirmDelete={false}
+        toast={null}
+        unsaved={{
+          title: "Your name isn't saved",
+          text: "You're offline, so your name can't be saved. Keep editing, or discard your change.",
+          confirmLabel: "Discard changes",
+          cancelLabel: "Keep editing",
+          onKeepEditing: noop,
+          onDiscard: noop,
+        }}
+      />
+    ),
+  },
+  {
+    id: "account-save-waiting",
+    title: "Name save waiting for the connection",
+    group: "Account",
+    render: () => (
+      <AccountScreen
+        {...accountHandlers}
+        me={{ person: personOf(ME, w), signedInWith: "Google" }}
+        name="Nadia Jo"
+        hasPhoto={false}
+        confirmDelete={false}
+        toast={null}
+        unsaved={{
+          title: "Your name isn't saved",
+          text: "You're offline, so your name hasn't saved yet. It may still save when you're back online.",
+          confirmLabel: "Leave anyway",
+          cancelLabel: "Stay here",
+          onKeepEditing: noop,
+          onDiscard: noop,
+        }}
+      />
+    ),
+  },
+  {
+    id: "account-photo-pending",
+    title: "Photo change not finished, on leaving",
+    group: "Account",
+    render: () => (
+      <AccountScreen
+        {...accountHandlers}
+        me={{ person: personOf(ME, w), signedInWith: "Google" }}
+        name="Nadia"
+        hasPhoto={false}
+        confirmDelete={false}
+        toast={null}
+        unsaved={{
+          title: "Your photo isn't saved",
+          text: "Your photo change isn't done yet. If you leave now, it may not be saved.",
+          confirmLabel: "Leave anyway",
+          cancelLabel: "Stay here",
+          onKeepEditing: noop,
+          onDiscard: noop,
+        }}
       />
     ),
   },

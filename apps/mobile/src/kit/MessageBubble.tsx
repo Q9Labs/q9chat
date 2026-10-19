@@ -5,7 +5,9 @@ import { useTheme } from "../theme";
 import { T } from "../theme/Text";
 import { radius } from "../theme/tokens";
 import type { Emoji, Message, MessageContent, SendState } from "../types";
+import { isWebUrl } from "./format";
 import { Icon } from "./Icon";
+import { openWebUrl } from "./links";
 import {
   BodyText,
   FileCard,
@@ -226,18 +228,41 @@ function TimeLabel({ message, show }: { message: Message; show: boolean }) {
   );
 }
 
+const LINK_ACTION = "link-";
+
+/** The http and https links in the message text, in reading order. */
+function linksOf({ content }: Message): string[] {
+  const segments =
+    content.kind === "text" ? content.segments : content.kind === "image" ? content.caption : null;
+  return (segments ?? []).flatMap((segment) =>
+    segment.type === "link" && isWebUrl(segment.text) ? [segment.text] : [],
+  );
+}
+
+/** Screen readers get each link as an action of the message, since the message is one element. */
 const elementOf = (
   message: Message,
   openable: boolean,
   onOpenSheet: () => void,
-): MessageElement => ({
-  accessible: true,
-  accessibilityLabel: message.summary,
-  accessibilityActions: openable ? [{ name: "longpress", label: "Message actions" }] : [],
-  onAccessibilityAction: (event) => {
-    if (event.nativeEvent.actionName === "longpress") onOpenSheet();
-  },
-});
+): MessageElement => {
+  const links = linksOf(message);
+  return {
+    accessible: true,
+    accessibilityLabel: message.summary,
+    accessibilityActions: [
+      ...(openable ? [{ name: "longpress", label: "Message actions" }] : []),
+      ...links.map((url, index) => ({ name: `${LINK_ACTION}${index}`, label: `Open ${url}` })),
+    ],
+    onAccessibilityAction: (event) => {
+      const { actionName } = event.nativeEvent;
+      if (actionName === "longpress") onOpenSheet();
+      else if (actionName.startsWith(LINK_ACTION)) {
+        const url = links[Number(actionName.slice(LINK_ACTION.length))];
+        if (url) openWebUrl(url);
+      }
+    },
+  };
+};
 
 /**
  * One message: the raised bubble, media, reactions and send state.

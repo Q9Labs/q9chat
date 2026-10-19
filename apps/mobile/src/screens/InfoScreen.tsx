@@ -209,7 +209,7 @@ function MemberRow({ member, onOptions }: { member: Member; onOptions: () => voi
       <Avatar avatar={member.avatar} size={28} />
       <View style={{ flex: 1, minWidth: 0 }}>
         <T weight={600} numberOfLines={1}>
-          {member.isYou ? `${member.fullName} (you)` : member.name}
+          {member.isYou ? `${member.fullName} (you)` : member.fullName}
         </T>
         <T size={12} color="mu" numberOfLines={1}>
           {member.email}
@@ -218,7 +218,7 @@ function MemberRow({ member, onOptions }: { member: Member; onOptions: () => voi
       {member.isYou ? null : (
         <IconButton
           icon="more"
-          label={`Options for ${member.name}`}
+          label={`Options for ${member.fullName}`}
           size={36}
           onPress={onOptions}
         />

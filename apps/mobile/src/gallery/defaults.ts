@@ -118,17 +118,23 @@ export const searchHandlers: Pick<
 export const accountHandlers: Pick<
   AccountScreenProps,
   | "onNameChange"
+  | "nameSaving"
+  | "unsaved"
   | "onTogglePhoto"
   | "onBack"
   | "onSignOut"
+  | "signingOut"
   | "onAskDelete"
   | "onConfirmDelete"
   | "onCancelDelete"
 > = {
   onNameChange: noop,
+  nameSaving: false,
+  unsaved: null,
   onTogglePhoto: noop,
   onBack: noop,
   onSignOut: noop,
+  signingOut: false,
   onAskDelete: noop,
   onConfirmDelete: noop,
   onCancelDelete: noop,

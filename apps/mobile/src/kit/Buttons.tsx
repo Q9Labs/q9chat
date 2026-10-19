@@ -6,6 +6,8 @@ import { radius, resolveColor, type ColorRef } from "../theme/tokens";
 import { Icon, type IconName } from "./Icon";
 import { Press } from "./Press";
 
+const MIN_TARGET = 44;
+
 type Variant = "default" | "solid" | "danger" | "solidDanger";
 
 /** Pill button: 36px by default, 44 `big`, 32 `small`; full width when `wide`. */
@@ -43,12 +45,15 @@ export function PillButton({
   const height = { default: 36, big: 44, small: 32, sheet: 48 }[size];
   const fontSize = { default: 13, big: 14, small: 13, sheet: 15 }[size];
   const px = size === "small" ? 12 : 16;
+  // A shorter pill keeps its look and still gets a 44-point touch area.
+  const slop = Math.max(0, (MIN_TARGET - height) / 2);
   return (
     <Press
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ disabled: !!disabled }}
       disabled={disabled}
+      hitSlop={{ top: slop, bottom: slop }}
       onPress={onPress}
       style={[
         {
@@ -73,8 +78,6 @@ export function PillButton({
     </Press>
   );
 }
-
-const MIN_TARGET = 44;
 
 /** Round icon button; 44px on the phone. A smaller one keeps its look and still gets a 44px touch area. */
 export function IconButton({

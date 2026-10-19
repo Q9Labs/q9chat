@@ -8,6 +8,7 @@
 - **Project scaffold**: Generated `q9chat` with its selected backend, shared UI, and quality tooling.
 - **Headless sign-in endpoints and web sessions**: Sign in through email codes, Google or Apple with shared web and phone auth endpoints and a cookie-backed web session.
 - **Sign in and find your groups on the web**: Sign in by email code, set up a profile, see live group previews and unread counts, and manage your account and sign out. Google and Apple start the shared sign-in flow.
+- **Sign in and find your groups on the phone**: Sign in by email code, Google or Apple, set up a profile with an optional photo, see live group previews and unread counts, manage your account and sign out. A saved sign-in survives a lost connection and shows a retry. Signing out takes effect on the phone at once, even offline, and says so if it fails.
 - **Web conversation history and unread position**: Open a group at its unread divider, load older history, follow live messages and see expiring typing indicators.
 
 ### Fixed

@@ -13,12 +13,25 @@ export type AccountScreenProps = {
   me: Me;
   name: string;
   onNameChange: (name: string) => void;
+  /** A name save is out: the field is locked until it ends. */
+  nameSaving: boolean;
+  /** Set when leaving could not save the name; asks whether to keep editing or discard. */
+  unsaved: {
+    text: string;
+    title: string;
+    confirmLabel: string;
+    cancelLabel: string;
+    onKeepEditing: () => void;
+    onDiscard: () => void;
+  } | null;
   hasPhoto: boolean;
   onTogglePhoto: () => void;
   confirmDelete: boolean;
   toast: string | null;
   onBack: () => void;
   onSignOut: () => void;
+  /** Sign out is under way; the button says so and does nothing more. */
+  signingOut: boolean;
   onAskDelete: () => void;
   onConfirmDelete: () => void;
   onCancelDelete: () => void;
@@ -28,6 +41,36 @@ function ProviderIcon({ provider }: { provider: Me["signedInWith"] }) {
   if (provider === "Google") return <GoogleGlyph />;
   if (provider === "Apple") return <AppleGlyph />;
   return <Icon name="mail" size={20} color="tx" />;
+}
+
+/** The name field, locked with a "Saving…" mark while the save is out. */
+function NameField({
+  value,
+  onChange,
+  saving,
+}: {
+  value: string;
+  onChange: (name: string) => void;
+  saving: boolean;
+}) {
+  return (
+    <Field label="Name">
+      <TextField
+        accessibilityLabel="Name"
+        value={value}
+        onChangeText={onChange}
+        editable={!saving}
+        right={
+          saving ? (
+            <T size={12} color="mu">
+              Saving…
+            </T>
+          ) : undefined
+        }
+        autoCorrect={false}
+      />
+    </Field>
+  );
 }
 
 export function AccountScreen(props: AccountScreenProps) {
@@ -65,14 +108,7 @@ export function AccountScreen(props: AccountScreenProps) {
             {person.email}
           </T>
         </View>
-        <Field label="Name">
-          <TextField
-            accessibilityLabel="Name"
-            value={props.name}
-            onChangeText={props.onNameChange}
-            autoCorrect={false}
-          />
-        </Field>
+        <NameField value={props.name} onChange={props.onNameChange} saving={props.nameSaving} />
         <Field label="Photo">
           <View
             style={{
@@ -109,7 +145,12 @@ export function AccountScreen(props: AccountScreenProps) {
             variant="danger"
             onPress={props.onAskDelete}
           />
-          <PillButton label="Sign out" icon="logout" onPress={props.onSignOut} />
+          <PillButton
+            label={props.signingOut ? "Signing out…" : "Sign out"}
+            icon="logout"
+            disabled={props.signingOut}
+            onPress={props.onSignOut}
+          />
         </View>
       </ScrollView>
       {props.confirmDelete ? (
@@ -119,6 +160,16 @@ export function AccountScreen(props: AccountScreenProps) {
           confirmLabel="Delete account"
           onConfirm={props.onConfirmDelete}
           onCancel={props.onCancelDelete}
+        />
+      ) : null}
+      {props.unsaved ? (
+        <ConfirmSheet
+          title={props.unsaved.title}
+          text={props.unsaved.text}
+          confirmLabel={props.unsaved.confirmLabel}
+          cancelLabel={props.unsaved.cancelLabel}
+          onConfirm={props.unsaved.onDiscard}
+          onCancel={props.unsaved.onKeepEditing}
         />
       ) : null}
       {props.toast ? <Toast text={props.toast} /> : null}
