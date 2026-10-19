@@ -358,8 +358,14 @@ test(
       }
       await verifyReading();
       async function verifyTyping() {
-        for (const [index, peer] of [b, c, d].entries()) {
-          await peer.client.mutation(api.typing.start, { groupId });
+        const peers = [b, c, d];
+        for (const index of peers.keys()) {
+          // Snapshot work can outlast a lease; keep every intended typer active.
+          await Promise.all(
+            peers
+              .slice(0, index + 1)
+              .map((peer) => peer.client.mutation(api.typing.start, { groupId })),
+          );
           const text = ["Bilal is typing", "Bilal and Cora are typing", "3 people are typing"][
             index
           ];

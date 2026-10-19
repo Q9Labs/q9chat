@@ -138,7 +138,7 @@ test(
       await field.fill("Draft for another group");
       await page.getByText("Launch conversation", { exact: true }).first().click();
       expect(await field.inputValue()).toBe("Draft for launch");
-      await page.reload();
+      await page.reload({ waitUntil: "commit" });
       await field.waitFor();
       expect(await field.inputValue()).toBe("Draft for launch");
       await page.getByText("Another conversation", { exact: true }).first().click();
@@ -157,7 +157,7 @@ test(
       expect(await page.locator('[role=log] [aria-label="Send status"]').count()).toBe(0);
       const rejectedKey = wire.sends.at(-1)?.clientKey;
       await shot("failed");
-      await page.reload();
+      await page.reload({ waitUntil: "commit" });
       await page.getByRole("button", { name: "Retry", exact: true }).waitFor();
       await page.getByRole("button", { name: "Retry", exact: true }).focus();
       await page.keyboard.press("Enter");
@@ -345,7 +345,7 @@ test(
             ),
           )
           .toBe(0);
-        await page.reload();
+        await page.reload({ waitUntil: "commit" });
         await page.getByText("Delivered while reading older history", { exact: true }).waitFor();
         expect(await page.getByRole("button", { name: "Retry", exact: true }).count()).toBe(0);
         const deliveredRows = await a.client.query(api.messages.range, {
