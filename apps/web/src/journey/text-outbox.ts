@@ -1,24 +1,17 @@
 import { api } from "@q9chat/convex";
 import { useConvex, useMutation } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { Either, Schema } from "effect";
 import { useEffect, useState, useSyncExternalStore } from "react";
 
 import type { PostView } from "../chat/types.js";
 import { transportLifetime } from "../lib/convex.js";
 import { journeyError } from "./group-errors.js";
+import { loadText, type Pending } from "./text-storage.js";
 
-const PendingText = Schema.Struct({
-  clientKey: Schema.String,
-  body: Schema.String,
-  createdAt: Schema.Number,
-  status: Schema.Literal("sending", "failed"),
-});
 interface TextState {
   readonly draft: string;
   readonly pending: readonly (Pending | Delivered)[];
 }
-type Pending = typeof PendingText.Type;
 type Delivered = Omit<Pending, "status"> & {
   readonly status: "sent";
   readonly afterSequence: number;
@@ -31,45 +24,9 @@ type Row = FunctionReturnType<typeof api.messages.range>[number];
 export const normalizeText = (body: string) => body.replace(/\s+$/, "");
 const bodyLimitCopy = "Use 4,000 characters or fewer.";
 
-function restorePending(key: string, name: string): Pending | null {
-  const raw = localStorage.getItem(name);
-  const decoded = Schema.decodeUnknownEither(Schema.parseJson(PendingText))(raw);
-  const prefix = `${key}:pending:`;
-  if (Either.isRight(decoded) && name === `${prefix}${decoded.right.clientKey}`)
-    return withStatus(decoded.right, "failed");
-  // Preserve the damaged value for recovery, but never let it poison another reload.
-  localStorage.setItem(`${key}:quarantine:${name.slice(prefix.length)}`, raw ?? "");
-  localStorage.removeItem(name);
-  return null;
-}
-
-function loadText(key: string): { readonly text: TextState; readonly error: string } {
-  try {
-    const draft = sessionStorage.getItem(`${key}:draft`) ?? "";
-    const prefix = `${key}:pending:`;
-    const pending: Pending[] = [];
-    let damaged = false;
-    for (const name of Object.keys(localStorage).filter((candidate) =>
-      candidate.startsWith(prefix),
-    )) {
-      const restored = restorePending(key, name);
-      if (restored) pending.push(restored);
-      else damaged = true;
-    }
-    return {
-      text: { draft, pending: pending.toSorted((a, b) => a.createdAt - b.createdAt) },
-      error: damaged ? "Couldn't restore one or more unsent messages on this device." : "",
-    };
-  } catch {
-    return {
-      text: { draft: "", pending: [] },
-      error: "Couldn't restore unsent messages on this device.",
-    };
-  }
-}
-
 function textStore(key: string) {
-  let snapshot = { ...loadText(key), saveError: "", failure: { id: 0, text: "" } };
+  const restored: { readonly text: TextState; readonly error: string } = loadText(key);
+  let snapshot = { ...restored, saveError: "", failure: { id: 0, text: "" } };
   let delivery = {
     pending: snapshot.text.pending,
     error: snapshot.error,
