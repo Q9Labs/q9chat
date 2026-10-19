@@ -76,21 +76,38 @@ test(
       await page.screenshot({ path: "artifacts/j7-dark.png" });
       await browser.emulateMedia({ colorScheme: "light" });
       await field.press("Enter");
-      await page.locator(`#m-${target.messageId}`).waitFor();
-      await expect(browser.locator(`#m-${target.messageId}`)).toContainText(
-        "The launch checklist is ready for review.",
-      );
-      expect(await page.locator(`#m-${target.messageId}`).getAttribute("class")).toContain("flash");
-      expect(
-        await page.locator(`#m-${target.messageId}`).evaluate((node) => {
-          const bounds = node.getBoundingClientRect();
-          const log = document.querySelector("[role=log]")?.getBoundingClientRect();
-          return Boolean(log && bounds.top >= log.top && bounds.bottom <= log.bottom);
-        }),
-      ).toBe(true);
+      async function expectTarget() {
+        await page.locator(`#m-${target.messageId}.flash`).waitFor();
+        await expect(browser.locator(`#m-${target.messageId}`)).toContainText(
+          "The launch checklist is ready for review.",
+        );
+        expect(
+          await page.locator(`#m-${target.messageId}`).evaluate((node) => {
+            const bounds = node.getBoundingClientRect();
+            const log = document.querySelector("[role=log]")?.getBoundingClientRect();
+            return Boolean(log && bounds.top >= log.top && bounds.bottom <= log.bottom);
+          }),
+        ).toBe(true);
+      }
+      await expectTarget();
       await page.screenshot({ path: "artifacts/j7-target.png" });
       await page.getByRole("button", { name: "Jump to latest", exact: true }).click();
       await expect(browser.locator("[role=log]")).toContainText("Later conversation 304");
+      await page.getByRole("button", { name: "Search ⌘K", exact: true }).click();
+      await field.fill("checklist");
+      await expect(browser.locator(".res .ri")).toHaveCount(2);
+      await field.press("Enter");
+      await expectTarget();
+      await page.screenshot({ path: "artifacts/j7-reopened.png" });
+      await page.locator(`#m-${target.messageId}:not(.flash)`).waitFor();
+      await page.locator("[role=log]").evaluate((node) => {
+        node.scrollTop = node.scrollHeight;
+      });
+      await page.keyboard.press("Meta+k");
+      await field.fill("checklist");
+      await expect(browser.locator(".res .ri")).toHaveCount(2);
+      await field.press("Enter");
+      await expectTarget();
       await page.getByRole("button", { name: "Search in this group", exact: true }).click();
       await field.waitFor();
       await expect(browser.locator(".scope-chip")).toContainText("In Launch search");
@@ -115,7 +132,16 @@ test(
       await expect(browser.locator(".search-empty")).toContainText("You're offline.");
       await page.context().setOffline(false);
       await field.press("Escape");
+      await page.getByRole("button", { name: "New group", exact: true }).click();
+      await page.getByRole("dialog", { name: "New group", exact: true }).waitFor();
+      await page.keyboard.press("Meta+k");
+      await expect(browser.locator("dialog[open]")).toHaveCount(1);
+      await expect(browser.locator('input[aria-label="Search messages"]')).toHaveCount(0);
+      await page.keyboard.press("Escape");
       await page.getByRole("button", { name: "Account", exact: true }).click();
+      await page.keyboard.press("Meta+k");
+      await expect(browser.locator("dialog[open]")).toHaveCount(1);
+      await expect(browser.locator('input[aria-label="Search messages"]')).toHaveCount(0);
       await page.getByRole("button", { name: "Sign out", exact: true }).click();
       await expect(browser.locator(".search-box")).toHaveCount(0);
       await page.getByRole("button", { name: "Email me a code", exact: true }).waitFor();

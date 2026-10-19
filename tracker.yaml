@@ -138,8 +138,8 @@ outcomes:
   - id: chat.calm_notifications
     title: Get notified only when something needs you
     area: notifications
-    state: planned
-    summary: Not built.
+    state: in_progress
+    summary: Web members can choose notification modes and mute groups. Push setup and phone controls remain.
     theory: theory.md#calm
     code: []
     priority: P0
@@ -148,21 +148,22 @@ outcomes:
     remaining:
       - Notify on mentions and replies by default; let a person choose every message per group.
       - Deliver through web push, APNs and FCM, and open the notification at the message.
-      - Mute a group.
+      - Add the phone mute controls; web mute settings and grey counts work.
 
   - id: chat.leave_group
     title: Leave a group or remove a member
     area: groups
-    state: planned
-    summary: Not built.
+    state: in_progress
+    summary: Web members can leave or remove another member with confirmation. Removed people lose history and can clear the removal notice; phone controls remain.
     theory: theory.md#groups
-    code: []
+    code:
+      - apps/web/src/journey/group-controls.tsx
+      - convex/groups.ts
     priority: P1
     size: S
-    size_reason: Two membership mutations and their controls on each app.
+    size_reason: Wire the existing membership mutations to the phone controls.
     remaining:
-      - Let a member leave a group, ending their access.
-      - Let any member remove another member, and show who removed them in the group.
+      - Let phone members leave, remove members and clear removal notices.
 
   - id: chat.store_requirements
     title: Delete your account and report a message

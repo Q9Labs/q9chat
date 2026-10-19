@@ -13,6 +13,7 @@
 - **Groups on the phone**: On the phone you can create a group or a pair, add people from Group info, copy the invite link, and join a group by opening its link, including when you were signed out. A group you were removed from can be taken off your list.
 - **Send text on the web**: Messages appear immediately, failed sends can be retried without duplicates, and each group keeps its own draft across reloads.
 - **Find old messages on the web**: Search your groups as you type, then open a result at its highlighted message.
+- **Manage group membership and mute on web**: Mute or unmute a group, leave with confirmation, remove a member, and clear a removal notice.
 
 ### Fixed
 

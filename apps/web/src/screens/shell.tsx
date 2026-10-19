@@ -20,6 +20,7 @@ export function ChatShell({ sidebar, banner, main, info, onOpenSearch }: ChatShe
     const onKey = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
+        if (document.querySelector('dialog[open][aria-modal="true"]')) return;
         open();
       }
     };

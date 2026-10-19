@@ -7,6 +7,12 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import type { SearchHit } from "../chat/types.js";
 import { SearchDialog } from "../screens/dialogs.js";
 
+declare module "@tanstack/react-router" {
+  interface HistoryState {
+    searchJump?: string;
+  }
+}
+
 type Group = FunctionReturnType<typeof api.groups.list>[number];
 type Hits = FunctionReturnType<typeof api.messages.search>;
 type Result =
@@ -116,6 +122,8 @@ function SearchJourney({
     if (!current) return;
     void navigate({
       to: "/",
+      resetScroll: false,
+      state: { searchJump: crypto.randomUUID() },
       search: { group: current.groupId, message: current.sequence, authError: undefined },
     });
     onClose();
