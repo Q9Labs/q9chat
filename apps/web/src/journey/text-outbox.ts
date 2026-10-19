@@ -119,10 +119,19 @@ export function useTextOutbox(group: Group, rows: readonly Row[]) {
   const committed = new Set(
     rows.flatMap((row) => (row.kind === "post" && row.author.isYou ? [row.clientKey] : [])),
   );
-  const pending = text.pending.filter((post) => !committed.has(post.clientKey));
+  const loadedIds = new Set(rows.map((row) => row.id));
+  function notLoaded(post: Pending | Delivered) {
+    return (
+      !committed.has(post.clientKey) && (post.status !== "sent" || !loadedIds.has(post.messageId))
+    );
+  }
+  const pending = text.pending.filter(notLoaded);
   useEffect(() => {
-    // react-doctor-disable-next-line react-doctor/no-pass-data-to-parent -- Synchronizes committed keys to the external localStorage outbox, not parent React state.
-    if (pending.length !== text.pending.length) update({ ...store.get().text, pending });
+    if (pending.length !== text.pending.length) {
+      const current = store.get().text;
+      // react-doctor-disable-next-line react-doctor/no-pass-data-to-parent -- Synchronizes committed keys to the external localStorage outbox, not parent React state.
+      update({ ...current, pending: current.pending.filter(notLoaded) });
+    }
   });
 
   async function deliver(post: Pending) {

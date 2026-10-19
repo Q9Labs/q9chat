@@ -804,15 +804,16 @@ test(
       await verifyOwnOnlyHistory();
       async function verifyCappedEvent() {
         const additional = [];
-        for (const name of ["Eli", "Faye", "Gus", "Hana"]) additional.push(await createPeer(name));
+        for (const name of ["Eli", "Faye", "Gus", "Hana", "Ivan"])
+          additional.push(await createPeer(name));
         const capped = await a.client.mutation(api.groups.create, {
           name: "Capped member event",
-          memberIds: [b.id, c.id, d.id, ...additional.map((peer) => peer.id)],
+          memberIds: [b.id, c.id, ...additional.map((peer) => peer.id)],
           inviteToken: crypto.randomUUID().replaceAll("-", ""),
         });
         await app.open(`/?group=${capped}`);
         await expect(browser.locator("[role=log] .sys").last()).toHaveText(
-          "You added Bilal, Cora, Dina and 4 others",
+          "You added Bilal, Cora, Eli and 4 others",
         );
       }
       await verifyCappedEvent();

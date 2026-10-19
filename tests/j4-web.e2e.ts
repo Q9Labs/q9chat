@@ -180,6 +180,51 @@ test(
         "J4 PASS: first committed response forced to fail; retry sends the same clientKey twice but stores and renders one post\n",
       );
 
+      async function verifyDeletedRetry() {
+        const body = "Deleted after a lost acknowledgement";
+        wire.set("fail-committed");
+        await field.fill(body);
+        await field.press("Enter");
+        const retry = page.getByRole("button", { name: "Retry", exact: true });
+        await retry.waitFor();
+        const request = wire.sends.at(-1);
+        if (!request) throw new Error("Missing failed send request");
+        const post = (await posts()).find(
+          (row) => row.kind === "post" && row.clientKey === request.clientKey,
+        );
+        if (!post || post.kind !== "post") throw new Error("Missing committed send to delete");
+        await a.client.mutation(api.messages.remove, { messageId: post.id });
+        await retry.click();
+        await page.locator(`[id="m-${post.id}"] .gone`).waitFor();
+        await expect.poll(() => page.locator(".txt").filter({ hasText: body }).count()).toBe(0);
+        expect(await page.locator(`[id="m-${post.id}"]`).count()).toBe(1);
+        process.stdout.write(
+          "J4 PASS: retry of an already-deleted committed post shows only its deleted placeholder, never cached text\n",
+        );
+      }
+      await verifyDeletedRetry();
+
+      async function verifyConcurrentSends() {
+        const bodies = ["First overlapping send", "Second overlapping send"];
+        wire.set("hold");
+        for (const body of bodies) {
+          await field.fill(body);
+          await field.press("Enter");
+        }
+        expect(await page.locator(".msg.sending").count()).toBe(2);
+        expect(new Set(wire.sends.slice(-2).map((post) => post.clientKey)).size).toBe(2);
+        await field.fill("Draft written while both sends are pending");
+        wire.release();
+        await Promise.all(bodies.map(committed));
+        expect(await field.inputValue()).toBe("Draft written while both sends are pending");
+        await expect.poll(() => page.locator(".msg.sending").count()).toBe(0);
+        await field.fill("");
+        process.stdout.write(
+          "J4 PASS: overlapping sends have distinct keys, each reconcile once, and preserve a newer draft\n",
+        );
+      }
+      await verifyConcurrentSends();
+
       await field.fill(" ");
       await field.press("Enter");
       expect(await field.inputValue()).toBe(" ");
