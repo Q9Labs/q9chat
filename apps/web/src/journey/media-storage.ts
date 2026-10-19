@@ -1,5 +1,7 @@
 import { Either, Schema } from "effect";
 
+import { QuotedReply } from "./text-storage.js";
+
 const positive = Schema.Number.pipe(Schema.finite(), Schema.positive());
 const bytes = Schema.instanceOf(Blob).pipe(
   Schema.filter((blob) => blob.size > 0 && blob.size <= 20_000_000),
@@ -28,6 +30,7 @@ const media = Schema.Union(
 export type Media = typeof media.Type;
 const saved = Schema.Struct({
   clientKey: Schema.String,
+  reply: Schema.optional(QuotedReply),
   createdAt: Schema.Number,
   files: Schema.Array(media).pipe(Schema.minItems(1), Schema.maxItems(10)),
 });
@@ -114,4 +117,17 @@ export async function saveMedia(scope: string, post: SavedMedia) {
 }
 export async function removeMedia(scope: string, key: string) {
   await transaction("readwrite", (store) => store.delete(entryKey(scope, key)));
+}
+
+export async function clearProfileMedia(profileId: string) {
+  const prefixes = [`${profileId}:`, `quarantine:${profileId}:`];
+  await transaction("readwrite", (store) => {
+    const request = store.getAllKeys();
+    request.onsuccess = () => {
+      for (const key of request.result)
+        if (typeof key === "string" && prefixes.some((prefix) => key.startsWith(prefix)))
+          store.delete(key);
+    };
+    return request;
+  });
 }

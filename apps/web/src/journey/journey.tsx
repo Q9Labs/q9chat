@@ -8,20 +8,31 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 
 import type { GroupListRow, Me } from "../chat/types.js";
 import { AccountTransport } from "../lib/account-transport.js";
+import { retireAccountTransport } from "../lib/convex.js";
 import { useSession } from "../lib/session.js";
-import { AccountDialog } from "../screens/dialogs.js";
+import { AccountDialog, DeleteAccountDialog } from "../screens/dialogs.js";
 import { ChatShell, PickAGroup } from "../screens/shell.js";
 import { NoGroupsYet, Sidebar } from "../screens/sidebar.js";
 import { Toast } from "../ui/overlay.js";
 import { AppRoot } from "../ui/root.js";
 import { GroupJourneyBoundary, useGroupJourney } from "./groups.js";
+import { clearProfileMedia } from "./media-storage.js";
 import { OAuthArrival } from "./oauth-arrival.js";
 import { isPhotoRejection, photoSelectionError, uploadPhoto, usePhotos } from "./photos.js";
 import { useSearchJourney } from "./search.js";
 import { ProfileSetup } from "./setup.js";
 import { SignInJourney } from "./sign-in.js";
+import { clearProfileText } from "./text-outbox.js";
 
 const InviteToken = createContext<string | undefined>(undefined);
+
+const DeletedAccountAction = createContext<((id: ReadyProfile["id"]) => void) | null>(null);
+
+function useDeletedAccountAction() {
+  const action = useContext(DeletedAccountAction);
+  if (!action) throw new Error("Account deletion requires Journey");
+  return action;
+}
 
 const SignOutAction = createContext<(() => void) | null>(null);
 function useSignOutAction() {
@@ -78,6 +89,44 @@ function useJourneySignOut() {
   return { signOutStatus, leave, clearSignOutStatus: () => setSignOutStatus("idle") };
 }
 
+function useDeletedAccountCleanup(signOut: () => void) {
+  const [deleted, setDeleted] = useState<{
+    readonly id: ReadyProfile["id"];
+    readonly failed: boolean;
+  } | null>(null);
+  async function clean(id: ReadyProfile["id"]) {
+    setDeleted({ id, failed: false });
+    try {
+      await retireAccountTransport();
+      await Promise.all([
+        Promise.resolve().then(() => clearProfileText(id)),
+        clearProfileMedia(id),
+      ]);
+      signOut();
+      setDeleted(null);
+    } catch {
+      setDeleted({ id, failed: true });
+    }
+  }
+  return {
+    complete: (id: ReadyProfile["id"]) => void clean(id),
+    screen: deleted ? (
+      <div className="center">
+        <p>
+          {deleted.failed
+            ? "Your account is deleted, but we couldn't remove saved data from this browser. Allow storage access, then try again to finish signing out."
+            : "Removing saved data from this browser…"}
+        </p>
+        {deleted.failed ? (
+          <button type="button" onClick={() => void clean(deleted.id)}>
+            Try again
+          </button>
+        ) : null}
+      </div>
+    ) : null,
+  };
+}
+
 export function Journey({
   authError,
   inviteToken,
@@ -87,7 +136,9 @@ export function Journey({
 }) {
   const session = useSession();
   const [now, setNow] = useState(Date.now);
-  const { signOutStatus, leave, clearSignOutStatus } = useJourneySignOut();
+  const signOut = useJourneySignOut();
+  const { signOutStatus, leave } = signOut;
+  const deletion = useDeletedAccountCleanup(leave);
   const arrivalMethod = authError ? null : session.method;
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 30_000);
@@ -95,33 +146,51 @@ export function Journey({
   }, []);
   return (
     <SignOutAction.Provider value={leave}>
-      <AppRoot clock={{ now }}>
-        {session.status === "loading" ? (
-          <Loading />
-        ) : session.user === null ? (
-          <SignInJourney
-            authError={authError}
-            signOutStatus={signOutStatus}
-            onSignInAttempt={clearSignOutStatus}
-          />
-        ) : (
-          <InviteToken.Provider value={inviteToken}>
-            <AccountTransport key={session.user.id}>
-              <ProfileGate />
-            </AccountTransport>
-          </InviteToken.Provider>
-        )}
-        {signOutStatus === "failed" ? (
-          <Toast
-            message="Couldn't sign out. Try again."
-            action={{ label: "Try again", onClick: leave }}
-          />
-        ) : null}
-        {session.status !== "loading" ? (
-          <OAuthArrival key={arrivalMethod ?? "signed-out"} method={arrivalMethod} />
-        ) : null}
-      </AppRoot>
+      <DeletedAccountAction.Provider value={deletion.complete}>
+        <AppRoot clock={{ now }}>
+          {deletion.screen ?? (
+            <SessionJourney authError={authError} inviteToken={inviteToken} signOut={signOut} />
+          )}
+          {signOutStatus === "failed" ? (
+            <Toast
+              message="Couldn't sign out. Try again."
+              action={{ label: "Try again", onClick: leave }}
+            />
+          ) : null}
+          {session.status !== "loading" ? (
+            <OAuthArrival key={arrivalMethod ?? "signed-out"} method={arrivalMethod} />
+          ) : null}
+        </AppRoot>
+      </DeletedAccountAction.Provider>
     </SignOutAction.Provider>
+  );
+}
+
+function SessionJourney({
+  authError,
+  inviteToken,
+  signOut,
+}: {
+  readonly authError: boolean;
+  readonly inviteToken: string | undefined;
+  readonly signOut: ReturnType<typeof useJourneySignOut>;
+}) {
+  const session = useSession();
+  if (session.status === "loading") return <Loading />;
+  if (session.user === null)
+    return (
+      <SignInJourney
+        authError={authError}
+        signOutStatus={signOut.signOutStatus}
+        onSignInAttempt={signOut.clearSignOutStatus}
+      />
+    );
+  return (
+    <InviteToken.Provider value={inviteToken}>
+      <AccountTransport key={session.user.id}>
+        <ProfileGate />
+      </AccountTransport>
+    </InviteToken.Provider>
   );
 }
 
@@ -280,7 +349,7 @@ function Groups({
       {workspace.dialog}
       {accountOpen ? (
         <Account
-          me={me}
+          me={{ ...me, id: profile.id }}
           onClose={() => setAccountOpen(false)}
           onNotice={setNotice}
           onPhotoChange={refreshPhotos}
@@ -301,7 +370,7 @@ function Account({
   onNotice,
   onPhotoChange,
 }: {
-  readonly me: Me;
+  readonly me: Me & { readonly id: ReadyProfile["id"] };
   readonly onClose: () => void;
   readonly onNotice: (message: string) => void;
   readonly onPhotoChange: () => void;
@@ -309,6 +378,11 @@ function Account({
   const { fetchAccessToken } = useSession();
   const signOut = useSignOutAction();
   const update = useMutation(api.profiles.update);
+  const deleteAccount = useMutation(api.profiles.deleteAccount);
+  const completeDeletion = useDeletedAccountAction();
+  const [deleting, setDeleting] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const [name, setName] = useState(me.displayName);
   const busy = useRef(false);
   const picker = useRef<HTMLInputElement>(null);
@@ -338,6 +412,25 @@ function Account({
       busy.current = false;
     }
   }
+  async function confirmDelete() {
+    if (busy.current) return;
+    if (!navigator.onLine) {
+      setDeleteError("You're offline. Reconnect and try again.");
+      return;
+    }
+    busy.current = true;
+    setDeleteBusy(true);
+    setDeleteError("");
+    try {
+      await deleteAccount({});
+      completeDeletion(me.id);
+    } catch {
+      setDeleteError("Couldn't delete your account. Try again.");
+    } finally {
+      busy.current = false;
+      setDeleteBusy(false);
+    }
+  }
   async function closeAccount() {
     if (busy.current) return;
     busy.current = true;
@@ -351,6 +444,18 @@ function Account({
       busy.current = false;
     }
   }
+
+  if (deleting)
+    return (
+      <DeleteAccountDialog
+        pending={deleteBusy}
+        error={deleteError}
+        onConfirm={() => void confirmDelete()}
+        onClose={() => {
+          if (!deleteBusy) setDeleting(false);
+        }}
+      />
+    );
 
   return (
     <>
@@ -372,7 +477,7 @@ function Account({
         onNameChange={setName}
         onUploadPhoto={() => picker.current?.click()}
         onRemovePhoto={() => void changePhoto(null)}
-        onDeleteAccount={() => onNotice("This is coming in the next journey.")}
+        onDeleteAccount={() => setDeleting(true)}
         onSignOut={signOut}
         onClose={() => void closeAccount()}
       />

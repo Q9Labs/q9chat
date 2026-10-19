@@ -538,7 +538,7 @@ export function AccountDialog({
 
 // ---------- Confirmations ----------
 
-interface ConfirmProps {
+interface ConfirmProps extends Closable {
   readonly title: string;
   readonly body: string;
   readonly confirmLabel: string;
@@ -627,6 +627,8 @@ export function DeleteAccountDialog(props: Closable) {
 type ReportReason = "spam" | "harassment" | "other";
 
 interface ReportDialogProps {
+  readonly error?: string;
+  readonly busy?: boolean;
   readonly authorName: string;
   readonly reason: ReportReason | null;
   readonly onReasonChange: (reason: ReportReason) => void;
@@ -637,6 +639,8 @@ interface ReportDialogProps {
 /** Pick a reason, then send. The author is never told who reported. */
 export function ReportDialog({
   authorName,
+  error,
+  busy,
   reason,
   onReasonChange,
   onSend,
@@ -645,9 +649,8 @@ export function ReportDialog({
   return (
     <Dialog label="Report this message" onClose={onClose}>
       <h3>Report this message</h3>
-      <p className="sub">
-        We review reports within a day. {authorName} isn't told who reported it.
-      </p>
+      <p className="sub">Q9 reviews reports. {authorName} isn't told who reported it.</p>
+      {error ? <p role="alert">{error}</p> : null}
       <RadioList
         label="Reason"
         value={reason}
@@ -660,7 +663,7 @@ export function ReportDialog({
       />
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>
-        <Button variant="solid" disabled={reason === null} onClick={onSend}>
+        <Button variant="solid" disabled={busy === true || reason === null} onClick={onSend}>
           Send report
         </Button>
       </DialogActions>

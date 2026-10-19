@@ -1,12 +1,11 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { Composer } from "../chat/composer.js";
 import { selectedMedia } from "./media-selection.js";
 import type { Media } from "./media-storage.js";
+import type { useMessageActions } from "./message-actions.js";
 import { normalizeText, type useTextOutbox } from "./text-outbox.js";
 import { useVoiceRecorder } from "./voice-recorder.js";
-
-const laterJourney = () => {};
 
 export function TextComposer({
   title,
@@ -16,7 +15,12 @@ export function TextComposer({
   onBlur,
   onMedia,
   onError,
+  actions,
 }: {
+  readonly actions: Pick<
+    ReturnType<typeof useMessageActions>,
+    "composerMode" | "editDraft" | "cancel" | "editLast" | "busy"
+  >;
   readonly onMedia: (media: readonly Media[]) => void;
   readonly onError: (error: string) => void;
   readonly title: string;
@@ -25,38 +29,22 @@ export function TextComposer({
   readonly onSend: () => void;
   readonly onBlur: () => void;
 }) {
-  const alive = useRef(true);
-  useEffect(() => {
-    alive.current = true;
-    return () => {
-      alive.current = false;
-    };
-  }, []);
+  const { photo, file, select } = useMediaPicker(onMedia, onError);
   const [attachOpen, setAttachOpen] = useState(false);
-  const photo = useRef<HTMLInputElement>(null);
-  const file = useRef<HTMLInputElement>(null);
   const microphone = useRef<HTMLButtonElement | null>(null);
   const recorder = useVoiceRecorder(onMedia, onError);
-  const value = useSyncExternalStore(store.subscribe, store.getDraft, store.getDraft);
+  const draft = useSyncExternalStore(store.subscribe, store.getDraft, store.getDraft);
+  const value = actions.editDraft ?? draft;
   const body = normalizeText(value);
   const wasRecording = useRef(false);
   useEffect(() => {
     if (wasRecording.current && !recorder.recording) microphone.current?.focus();
     wasRecording.current = recorder.recording !== null;
   }, [recorder.recording]);
-  async function select(input: HTMLInputElement, kind: "photo" | "file") {
-    const files = [...(input.files ?? [])];
-    input.value = "";
-    if (!files.length) return;
-    try {
-      const media = await selectedMedia(files, kind);
-      if (alive.current) onMedia(media);
-    } catch (cause) {
-      if (alive.current)
-        onError(
-          cause instanceof Error ? cause.message : "Couldn't read that attachment. Choose another.",
-        );
-    }
+  const sendDisabled = actions.busy || !body.trim() || body.length > 4000;
+  function pickAttachment(kind: "photo" | "file") {
+    setAttachOpen(false);
+    (kind === "photo" ? photo : file).current?.click();
   }
   return (
     <>
@@ -87,16 +75,13 @@ export function TextComposer({
         onChange={onChange}
         onSend={onSend}
         onBlur={onBlur}
-        sendDisabled={!body.trim() || body.length > 4000}
-        mode={null}
-        onCancelMode={laterJourney}
-        onEditLast={laterJourney}
+        sendDisabled={sendDisabled}
+        mode={actions.composerMode}
+        onCancelMode={actions.cancel}
+        onEditLast={actions.editLast}
         attachOpen={attachOpen}
         onAttachOpenChange={setAttachOpen}
-        onPickAttachment={(kind) => {
-          setAttachOpen(false);
-          (kind === "photo" ? photo : file).current?.click();
-        }}
+        onPickAttachment={pickAttachment}
         onRecord={recorder.start}
         onMicrophoneMount={(element) => {
           microphone.current = element;
@@ -107,4 +92,38 @@ export function TextComposer({
       />
     </>
   );
+}
+
+function useMediaPicker(
+  onMedia: (media: readonly Media[]) => void,
+  onError: (error: string) => void,
+) {
+  const delivery = useRef(onMedia);
+  useLayoutEffect(() => {
+    delivery.current = onMedia;
+  }, [onMedia]);
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+  const photo = useRef<HTMLInputElement>(null);
+  const file = useRef<HTMLInputElement>(null);
+  async function select(input: HTMLInputElement, kind: "photo" | "file") {
+    const files = [...(input.files ?? [])];
+    input.value = "";
+    if (!files.length) return;
+    try {
+      const media = await selectedMedia(files, kind);
+      if (alive.current) delivery.current(media);
+    } catch (cause) {
+      if (alive.current)
+        onError(
+          cause instanceof Error ? cause.message : "Couldn't read that attachment. Choose another.",
+        );
+    }
+  }
+  return { photo, file, select };
 }
