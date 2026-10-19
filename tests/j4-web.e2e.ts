@@ -20,10 +20,19 @@ function liveBrowser() {
 test(
   "journey 4: text sends, durable drafts, retry keys and sender typing",
   { timeout: 360_000 },
-  async ({ app }) => {
+  async ({ app, browser }) => {
     const { surface, engine } = liveBrowser();
     await app.open("/");
     const page = surface.page();
+    async function reload() {
+      // Convex's pending-mutation warning must not cancel an intentional restart.
+      const removeDialogHandler = await browser.onDialog("accept");
+      try {
+        await page.reload({ waitUntil: "commit" });
+      } finally {
+        await removeDialogHandler();
+      }
+    }
     const wire = await sendWire(page);
     const addresses: string[] = [];
     const clients: { readonly context: Context; readonly client: ConvexHttpClient }[] = [];
@@ -138,7 +147,7 @@ test(
       await field.fill("Draft for another group");
       await page.getByText("Launch conversation", { exact: true }).first().click();
       expect(await field.inputValue()).toBe("Draft for launch");
-      await page.reload({ waitUntil: "commit" });
+      await reload();
       await field.waitFor();
       expect(await field.inputValue()).toBe("Draft for launch");
       await page.getByText("Another conversation", { exact: true }).first().click();
@@ -157,7 +166,7 @@ test(
       expect(await page.locator('[role=log] [aria-label="Send status"]').count()).toBe(0);
       const rejectedKey = wire.sends.at(-1)?.clientKey;
       await shot("failed");
-      await page.reload({ waitUntil: "commit" });
+      await reload();
       await page.getByRole("button", { name: "Retry", exact: true }).waitFor();
       await page.getByRole("button", { name: "Retry", exact: true }).focus();
       await page.keyboard.press("Enter");
@@ -345,7 +354,7 @@ test(
             ),
           )
           .toBe(0);
-        await page.reload({ waitUntil: "commit" });
+        await reload();
         await page.getByText("Delivered while reading older history", { exact: true }).waitFor();
         expect(await page.getByRole("button", { name: "Retry", exact: true }).count()).toBe(0);
         const deliveredRows = await a.client.query(api.messages.range, {

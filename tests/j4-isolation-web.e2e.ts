@@ -1,4 +1,4 @@
-import { surfaceOf, test } from "@e2e-dev/web";
+import { surfaceOf, test, type Browser } from "@e2e-dev/web";
 import { api } from "@q9chat/convex";
 import { expect } from "e2e";
 import { Schema } from "effect";
@@ -122,14 +122,14 @@ async function fixture() {
 
 function isolationTest(
   name: string,
-  run: (f: Awaited<ReturnType<typeof fixture>>) => Promise<void>,
+  run: (f: Awaited<ReturnType<typeof fixture>>, browser: Browser) => Promise<void>,
 ) {
-  test(name, { timeout: 180_000 }, async ({ app }) => {
+  test(name, { timeout: 180_000 }, async ({ app, browser }) => {
     await app.open("/");
     const f = await fixture();
     process.stdout.write(`J4 CASE READY: ${name}\n`);
     try {
-      await run(f);
+      await run(f, browser);
     } finally {
       await f.cleanup();
     }
@@ -239,7 +239,7 @@ isolationTest("J4 tab drafts: one restored composition cannot become two posts",
   }
 });
 
-isolationTest("J4 tab drafts: stale tab send cannot erase a newer draft", async (f) => {
+isolationTest("J4 tab drafts: stale tab send cannot erase a newer draft", async (f, browser) => {
   await f.open();
   await f.field.fill("Old tab A draft");
   const { tab, other } = await f.newTab();
@@ -268,7 +268,13 @@ isolationTest("J4 tab drafts: stale tab send cannot erase a newer draft", async 
   // The interleaving is complete. Close its sender before the separate durability check.
   await f.page.bringToFront();
   const beforeReload = await f.page.evaluate(() => performance.timeOrigin);
-  await f.page.reload({ waitUntil: "commit" });
+  // Convex may warn about an in-flight typing mutation; deliberately leave the page.
+  const removeDialogHandler = await browser.onDialog("accept");
+  try {
+    await f.page.reload({ waitUntil: "commit" });
+  } finally {
+    await removeDialogHandler();
+  }
   expect(await f.page.evaluate((previous) => performance.timeOrigin > previous, beforeReload)).toBe(
     true,
   );
