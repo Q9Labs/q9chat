@@ -18,10 +18,12 @@ const Response = Schema.Struct({
   requestId: Schema.Number,
 });
 const Ping = Schema.Struct({ type: Schema.Literal("Ping") });
+const Queries = Schema.Struct({ type: Schema.Literal("ModifyQuerySet") });
 
 type Mode =
   | "normal"
   | "hold"
+  | "hold-queries"
   | "fail-before"
   | "fail-committed"
   | "await-retry"
@@ -75,14 +77,21 @@ export async function sendWire(page: Page) {
     }
     socket.onMessage((message) => {
       const parsed: unknown = JSON.parse(message.toString());
-      if (Schema.is(Mutation)(parsed) && parsed.udfPath === "typing:start") starts.push(Date.now());
-      if (Schema.is(Mutation)(parsed) && parsed.udfPath === `typing:${typingFailure}`) {
+      if (mode === "hold-queries" && Schema.is(Queries)(parsed)) {
+        heldRequests.push(message);
+        return;
+      }
+      if (!Schema.is(Mutation)(parsed)) {
+        server.send(message);
+        return;
+      }
+      if (parsed.udfPath === "typing:start") starts.push(Date.now());
+      if (parsed.udfPath === `typing:${typingFailure}`) {
         typingFailure = null;
         failure(parsed.requestId);
         return;
       }
-      if (Schema.is(Mutation)(parsed) && parsed.udfPath === "messages:send")
-        handleSend(parsed, message);
+      if (parsed.udfPath === "messages:send") handleSend(parsed, message);
       else server.send(message);
     });
     function consumeResponse(parsed: unknown, message: string | Buffer) {

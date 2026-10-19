@@ -32,6 +32,82 @@ async function until(condition: () => boolean) {
   assert.fail("session event did not settle");
 }
 
+void test("a delayed logout keeps sign-in unavailable until its cookie deletion settles", async () => {
+  const original = globalThis.fetch;
+  const release = Promise.withResolvers<void>();
+  let identity: string | null = "user_one";
+  let logoutStarted = false;
+  let verifications = 0;
+  globalThis.fetch = async (url) => {
+    const path = typeof url === "string" ? url : url instanceof URL ? url.href : url.url;
+    if (path.endsWith("sign-out")) {
+      logoutStarted = true;
+      await release.promise;
+      identity = null;
+      return Response.json({ ok: true });
+    }
+    if (path.endsWith("email/verify")) {
+      verifications++;
+      identity = "user_two";
+    }
+    return identity ? Response.json(session(identity)) : Response.json({}, { status: 401 });
+  };
+  const client = createSessionClient();
+  const close = client.start();
+  try {
+    await until(() => client.getSnapshot().session !== null);
+    const signingOut = client.signOut();
+    await until(() => logoutStarted);
+    const verifying = client.verifyEmail("test@example.net", "123456");
+    await setTimeout(10);
+    const loadingDuringLogout = client.getSnapshot().loading;
+    const prematureVerifications = verifications;
+    release.resolve();
+    await Promise.all([signingOut, verifying]);
+    assert.equal(prematureVerifications, 0);
+    assert.equal(loadingDuringLogout, true);
+    assert.equal(identity, "user_two");
+    assert.equal(client.getSnapshot().session?.user.id, "user_two");
+  } finally {
+    release.resolve();
+    close();
+    globalThis.fetch = original;
+  }
+});
+
+void test("a cross-tab account refresh does not await a stalled retired socket", async () => {
+  const original = globalThis.fetch;
+  const release = Promise.withResolvers<void>();
+  let identity = "user_one";
+  let holdNextClose = false;
+  let closing = false;
+  globalThis.fetch = async () => Response.json(session(identity));
+  const broadcaster = new BroadcastChannel("q9-auth-session");
+  const second = createSessionClient(() => {
+    if (!holdNextClose) return Promise.resolve();
+    holdNextClose = false;
+    closing = true;
+    return release.promise;
+  });
+  const closeSecond = second.start();
+  try {
+    await until(() => second.getSnapshot().session !== null);
+    holdNextClose = true;
+    identity = "user_two";
+    // eslint-disable-next-line unicorn/require-post-message-target-origin -- BroadcastChannel has no targetOrigin argument.
+    broadcaster.postMessage({ userId: identity });
+    await until(() => closing);
+    await until(() => second.getSnapshot().session?.user.id === "user_two");
+    assert.equal(second.getSnapshot().loading, false);
+  } finally {
+    release.resolve();
+    await setTimeout(20);
+    broadcaster.close();
+    closeSecond();
+    globalThis.fetch = original;
+  }
+});
+
 void test("sign-out dispatches keepalive immediately during verify and ignores the stale result", async () => {
   const original = globalThis.fetch;
   const release = Promise.withResolvers<void>();

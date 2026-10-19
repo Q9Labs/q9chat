@@ -45,6 +45,7 @@ export function createSessionClient(
   let snapshot: Snapshot = empty;
   let generation = 0;
   let pending: Promise<string | null> | null = null;
+  let logout: Promise<void> | null = null;
   let channel: BroadcastChannel | null = null;
   const listeners = new Set<() => void>();
   const notify = (userId: string | null) => {
@@ -52,6 +53,7 @@ export function createSessionClient(
     channel?.postMessage({ userId });
   };
   const save = async (session: Session | null) => {
+    if (logout) return false;
     const started = generation;
     const changed = snapshot.loading || snapshot.session?.user.id !== session?.user.id;
     if (changed) await retireTransport();
@@ -62,6 +64,7 @@ export function createSessionClient(
     return true;
   };
   const fetchAccessToken = ({ forceRefreshToken }: { forceRefreshToken: boolean }) => {
+    if (logout) return Promise.resolve(null);
     const cached = snapshot.session;
     if (!forceRefreshToken && cached && cached.expiresAt > Date.now() + 30_000)
       return Promise.resolve(cached.accessToken);
@@ -82,7 +85,7 @@ export function createSessionClient(
         return next.accessToken;
       } finally {
         pending = null;
-        if (snapshot.loading) await save(null);
+        if (started === generation && snapshot.loading) await save(null);
       }
     })();
     return pending;
@@ -102,18 +105,20 @@ export function createSessionClient(
         const message = event.data;
         if (!message || typeof message !== "object" || !("userId" in message)) return;
         if (message.userId !== null && typeof message.userId !== "string") return;
+        if (logout) return;
         if (!snapshot.loading && message.userId === (snapshot.session?.user.id ?? null)) return;
         const started = ++generation;
         // Do not announce the temporary empty state while checking the shared cookie.
-        void retireTransport()
+        void retireTransport().catch(() => null);
+        snapshot = { session: null, loading: true };
+        for (const listener of listeners) listener();
+        void (pending ?? Promise.resolve())
+          .catch(() => null)
           .then(async () => {
             if (started !== generation) return;
-            snapshot = { session: null, loading: true };
-            for (const listener of listeners) listener();
-            await (pending ?? Promise.resolve()).catch(() => null);
-            if (started === generation) await fetchAccessToken({ forceRefreshToken: true });
+            await fetchAccessToken({ forceRefreshToken: true });
           })
-          .catch(() => save(null));
+          .catch(() => (started === generation ? save(null) : false));
       });
       let active = true;
       // StrictMode can restart the effect while the previous generation's
@@ -136,27 +141,36 @@ export function createSessionClient(
     },
     fetchAccessToken,
     signOut: async () => {
-      generation += 1;
+      if (logout) return logout;
+      const started = ++generation;
       const closing = retireTransport();
       // Dispatch before touching memory: navigation must not discard queued logout.
       const request = post("sign-out", {}, true);
-      await save(null);
-      notify(null);
-      await Promise.all([
-        request.then(async (response) => {
+      logout = (async () => {
+        try {
+          const response = await request;
           if (!response.ok) throw new Error("auth_unavailable");
-          generation += 1;
-          await save(null);
-          notify(null);
-        }),
-        closing,
-      ]);
+        } finally {
+          logout = null;
+          if (started === generation) {
+            generation += 1;
+            await save(null);
+            notify(null);
+          }
+        }
+      })();
+      snapshot = { session: null, loading: true };
+      for (const listener of listeners) listener();
+      notify(null);
+      await Promise.all([logout, closing]);
     },
     startEmail: async (email: string) => {
+      await logout;
       const response = await post("email/start", { email });
       if (!response.ok) throw new Error("auth_unavailable");
     },
     verifyEmail: async (email: string, code: string) => {
+      if (logout) await logout;
       const started = ++generation;
       await retireTransport();
       if (started !== generation) return;

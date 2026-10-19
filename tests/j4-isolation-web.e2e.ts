@@ -356,6 +356,60 @@ const Coverage = Schema.Struct({
 });
 
 isolationTest(
+  "J4 receipt: a new send stays visible while the latest range is loading",
+  async (f) => {
+    const wire = await sendWire(f.page);
+    await f.seedPosts(305, "Older window fixture");
+    await f.a.client.mutation(api.readStates.markRead, { groupId: f.groupId, sequence: 307 });
+    await f.open();
+    for (let turn = 0; turn < 2; turn++) {
+      const firstId = await f.page.locator("[role=log] .msg").first().getAttribute("id");
+      await f.page.locator("[role=log]").evaluate((log) => {
+        log.scrollTop = 0;
+      });
+      await f.page.waitForFunction(
+        (id) => document.querySelector("[role=log] .msg")?.id !== id,
+        firstId,
+      );
+      await f.page.locator('[role=log][aria-busy="false"]').waitFor();
+    }
+    expect(
+      await f.page.locator("[role=log] [data-sequence]").last().getAttribute("data-sequence"),
+    ).toBe("300");
+    const body = "Acknowledged while the latest range is loading";
+    wire.set("hold-queries");
+    try {
+      await f.field.fill(body);
+      await f.field.press("Enter");
+      await expect
+        .poll(() =>
+          f.page.evaluate(
+            (prefix) => Object.keys(localStorage).filter((key) => key.startsWith(prefix)).length,
+            `q9chat:text:${f.a.id}:${f.groupId}:pending:`,
+          ),
+        )
+        .toBe(0);
+      expect(await f.page.locator("[role=log]").getAttribute("aria-busy")).toBe("true");
+      expect(await f.page.locator(".txt").filter({ hasText: body }).count()).toBe(1);
+      wire.release();
+      await f.page.locator('[role=log][aria-busy="false"]').waitFor();
+      expect(await f.page.locator(".txt").filter({ hasText: body }).count()).toBe(1);
+      const committed = await f.a.client.query(api.messages.range, {
+        groupId: f.groupId,
+        fromSequence: 301,
+        toSequence: 400,
+      });
+      expect(committed.filter((row) => row.kind === "post" && row.body === body).length).toBe(1);
+      process.stdout.write(
+        "J4 PASS: a current send stays visible through a delayed latest query and reconciles once\n",
+      );
+    } finally {
+      wire.release();
+    }
+  },
+);
+
+isolationTest(
   "J4 receipt: deleted post outside the loaded window never replays cached text",
   async (f) => {
     const wire = await sendWire(f.page);
@@ -396,8 +450,18 @@ isolationTest(
       ),
     ).toBe(0);
     await page.close();
+    await f.signOut();
+    wire.set("normal");
+    await f.signIn(f.aEmail);
+    await f.field.waitFor();
+    await f.page.locator('[role=log][aria-busy="false"]').waitFor();
+    const restoredRetry = f.page.getByRole("button", { name: "Retry", exact: true });
+    await restoredRetry.focus();
+    await f.page.keyboard.press("Enter");
+    await restoredRetry.waitFor({ state: "detached" });
+    await expect.poll(() => f.page.locator(".txt").filter({ hasText: body }).count()).toBe(0);
     process.stdout.write(
-      "J4 PASS: retry of an old deleted post outside the loaded window retires its receipt and never appends cached text\n",
+      "J4 PASS: retry of an old deleted post outside the loaded window retires its receipt in a fresh view and after same-tab account restoration; cached text never reappears\n",
     );
   },
 );

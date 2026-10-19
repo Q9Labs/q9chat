@@ -19,9 +19,10 @@ interface TextState {
   readonly pending: readonly (Pending | Delivered)[];
 }
 type Pending = typeof PendingText.Type;
-type Delivered = Omit<Pending, "status"> & { readonly status: "sent" } & FunctionReturnType<
-    typeof api.messages.send
-  >;
+type Delivered = Omit<Pending, "status"> & {
+  readonly status: "sent";
+  readonly afterSequence: number;
+} & FunctionReturnType<typeof api.messages.send>;
 function withStatus(post: Pending | Delivered, status: Pending["status"]): Pending {
   return { clientKey: post.clientKey, body: post.body, createdAt: post.createdAt, status };
 }
@@ -77,6 +78,10 @@ function textStore(key: string) {
   };
   const listeners = new Set<() => void>();
   const inFlight = new Set<string>();
+  const sentAfter = new Map<
+    string,
+    { readonly sequence: number; readonly lifetime: AbortSignal }
+  >();
   function publish() {
     if (
       delivery.pending !== snapshot.text.pending ||
@@ -95,6 +100,13 @@ function textStore(key: string) {
   }
   return {
     inFlight,
+    sentAfter,
+    sequenceBeforeSend: (clientKey: string, lifetime: AbortSignal, latestSequence: number) => {
+      const previous = sentAfter.get(clientKey);
+      const sequence = previous?.lifetime === lifetime ? previous.sequence : latestSequence;
+      sentAfter.set(clientKey, { sequence, lifetime });
+      return sequence;
+    },
     get: () => snapshot,
     getDelivery: () => delivery,
     getDraft: () => snapshot.text.draft,
@@ -126,8 +138,10 @@ function textStore(key: string) {
         }
         if (previous.draft !== text.draft) sessionStorage.setItem(`${key}:draft`, text.draft);
         for (const post of previous.pending) {
-          if (!text.pending.some((item) => item.clientKey === post.clientKey))
+          if (!text.pending.some((item) => item.clientKey === post.clientKey)) {
             localStorage.removeItem(`${key}:pending:${post.clientKey}`);
+            sentAfter.delete(post.clientKey);
+          }
         }
         snapshot = { ...snapshot, saveError: "" };
       } catch {
@@ -161,12 +175,6 @@ function replacePost(
   });
 }
 
-function receiptInWindow(post: Delivered, rows: readonly Row[], lastSequence: number) {
-  const first = rows[0]?.sequence ?? 0;
-  const last = rows.at(-1)?.sequence ?? lastSequence;
-  return post.sequence >= first && post.sequence <= last + 1;
-}
-
 /** A durable key is allocated before transport; failed/restarted sends keep that same key. */
 export function useTextOutbox(group: Group, rows: readonly Row[]) {
   const me = group.members.find((person) => person.isYou);
@@ -192,8 +200,12 @@ export function useTextOutbox(group: Group, rows: readonly Row[]) {
   function notLoaded(post: Pending | Delivered) {
     if (committed.has(post.clientKey)) return false;
     if (post.status !== "sent") return true;
-    // Only bridge the live-query delay where a row is expected, never replay cached old text.
-    return !loadedIds.has(post.messageId) && receiptInWindow(post, rows, group.lastSequence);
+    // A new receipt bridges query loading; a pre-existing receipt must not replay old text.
+    return (
+      !loadedIds.has(post.messageId) &&
+      store.sentAfter.get(post.clientKey)?.lifetime === lifetime &&
+      post.sequence > post.afterSequence
+    );
   }
   const pending = savedPending.filter(notLoaded);
   useEffect(() => {
@@ -215,6 +227,7 @@ export function useTextOutbox(group: Group, rows: readonly Row[]) {
   async function deliver(post: Pending) {
     if (abandoned() || inFlight.has(post.clientKey)) return;
     inFlight.add(post.clientKey);
+    const afterSequence = store.sequenceBeforeSend(post.clientKey, lifetime, group.lastSequence);
     const abandon = () => {
       inFlight.delete(post.clientKey);
       replacePost(store, post.clientKey, (item) =>
@@ -238,7 +251,7 @@ export function useTextOutbox(group: Group, rows: readonly Row[]) {
         attachments: [],
       });
       if (abandoned()) return;
-      const delivered: Delivered = { ...post, ...receipt, status: "sent" };
+      const delivered: Delivered = { ...post, ...receipt, afterSequence, status: "sent" };
       replacePost(store, post.clientKey, () => delivered);
     } catch (cause) {
       if (abandoned()) return;
