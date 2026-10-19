@@ -218,3 +218,20 @@ void test("a saved name still asks about the photo change before leaving", async
   assert.deepEqual(left, []);
   assert.equal(editor.snapshot().unsaved?.cancelLabel, "Stay here");
 });
+
+void test("discarding the name still asks about a pending photo change before signing out", async () => {
+  const { world, editor, left, leave } = setup();
+  editor.change("Nadia Jo");
+  world.connected = false;
+  world.photoBusy = true;
+  await editor.exit(leave("sign out"));
+  assert.equal(editor.snapshot().unsaved?.title, "Your name isn't saved");
+
+  editor.discard();
+  assert.deepEqual(left, []);
+  assert.equal(editor.snapshot().unsaved?.title, "Your photo isn't saved");
+  assert.equal(editor.snapshot().draft, null);
+
+  editor.discard();
+  assert.deepEqual(left, ["sign out"]);
+});

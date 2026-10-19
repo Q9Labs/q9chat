@@ -2,6 +2,8 @@ import { MAX_NAME, saveThenCheck } from "./nameRules.ts";
 
 /** What the sheet over Account says when the name cannot be saved before leaving. */
 type Unsaved = {
+  /** Which question this is: Discard on a name question goes on to the photo question, if one is due. */
+  kind: keyof typeof ASK;
   title: string;
   text: string;
   confirmLabel: string;
@@ -113,7 +115,7 @@ export function createNameEditor(initial: NameEditorInputs) {
     for (const listener of listeners) listener();
   };
   const ask = (kind: keyof typeof ASK, leave: () => void) =>
-    set({ unsaved: { ...ASK[kind], leave } });
+    set({ unsaved: { ...ASK[kind], kind, leave } });
 
   /** Saves `name`, then leaves if the field still holds it; a rejected save asks instead. */
   async function saveThenLeave(name: string, leave: () => void) {
@@ -163,9 +165,12 @@ export function createNameEditor(initial: NameEditorInputs) {
       set({ unsaved: null });
     },
     discard: () => {
-      const leave = state.unsaved?.leave;
+      const unsaved = state.unsaved;
       clear();
-      leave?.();
+      if (!unsaved) return;
+      // Dropping the name must not drop a photo change that is still pending: ask about that next.
+      if (unsaved.kind === "photo") unsaved.leave();
+      else void exit(unsaved.leave);
     },
     subscribe: (listener: () => void) => {
       listeners.add(listener);
