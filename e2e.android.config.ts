@@ -7,7 +7,12 @@ import type { E2EConfig } from "e2e";
 const serial = process.env["J1_ANDROID_SERIAL"] ?? "emulator-5590";
 
 export default {
-  tests: ["tests/j1-android.e2e.ts", "tests/j2-android.e2e.ts", "tests/j3-android.e2e.ts"],
+  tests: [
+    "tests/j1-android.e2e.ts",
+    "tests/j2-android.e2e.ts",
+    "tests/j3-android.e2e.ts",
+    "tests/j4-android.e2e.ts",
+  ],
   assertionTimeout: 20_000,
   // One simulator or emulator serves the whole run, so two tests at once would restart each other's app.
   workers: 1,

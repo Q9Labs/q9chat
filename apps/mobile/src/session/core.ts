@@ -45,6 +45,7 @@ export type SessionState =
 /** What the session needs from the phone: the keychain, the system auth window and secure randomness. */
 export type SessionEdges = {
   store: Store;
+  clearLocalText?: () => void;
   /** Opens the sign-in page; resolves with the returning link, or `closed` when the person left. */
   openAuth: (
     url: string,
@@ -431,6 +432,7 @@ export function createSessionClient(edges: SessionEdges) {
       try {
         const active = await store.get("refreshToken").catch(() => null);
         // The invite goes first and a failure to delete it fails the sign-out too, so a later account never meets it.
+        edges.clearLocalText?.();
         await store.delete("pendingInvite");
         await store.delete("refreshToken");
         await clearAttempts().catch(noop);

@@ -30,8 +30,10 @@ import {
   followAfterScroll,
   messageBounds,
 } from "./historyRows";
+import { PendingPosts, TextComposer } from "./PhoneText";
 import { useHistoryPages } from "./useHistoryPages";
 import { useReadMessages } from "./useReadMessages";
+import { useTextOutbox } from "./useTextOutbox";
 import { useToday } from "./useToday";
 
 type Group = Extract<NonNullable<FunctionReturnType<typeof api.groups.get>>, { status: "member" }>;
@@ -93,6 +95,7 @@ export function LiveHistory({ group }: { group: Group }) {
     read: group.lastReadSequence,
   }));
   const { window, setWindow, rows, loading, failed } = useHistoryPages(group, opening.unread);
+  const text = useTextOutbox(group, rows);
   const latest = pageOf(group.lastSequence);
   const scroll = useRef<ScrollViewInstance>(null);
   const boxes = useRowBoxes(rows);
@@ -215,6 +218,7 @@ export function LiveHistory({ group }: { group: Group }) {
         <ScrollView
           ref={scroll}
           accessibilityLabel="Messages"
+          keyboardShouldPersistTaps="handled"
           scrollEventThrottle={100}
           onLayout={(event) => {
             viewport.current.metrics.height = event.nativeEvent.layout.height;
@@ -241,10 +245,12 @@ export function LiveHistory({ group }: { group: Group }) {
               measureVisible();
             }}
           />
+          <PendingPosts text={text} actions={READ_ONLY} />
         </ScrollView>
         <JumpControl shown={away || window.last < latest} onPress={toLatest} />
       </View>
       <IncomingTyping groupId={group.groupId} />
+      <TextComposer text={text} group={group} onSent={toLatest} />
     </View>
   );
 }

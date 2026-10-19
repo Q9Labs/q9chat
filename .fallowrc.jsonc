@@ -8,6 +8,7 @@
     "tests/*.e2e.ts",
     // A classic worker loaded by navigator.serviceWorker.register, not an import.
     "apps/web/public/notifications.js",
+    "tests/support/phone-network.ts",
   ],
   "ignorePatterns": [
     "**/dist/**",
