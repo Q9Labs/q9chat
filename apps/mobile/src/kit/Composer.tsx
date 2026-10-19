@@ -23,6 +23,7 @@ type Props = {
   mode: ComposerMode;
   draft: string;
   onDraftChange: (text: string) => void;
+  onBlur?: () => void;
   groupTitle: string;
   onSend: () => void;
   onAttach: () => void;
@@ -262,7 +263,10 @@ function ComposeRow({ props, editing }: { props: Props; editing: boolean }) {
         value={draft}
         onChangeText={props.onDraftChange}
         onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
+        onBlur={() => {
+          setFocused(false);
+          props.onBlur?.();
+        }}
         onContentSizeChange={(event) =>
           setInputHeight(Math.min(140, Math.max(36, event.nativeEvent.contentSize.height)))
         }

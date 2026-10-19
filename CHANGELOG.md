@@ -18,7 +18,6 @@
 - **Find old messages on the web**: Search your groups as you type, then open a result at its highlighted message.
 - **Manage group membership and mute on web**: Mute or unmute a group, leave with confirmation, remove a member, and clear a removal notice.
 - **Production phone build settings**: Store builds connect to the same Q9 Chat service as the web app. Development builds keep their local settings.
-
 - **Desktop notifications for mentions and replies**: Turn on desktop notifications after opening a group, choose which groups can interrupt, and open a notification at its message.
 - **Send text from your phone**: Send text on iOS and Android, retry failed messages after a restart, keep a draft in each group and see who is typing.
 
@@ -27,3 +26,4 @@
 - **Local development**: Keep generated build output and local server logs out of git.
 - **Harden sign-in redirects and session lifecycle**: Keep OAuth callbacks on-site, prevent one-time-code replays and late sign-in after sign-out, synchronize open tabs, and budget email authentication requests.
 - **Keep sign-in recovery and profile setup consistent**: Keep avatar colours consistent, recover failed sign-out, reconcile setup across tabs, and explain unsupported or oversized profile photos.
+- **Clear phone drafts when signing out**: Signing out forgets local drafts and unsent text. Losing group access clears that group’s local text, and leaving the composer stops typing.

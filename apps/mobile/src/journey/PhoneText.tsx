@@ -74,6 +74,7 @@ export function TextComposer({
           text.change(draft);
           typing.change(draft);
         }}
+        onBlur={typing.clear}
         onSend={() => {
           if (text.submit()) {
             typing.clear();
