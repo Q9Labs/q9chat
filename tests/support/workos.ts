@@ -4,6 +4,7 @@ import { Schema } from "effect";
 
 const key = process.env["WORKOS_API_KEY"];
 if (!key || !key.startsWith("sk_test_")) throw new Error("A staging WorkOS key is required");
+const authOrigin = process.env["J1_AUTH_ORIGIN"] ?? "http://localhost:3000";
 const headers = { Authorization: `Bearer ${key}` };
 const events = Schema.Struct({
   data: Schema.Array(
@@ -45,11 +46,11 @@ export async function magicCode(email: string) {
 }
 
 async function authPost(path: string, body: object) {
-  const response = await fetch(`http://localhost:3000/api/auth/${path}`, {
+  const response = await fetch(`${authOrigin}/api/auth/${path}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Origin: "http://localhost:3000",
+      Origin: authOrigin,
       Cookie: [...cookies].map(([name, value]) => `${name}=${value}`).join("; "),
     },
     body: JSON.stringify(body),
