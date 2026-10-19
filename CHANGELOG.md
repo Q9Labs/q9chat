@@ -18,8 +18,8 @@
 - **Find old messages on the web**: Search your groups as you type, then open a result at its highlighted message.
 - **Manage group membership and mute on web**: Mute or unmute a group, leave with confirmation, remove a member, and clear a removal notice.
 - **Production phone build settings**: Store builds connect to the same Q9 Chat service as the web app. Development builds keep their local settings.
-
 - **Desktop notifications for mentions and replies**: Turn on desktop notifications after opening a group, choose which groups can interrupt, and open a notification at its message.
+- **Search and manage groups on phone**: Search your groups and open a matching message. Mute a group, leave it, or remove a member with confirmation.
 
 ### Fixed
 

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import type { test } from "@e2e-dev/mobile";
+import { expect, type Locator, type Screen } from "e2e";
 
 const serial = process.env["J1_ANDROID_SERIAL"] ?? "emulator-5590";
 const metro = process.env["J1_PHONE_METRO"] ?? "http://localhost:8097";
@@ -54,4 +55,19 @@ export function openDevClient(device: Device) {
 export function screenDensity() {
   const dpi = Number(/(\d+)\s*$/u.exec(adbShell("wm density").trim())?.[1]);
   return dpi / 160;
+}
+
+/** Use the same native entry and input adapter for each Android journey. */
+export async function runAndroidJourney(
+  { app, device, screen }: Parameters<Parameters<typeof test>[2]>[0],
+  journey: (input: {
+    screen: Screen;
+    enter: (field: Locator, value: string) => Promise<void>;
+    shot: (name: string) => void;
+  }) => Promise<void>,
+) {
+  await app.clearState();
+  await openDevClient(device);
+  await expect(screen.getByLabel("Email")).toBeVisible({ timeout: 120_000 });
+  await journey({ screen, enter: (field, value) => field.fill(value), shot });
 }

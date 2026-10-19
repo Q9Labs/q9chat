@@ -51,7 +51,7 @@ const NO_ACTIONS = {
 export function GroupScreen(props: GroupScreenProps) {
   return (
     <Screen safeBottom>
-      <ChatHeader {...props} hideSearch />
+      <ChatHeader {...props} />
       <GroupBody {...props} />
       {props.leavePrompt ? (
         <WriteExitSheet

@@ -2,6 +2,7 @@ import { api } from "@q9chat/convex";
 import { ConvexClient, ConvexHttpClient } from "convex/browser";
 import { expect, type Locator, type Screen } from "e2e";
 
+import { enterPhoneEmailCode } from "./phone-fixtures.js";
 import { expectButtonHeights } from "./targets.js";
 import {
   deletePhoneProfile,
@@ -54,10 +55,7 @@ async function makePerson(
 
 async function signInOnPhone(p: J2Platform, email: string, displayName: string) {
   const { screen } = p;
-  await p.enter(screen.getByLabel("Email"), email);
-  await screen.getByRole("button", "Email me a code").tap();
-  await expect(screen.getByText("Check your email")).toBeVisible();
-  await p.enterCode(await magicCode(email));
+  await enterPhoneEmailCode(p, email);
   await expect(screen.getByText("Set up your profile")).toBeVisible();
   await p.enter(screen.getByRole("textbox", "Your name"), displayName);
   await screen.getByRole("button", "Continue", { exact: true }).tap();
@@ -317,9 +315,8 @@ export async function runJ2(p: J2Platform) {
   } finally {
     await live.close();
     // A run can outlast an access token, so each person signs in again to delete the account.
-    for (const person of [cast.bilal, cast.carla, cast.elena])
-      await deletePhoneProfile(await signInPhone(person.email));
-    for (const email of phoneUsers) await deletePhoneProfile(await signInPhone(email));
+    const emails = [cast.bilal.email, cast.carla.email, cast.elena.email, ...phoneUsers];
+    await Promise.all(emails.map(async (email) => deletePhoneProfile(await signInPhone(email))));
     await Promise.all([...cast.allEmails].map((email) => removeTestUser(email)));
   }
 }

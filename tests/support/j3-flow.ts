@@ -1,16 +1,11 @@
 import { randomUUID } from "node:crypto";
 
 import { api, type Id } from "@q9chat/convex";
-import { ConvexHttpClient } from "convex/browser";
+import type { ConvexHttpClient } from "convex/browser";
 import { expect, type Locator, type Screen } from "e2e";
 
-import {
-  deletePhoneProfile,
-  magicCode,
-  removeTestUser,
-  signInPhone,
-  type PhoneSession,
-} from "./workos.js";
+import { createPhoneAccount } from "./phone-fixtures.js";
+import { deletePhoneProfile, magicCode, removeTestUser, type PhoneSession } from "./workos.js";
 
 /** One real member reads another's posts; both native platforms run this same journey. */
 export async function runJ3(p: {
@@ -25,8 +20,8 @@ export async function runJ3(p: {
     const readerEmail = emails[0];
     const peerEmail = emails[1];
     if (!readerEmail || !peerEmail) throw new Error("Missing test addresses");
-    const reader = await account(readerEmail, "Nadia Reader", sessions);
-    const peer = await account(peerEmail, "Bilal Writer", sessions);
+    const reader = await createPhoneAccount(readerEmail, "Nadia Reader", sessions);
+    const peer = await createPhoneAccount(peerEmail, "Bilal Writer", sessions);
     const title = `J3 Reading ${stamp}`;
     const groupId = await peer.client.mutation(api.groups.create, {
       name: title,
@@ -94,31 +89,25 @@ export async function runJ3(p: {
   }
 }
 
-async function account(email: string, name: string, sessions: PhoneSession[]) {
-  const session = await signInPhone(email);
-  sessions.push(session);
-  const client = new ConvexHttpClient("https://quixotic-crab-23.convex.cloud");
-  client.setAuth(session.accessToken);
-  await client.action(api.profiles.setUp, { displayName: name });
-  const me = await client.query(api.profiles.me, {});
-  if (me?.status !== "ready") throw new Error("Missing seeded profile");
-  return { client, id: me.profile.id };
-}
-
 async function seedHistory(
   send: (body: string) => Promise<unknown>,
   client: ConvexHttpClient,
   groupId: Id<"groups">,
 ) {
   // Put the boundary near a page edge, below enough old posts to require a real opening scroll.
+  // The unread boundary depends on these posts arriving in sequence.
+  // eslint-disable-next-line no-await-in-loop
   for (let i = 0; i < 96; i++) await send(`Earlier post ${i}`);
   await client.mutation(api.readStates.markRead, { groupId, sequence: 98 });
   // More than one page of unread posts proves opening uses the first unread, not the tail.
-  for (let i = 0; i < 105; i++)
+  // The first post must remain the first unread message.
+  for (let i = 0; i < 105; i++) {
+    // eslint-disable-next-line no-await-in-loop
     await send(i === 0 ? "First unread phone post" : `Reading backlog ${i}`);
+  }
 }
 
 async function cleanAccounts(sessions: PhoneSession[], emails: string[]) {
-  for (const session of sessions.toReversed()) await deletePhoneProfile(session);
-  for (const email of emails) await removeTestUser(email);
+  await Promise.all(sessions.map(deletePhoneProfile));
+  await Promise.all(emails.map(removeTestUser));
 }

@@ -14,9 +14,7 @@ import { useOffline } from "./useOffline";
 import type { ReadyProfile } from "./useStage";
 import { useToday } from "./useToday";
 
-const COMING_NEXT = "This is coming in the next journey.";
-
-/** The live groups list. Search belongs to a later journey. */
+/** The live groups list. */
 export function GroupsJourney({ profile }: { profile: ReadyProfile }) {
   const router = useRouter();
   const groups = useQuery(api.groups.list, {});
@@ -43,7 +41,7 @@ export function GroupsJourney({ profile }: { profile: ReadyProfile }) {
       onOpenGroup={(groupId) => router.push({ pathname: "/g/[groupId]", params: { groupId } })}
       onNewGroup={() => router.push("/new-group")}
       onAccount={() => router.push("/account")}
-      onSearch={() => showToast(COMING_NEXT)}
+      onSearch={() => router.push("/search")}
       onNotNow={noop}
       onTurnOn={noop}
     />
