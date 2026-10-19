@@ -46,13 +46,7 @@ export function useVoiceRecording(
   );
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (next) => {
-      if (
-        (next !== "active" && current.current.phase === "recording") ||
-        (next === "background" && current.current.phase === "starting")
-      ) {
-        void finish(false);
-        notice("Recording cancelled when you left the app.");
-      }
+      if (next !== "active") void cancel(true);
     });
     return () => subscription.remove();
   });
@@ -83,6 +77,10 @@ export function useVoiceRecording(
     await recorder.prepareToRecordAsync();
     prepared.current = true;
     if (current.current.attempt !== attempt) return;
+    if (AppState.currentState !== "active") {
+      step({ type: "cancel" });
+      return;
+    }
     setLevels([]);
     recorder.record({ forDuration: 600 });
     step({ type: "ready", attempt });
@@ -105,11 +103,13 @@ export function useVoiceRecording(
       busy.current = false;
     }
   }
-  async function cancel() {
-    const before = current.current.phase;
-    if (before === "finishing") return;
-    step({ type: "cancel" });
-    if (busy.current || before !== "recording") return;
+  async function cancel(interrupted = false) {
+    const before = current.current;
+    if (before.phase === "finishing") return;
+    const next = step({ type: interrupted ? "interrupt" : "cancel" });
+    if (next === before) return;
+    if (interrupted) notice("Recording cancelled when you left the app.");
+    if (busy.current || before.phase !== "recording") return;
     busy.current = true;
     await release();
     busy.current = false;

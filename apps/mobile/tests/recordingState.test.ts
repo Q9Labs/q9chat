@@ -43,3 +43,23 @@ void test("duplicate starts and finishing before readiness do not change state",
   );
   assert.deepEqual(initialRecording, { phase: "closed", attempt: 0 });
 });
+
+void test("the permission dialog does not cancel preparation", () => {
+  const starting = recordingStep(initialRecording, { type: "open" });
+  const interrupted = recordingStep(starting, { type: "interrupt" });
+  assert.deepEqual(interrupted, starting);
+  assert.equal(
+    recordingStep(interrupted, { type: "ready", attempt: starting.attempt }).phase,
+    "recording",
+  );
+});
+void test("leaving the app cancels capture but not a preparation or stop in progress", () => {
+  for (const phase of ["closed", "starting", "recording", "finishing", "failed"] as const) {
+    const before = { phase, attempt: 3 };
+    const after = recordingStep(before, { type: "interrupt" });
+    if (phase === "recording") {
+      assert.deepEqual(after, { phase: "closed", attempt: 4 });
+      assert.deepEqual(recordingStep(after, { type: "ready", attempt: 3 }), after);
+    } else assert.deepEqual(after, before);
+  }
+});
