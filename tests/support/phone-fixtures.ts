@@ -2,9 +2,9 @@ import { randomUUID } from "node:crypto";
 
 import { api, type Id } from "@q9chat/convex";
 import { ConvexHttpClient } from "convex/browser";
-import { expect, type Screen } from "e2e";
+import { expect, type Locator, type Screen } from "e2e";
 
-import { signInPhone, type PhoneSession } from "./workos.js";
+import { magicCode, signInPhone, type PhoneSession } from "./workos.js";
 
 export async function createPhoneAccount(email: string, name: string, sessions: PhoneSession[]) {
   const session = await signInPhone(email);
@@ -15,6 +15,20 @@ export async function createPhoneAccount(email: string, name: string, sessions: 
   const me = await client.query(api.profiles.me, {});
   if (me?.status !== "ready") throw new Error("Missing seeded profile");
   return { client, id: me.profile.id };
+}
+
+export async function enterPhoneEmailCode(
+  p: {
+    screen: Screen;
+    enter: (field: Locator, text: string) => Promise<void>;
+    enterCode: (code: string) => Promise<void>;
+  },
+  email: string,
+) {
+  await p.enter(p.screen.getByLabel("Email"), email);
+  await p.screen.getByRole("button", "Email me a code").tap();
+  await expect(p.screen.getByText("Check your email")).toBeVisible();
+  await p.enterCode(await magicCode(email));
 }
 
 export function createPhoneGroup(client: ConvexHttpClient, name: string, memberId: Id<"profiles">) {

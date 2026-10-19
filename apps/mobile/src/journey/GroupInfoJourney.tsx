@@ -15,9 +15,8 @@ import { Loading } from "./Loading";
 import { takeNotice } from "./notice";
 import { createWriteRun, moveOnSuccess, OFFLINE_NOTICE } from "./pendingWrite";
 import { useCopied } from "./useCopied";
+import { useGroupControls } from "./useGroupControls";
 import { useOffline } from "./useOffline";
-
-const COMING_NEXT = "This is coming in the next journey.";
 
 type Detail = Extract<NonNullable<FunctionReturnType<typeof api.groups.get>>, { status: "member" }>;
 
@@ -29,6 +28,12 @@ function GroupInfoView({ groupId, detail }: { groupId: Id<"groups">; detail: Det
   const [sheet, setSheet] = useState<InfoSheet | null>(null);
   const [toast, showToast] = useToast();
   const { copied, copy } = useCopied();
+  const controls = useGroupControls({
+    groupId,
+    showToast,
+    closeSheet: () => setSheet(null),
+    onLeave: () => router.dismissTo("/"),
+  });
   // Add people leaves a line behind ("Added Elena") for this screen, which stays mounted under it.
   useFocusEffect(
     useCallback(() => {
@@ -38,11 +43,16 @@ function GroupInfoView({ groupId, detail }: { groupId: Id<"groups">; detail: Det
   );
 
   // A pair that opens after this screen was left (Back, or another screen on top) must not pull the person into it.
-  useFocusEffect(useCallback(() => () => pairs.supersede(), [pairs]));
+  useFocusEffect(
+    useCallback(
+      () => () => {
+        pairs.supersede();
+      },
+      [pairs],
+    ),
+  );
 
   const link = detail.inviteToken ? `${config.authOrigin}/join/${detail.inviteToken}` : null;
-  const soon = () => showToast(COMING_NEXT);
-
   async function copyLink() {
     if (link)
       showToast((await copy(link)) ? "Invite link copied" : "Couldn't copy the link. Try again.");
@@ -74,29 +84,30 @@ function GroupInfoView({ groupId, detail }: { groupId: Id<"groups">; detail: Det
       }}
       sheet={sheet}
       copied={copied}
-      toast={toast}
+      toast={controls.pending ? "Saving…" : toast}
+      busy={controls.pending}
       onBack={() => leaveScreen(router)}
       onAddPeople={() => router.push({ pathname: "/g/[groupId]/add", params: { groupId } })}
       onCopyLink={() => void copyLink()}
-      onSearch={soon}
-      onOpenNotify={soon}
-      onChooseNotify={soon}
-      onToggleMute={soon}
+      onSearch={() => router.push({ pathname: "/search", params: { groupId } })}
+      onOpenNotify={() => setSheet({ type: "notify" })}
+      onChooseNotify={controls.chooseNotify}
+      onToggleMute={(muted) => controls.chooseNotify(muted ? "muted" : "mentions")}
       onOpenMember={(personId) => setSheet({ type: "member", personId })}
       onMessageMember={(personId) => void messageMember(personId)}
-      onAskRemove={() => {
-        setSheet(null);
-        soon();
+      onAskRemove={(personId) => setSheet({ type: "removeMember", personId })}
+      onConfirmRemove={(personId) => {
+        const person = detail.members.find((member) => member.id === personId && !member.isYou);
+        if (person) controls.removeMember(person);
       }}
-      onConfirmRemove={soon}
-      onAskLeave={soon}
-      onConfirmLeave={soon}
+      onAskLeave={() => setSheet({ type: "leave" })}
+      onConfirmLeave={controls.leave}
       onCloseSheet={() => setSheet(null)}
     />
   );
 }
 
-/** Group info over the live group. Notifications, search, removing and leaving come with later journeys. */
+/** Live membership and notification controls over the existing Group info sheets. */
 export function GroupInfoJourney({ groupId }: { groupId: Id<"groups"> }) {
   const router = useRouter();
   const detail = useQuery(api.groups.get, { groupId });
@@ -104,7 +115,7 @@ export function GroupInfoJourney({ groupId }: { groupId: Id<"groups"> }) {
   // The pane closes by itself when the group stops being yours.
   const gone = membershipLost(detail);
   useEffect(() => {
-    if (gone) leaveScreen(router);
+    if (gone) router.dismissTo("/");
   }, [gone, router]);
   // Offline with nothing cached the lookup cannot answer, so say so, with a way back, as the group screen does.
   if (detail === undefined && offline) return <GroupUnavailable denied={false} />;

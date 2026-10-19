@@ -30,6 +30,7 @@ import {
   followAfterScroll,
   messageBounds,
 } from "./historyRows";
+import { highlightHistoryItem, historyOpening } from "./historyTarget";
 import { PendingPosts, TextComposer } from "./PhoneText";
 import { useHistoryPages } from "./useHistoryPages";
 import { useReadMessages } from "./useReadMessages";
@@ -88,12 +89,9 @@ type ViewportState = {
 };
 
 /** A bounded live window. Opening snapshots the private unread boundary, not the badge count. */
-export function LiveHistory({ group }: { group: Group }) {
+export function LiveHistory({ group, target = null }: { group: Group; target?: number | null }) {
   const today = useToday();
-  const [opening] = useState(() => ({
-    unread: group.firstUnreadSequence,
-    read: group.lastReadSequence,
-  }));
+  const [opening] = useState(() => historyOpening(group, target));
   const { window, setWindow, rows, loading, failed } = useHistoryPages(group, opening.unread);
   const text = useTextOutbox(group, rows);
   const latest = pageOf(group.lastSequence);
@@ -236,7 +234,8 @@ export function LiveHistory({ group }: { group: Group }) {
             group={group}
             rows={rows}
             paging={{ window, latest, loading, navigate }}
-            unread={opening.unread}
+            unread={opening.boundary}
+            target={opening.target}
             today={today}
             actions={{ ...READ_ONLY, tappedId, onToggleTime: toggleTime }}
             onRowLayout={onRowLayout}
@@ -265,6 +264,7 @@ type HistoryPageProps = {
     navigate: (direction: "older" | "newer") => void;
   };
   unread: number | null;
+  target: number | null;
   today: ReturnType<typeof useToday>;
   actions: GroupActions;
   onRowLayout: (id: string, box: LayoutRectangle) => void;
@@ -311,6 +311,14 @@ function HistoryPost({
   page: HistoryPageProps;
 }) {
   const { rows, group, today, unread, actions, onRowLayout, onContentLayout } = page;
+  const item = highlightHistoryItem(
+    historyItem(row, config.siteUrl, {
+      members: group.members,
+      previous: rows[index - 1],
+      unread,
+    }),
+    row.sequence === page.target,
+  );
   const root = useRef<ViewInstance>(null);
   const measured = useRef<{ row: LayoutRectangle | null; content: ViewInstance | null }>({
     row: null,
@@ -345,11 +353,7 @@ function HistoryPost({
       ) : null}
       {row.sequence === unread ? <UnreadDivider /> : null}
       <TimelineRow
-        item={historyItem(row, config.siteUrl, {
-          members: group.members,
-          previous: rows[index - 1],
-          unread,
-        })}
+        item={item}
         first={index === 0}
         actions={{ ...actions, onContentLayout: (_, node) => measure(node) }}
       />

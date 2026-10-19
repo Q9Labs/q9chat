@@ -53,6 +53,7 @@ function usePillLook(
 /** Pill button: 36px by default, 44 `big`, 32 `small`; full width when `wide`. */
 export function PillButton({
   label,
+  testID,
   onPress,
   variant = "default",
   icon,
@@ -63,6 +64,7 @@ export function PillButton({
   style,
 }: {
   label: string;
+  testID?: string | undefined;
   onPress?: () => void;
   variant?: Variant;
   icon?: IconName;
@@ -87,6 +89,7 @@ export function PillButton({
     </>
   );
   const press = {
+    testID,
     accessibilityRole: "button",
     accessibilityLabel: label,
     accessibilityState: { disabled: !!disabled },

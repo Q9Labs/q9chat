@@ -56,7 +56,7 @@ export function GroupScreen({ avatar, ...props }: GroupScreenProps) {
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <ChatHeader {...props} avatar={avatar} hideSearch />
+        <ChatHeader {...props} avatar={avatar} />
         <GroupBody {...props} />
       </KeyboardAvoidingView>
       {props.leavePrompt ? (

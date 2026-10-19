@@ -51,6 +51,7 @@ export type InfoScreenProps = {
     | { status: "removed"; title: string; avatar: AvatarData; memberCount: number };
   sheet: InfoSheet | null;
   copied: boolean;
+  busy?: boolean;
   toast: string | null;
   onBack: () => void;
   onAddPeople: () => void;
@@ -366,6 +367,7 @@ function RemoveConfirm({
       title={`Remove ${name}?`}
       text={`${name} loses access to ${info.title} and its history. Everyone in the group sees that you removed ${name}.`}
       confirmLabel={`Remove ${name}`}
+      confirmDisabled={props.busy}
       onConfirm={() => props.onConfirmRemove(personId)}
       onCancel={props.onCloseSheet}
     />
@@ -400,6 +402,8 @@ function InfoSheets({
         title={`Leave ${info.title}?`}
         text="You lose access to the group and its history. A member can add you back."
         confirmLabel="Leave group"
+        confirmTestID="confirm-leave-group"
+        confirmDisabled={props.busy}
         onConfirm={props.onConfirmLeave}
         onCancel={props.onCloseSheet}
       />
@@ -417,14 +421,16 @@ export function InfoScreen(props: InfoScreenProps) {
   return (
     <Screen safeBottom>
       <PageNav title="Group info" start={{ back: true, onPress: props.onBack }} />
-      {info.status === "removed" ? (
-        <ScrollView>
-          <Hero avatar={info.avatar} title={info.title} line={`${info.memberCount} members`} />
-          <Note style={{ textAlign: "center" }}>You were removed from this group.</Note>
-        </ScrollView>
-      ) : (
-        <MemberBody info={info} props={props} />
-      )}
+      <View style={{ flex: 1 }} pointerEvents={props.busy ? "none" : "auto"}>
+        {info.status === "removed" ? (
+          <ScrollView>
+            <Hero avatar={info.avatar} title={info.title} line={`${info.memberCount} members`} />
+            <Note style={{ textAlign: "center" }}>You were removed from this group.</Note>
+          </ScrollView>
+        ) : (
+          <MemberBody info={info} props={props} />
+        )}
+      </View>
       {sheet && info.status === "member" ? (
         <InfoSheets info={info} sheet={sheet} props={props} />
       ) : null}

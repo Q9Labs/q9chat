@@ -15,7 +15,7 @@ import { View } from "react-native";
 import { Toast } from "../kit/Overlays";
 import { useToast } from "../kit/useToast";
 import { sessionClient } from "../session/client";
-import { clearGroupText, rememberTextProfile } from "./textStore";
+import { rememberTextProfile, retainGroupText } from "./textStore";
 
 type SignOutApi = {
   complete: boolean;
@@ -44,9 +44,12 @@ export function SignOutProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (me?.status !== "ready") return;
     rememberTextProfile(me.profile.id);
-    for (const group of groups ?? []) {
-      if (group.status === "removed") clearGroupText(me.profile.id, group.groupId);
-    }
+    // An absent membership also means a leave on another device or before this restart.
+    if (groups !== undefined)
+      retainGroupText(
+        me.profile.id,
+        groups.filter((group) => group.status === "member").map((group) => group.groupId),
+      );
   }, [me, groups]);
   const [complete, setComplete] = useState(false);
   const [signingOut, setSigningOut] = useState(false);

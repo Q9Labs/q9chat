@@ -16,6 +16,7 @@ export type SearchScreenProps = {
   scopeTitle: string | null;
   onClearScope: () => void;
   hits: readonly SearchHit[];
+  status?: string;
   onOpenHit: (hit: SearchHit) => void;
   onCancel: () => void;
 };
@@ -129,6 +130,7 @@ export function SearchScreen(props: SearchScreenProps) {
           <TextInput
             accessibilityLabel="Search messages"
             autoFocus={false}
+            maxLength={100}
             value={props.query}
             onChangeText={props.onQueryChange}
             placeholder="Search messages"
@@ -165,7 +167,15 @@ export function SearchScreen(props: SearchScreenProps) {
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingHorizontal: 6, paddingBottom: 6 }}
       >
-        {!query ? (
+        {props.status ? (
+          <T
+            color="mu"
+            accessibilityLiveRegion="polite"
+            style={{ padding: 20, textAlign: "center" }}
+          >
+            {props.status}
+          </T>
+        ) : !query ? (
           <T color="mu" style={{ paddingVertical: 36, paddingHorizontal: 20, textAlign: "center" }}>
             {props.scopeTitle
               ? `Search messages in ${props.scopeTitle}.`

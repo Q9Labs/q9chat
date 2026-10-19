@@ -1,27 +1,9 @@
-import { useRouter } from "expo-router";
-import { useState } from "react";
+import { type Id } from "@q9chat/convex";
+import { useLocalSearchParams } from "expo-router";
 
-import { defaultWorld, searchOf } from "../src/fixtures/build";
-import { noop } from "../src/kit/noop";
-import { SearchScreen } from "../src/screens/SearchScreen";
-
-// Fixture messages stand in until the wiring lane maps `messages.search` onto the same props.
-const world = defaultWorld();
+import { SearchJourney } from "../src/journey/SearchJourney";
 
 export default function SearchRoute() {
-  const router = useRouter();
-  const [query, setQuery] = useState("");
-  return (
-    <SearchScreen
-      query={query}
-      onQueryChange={setQuery}
-      scopeTitle={null}
-      onClearScope={noop}
-      hits={searchOf(query, world, null)}
-      onOpenHit={(hit) =>
-        router.replace({ pathname: "/g/[groupId]", params: { groupId: hit.groupId } })
-      }
-      onCancel={() => router.back()}
-    />
-  );
+  const { groupId } = useLocalSearchParams<{ groupId?: Id<"groups"> }>();
+  return <SearchJourney groupId={groupId} />;
 }

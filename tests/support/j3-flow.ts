@@ -88,14 +88,19 @@ async function seedHistory(
   groupId: Id<"groups">,
 ) {
   // Put the boundary near a page edge, below enough old posts to require a real opening scroll.
+  // The unread boundary depends on these posts arriving in sequence.
+  // eslint-disable-next-line no-await-in-loop
   for (let i = 0; i < 96; i++) await send(`Earlier post ${i}`);
   await client.mutation(api.readStates.markRead, { groupId, sequence: 98 });
   // More than one page of unread posts proves opening uses the first unread, not the tail.
-  for (let i = 0; i < 105; i++)
+  // The first post must remain the first unread message.
+  for (let i = 0; i < 105; i++) {
+    // eslint-disable-next-line no-await-in-loop
     await send(i === 0 ? "First unread phone post" : `Reading backlog ${i}`);
+  }
 }
 
 async function cleanAccounts(sessions: PhoneSession[], emails: string[]) {
-  for (const session of sessions.toReversed()) await deletePhoneProfile(session);
-  for (const email of emails) await removeTestUser(email);
+  await Promise.all(sessions.map(deletePhoneProfile));
+  await Promise.all(emails.map(removeTestUser));
 }

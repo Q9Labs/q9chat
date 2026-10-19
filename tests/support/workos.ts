@@ -113,9 +113,12 @@ export async function signInPhone(email: string): Promise<PhoneSession> {
 }
 
 export async function deletePhoneProfile(session: PhoneSession) {
+  const fresh = Schema.decodeUnknownSync(phoneSession)(
+    await (await authPost("token", { refreshToken: session.refreshToken })).json(),
+  );
   const client = new ConvexHttpClient("https://quixotic-crab-23.convex.cloud");
-  client.setAuth(session.accessToken);
+  client.setAuth(fresh.accessToken);
   if ((await client.query(api.profiles.me, {}))?.status === "ready")
     await client.mutation(api.profiles.deleteAccount, {});
-  await authPost("sign-out", { refreshToken: session.refreshToken });
+  await authPost("sign-out", { refreshToken: fresh.refreshToken });
 }

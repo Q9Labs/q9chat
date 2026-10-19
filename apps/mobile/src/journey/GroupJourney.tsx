@@ -16,11 +16,17 @@ import { Loading } from "./Loading";
 import { useGuardedWrite } from "./useGuardedWrite";
 import { useOffline } from "./useOffline";
 
-const COMING_NEXT = "This is coming in the next journey.";
-
 type Detail = NonNullable<FunctionReturnType<typeof api.groups.get>>;
 
-function GroupView({ groupId, detail }: { groupId: Id<"groups">; detail: Detail }) {
+function GroupView({
+  groupId,
+  detail,
+  target,
+}: {
+  groupId: Id<"groups">;
+  detail: Detail;
+  target: number | null;
+}) {
   const router = useRouter();
   const [toast, showToast] = useToast();
   const offline = useOffline();
@@ -44,7 +50,7 @@ function GroupView({ groupId, detail }: { groupId: Id<"groups">; detail: Detail 
     toast,
     onBack: () => leaveScreen(router),
     onOpenInfo: () => router.push({ pathname: "/g/[groupId]/info", params: { groupId } }),
-    onSearch: () => showToast(COMING_NEXT),
+    onSearch: () => router.push({ pathname: "/search", params: { groupId } }),
     // The removed group stays in Groups until it is taken off the list, then Groups is where this goes back to.
     onForget: () =>
       guarded.submit(
@@ -74,16 +80,22 @@ function GroupView({ groupId, detail }: { groupId: Id<"groups">; detail: Detail 
       muted={detail.notify === "muted"}
       removed={null}
       items={[]}
-      history={<LiveHistory key={groupId} group={detail} />}
+      history={<LiveHistory key={groupId} group={detail} target={target} />}
     />
   );
 }
 
 /** Open a live group, or replace its history immediately after removal. */
-export function GroupJourney({ groupId }: { groupId: Id<"groups"> }) {
+export function GroupJourney({
+  groupId,
+  target = null,
+}: {
+  groupId: Id<"groups">;
+  target?: number | null;
+}) {
   const offline = useOffline();
   const detail = useQuery(api.groups.get, { groupId });
   if (detail === undefined && !offline) return <Loading />;
   if (!detail) return <GroupUnavailable denied={detail === null} />;
-  return <GroupView groupId={groupId} detail={detail} />;
+  return <GroupView groupId={groupId} detail={detail} target={target} />;
 }
