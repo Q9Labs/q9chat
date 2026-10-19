@@ -1,7 +1,7 @@
 # Phone attachments proof
 
 Use Node 24 and pnpm 11 on the M4. Run native builds, device tests and the full gate
-inside `lockf /tmp/q9chat-m4.lock`. Stop before a native build if the data volume has
+inside the shared M4 job lock (`/tmp/q9chat-m4.lock`). Stop before a native build if the data volume has
 less than 5 GB free. The staging credential is **Q9 Chat WorkOS Staging API key**
 in the dev vault; inject it without printing it.
 
