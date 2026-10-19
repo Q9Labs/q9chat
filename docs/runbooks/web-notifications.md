@@ -4,6 +4,9 @@ The web client uses the existing Web Push backend, including while its tab is
 closed. The Convex deployment needs `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and
 `VAPID_SUBJECT`. Set the web build variable `VITE_VAPID_PUBLIC_KEY` to the same
 public key. No VAPID secret belongs in a browser environment variable.
+The deploy workflow passes the GitHub repository variable
+`VITE_VAPID_PUBLIC_KEY` into the web build. The release lane sets that variable
+to the backend's public key before deployment.
 
 Open a group and choose **Turn on** in the permission banner. Only that action
 opens the browser permission request. **Not now** dismisses the banner until the
@@ -39,7 +42,7 @@ browser push service and OS notification settings.
 
 ## Journey proof
 
-Run `tests/j8-web.e2e.ts` from a logged-in desktop session on the M4, with Chrome's
+Run `tests/j8-web.e2e.ts` from Hasan's logged-in MacBook Air desktop, with Chrome's
 macOS notifications allowed. It uses stable Google Chrome and a disposable
 persistent profile. Set `Q9CHAT_CHROME_PATH` when Chrome lives outside its usual application
 folder. Chromium's private contexts do not support push; some test builds use
