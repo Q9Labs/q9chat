@@ -13,6 +13,7 @@ import {
   signInPhoneUi,
   signOutPhone,
 } from "./phone-fixtures.js";
+import type { phoneOutboxSnapshot } from "./phone-outbox.js";
 import { deletePhoneProfile, removeTestUser, type PhoneSession } from "./workos.js";
 
 export async function runJ4bPhone(p: {
@@ -23,6 +24,10 @@ export async function runJ4bPhone(p: {
   pickPhoto: () => Promise<void>;
   pickFile: () => Promise<void>;
   openFile: () => Promise<void>;
+  stop: () => void;
+  restart: () => Promise<void>;
+  fixtureVoice?: (profile: string, group: string) => void;
+  outbox: (profile: string, group: string) => ReturnType<typeof phoneOutboxSnapshot>;
   cachedMedia: (profile: string, group: string) => string[];
   shot: (name: string) => Promise<void> | void;
 }) {
@@ -89,14 +94,34 @@ export async function runJ4bPhone(p: {
     ).toBeVisible({ timeout: 30_000 });
     await p.screen.getByRole("button", "Retry", { exact: true }).tap();
     expect(kinds).toEqual(["image", "file"]);
+    await p.enter(
+      p.screen.getByRole("textbox", /^Message(?: |$)/),
+      "Draft survives offline restart",
+    );
+    p.stop();
+    p.fixtureVoice?.(reader.id, groupId);
+    const saved = p.outbox(reader.id, groupId);
+    expect(saved.draft).toBe("Draft survives offline restart");
+    await p.restart();
+    await expect(p.screen.getByText("Can't connect. Try again.", { exact: true })).toBeVisible({
+      timeout: 60_000,
+    });
+    expect(p.outbox(reader.id, groupId)).toEqual(saved);
+    await p.shot("j4b-offline-restart");
     await fetch("http://localhost:8321/__fault", { method: "DELETE" });
-    await expect(
-      p.screen.getByText("You're offline. Retry unsent messages when you're back."),
-    ).not.toBeVisible({ timeout: 30_000 });
+    await p.screen.getByRole("button", "Try again", { exact: true }).tap();
+    await expect(p.screen.getByRole("button", title, { exact: false })).toBeVisible({
+      timeout: 60_000,
+    });
+    await p.screen.getByRole("button", title, { exact: false }).tap();
+    await expect(p.screen.getByRole("textbox", /^Message(?: |$)/)).toHaveValue(
+      "Draft survives offline restart",
+    );
+    await expect(p.screen.getByRole("button", "Play voice note")).toBeVisible();
+    await expect(p.screen.getByRole("button", "Retry", { exact: true })).toBeVisible();
+    await p.shot("j4b-offline-recovered");
     await p.screen.getByRole("button", "Retry", { exact: true }).tap();
-    await expect
-      .poll(() => kinds)
-      .toEqual(["image", "file", p.voice === "record" ? "voice" : "file"]);
+    await expect.poll(() => kinds).toEqual(["image", "file", "voice"]);
     const peerSession = sessions[1];
     if (!peerSession) throw new Error("Missing peer session");
     const response = await fetch("https://quixotic-crab-23.convex.site/upload", {
@@ -123,12 +148,10 @@ export async function runJ4bPhone(p: {
         { kind: "voice", uploadId, durationMs: 12_000, waveform: [0.3, 0.5, 0.8, 0.5] },
       ],
     });
-    await expect
-      .poll(() => kinds)
-      .toEqual(["image", "file", p.voice === "record" ? "voice" : "file", "voice"]);
+    await expect.poll(() => kinds).toEqual(["image", "file", "voice", "voice"]);
     await expect(p.screen.getByRole("button", "Retry")).not.toBeVisible();
     await expect(p.screen.getByText("Sending", { exact: false })).not.toBeVisible();
-    await expect(p.screen.getByText("0:12", { exact: true })).toBeVisible();
+    await expect(p.screen.getByText("0:12", { exact: true }).last()).toBeVisible();
     await p.screen.getByRole("button", "Play voice note").last().tap();
     await expect(p.screen.getByRole("button", "Pause voice note")).toBeVisible();
     await expect(p.screen.getByText(/^0:0[12]$/u)).toBeVisible();

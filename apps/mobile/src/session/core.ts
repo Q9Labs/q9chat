@@ -183,13 +183,12 @@ export function createSessionClient(edges: SessionEdges) {
     return promise;
   }
 
-  /** Restores the saved session at launch, or returns to sign-in if it cannot be restored. */
+  /** Restores at launch; transient failures keep local data and wait for Retry. */
   async function bootstrap() {
     await enqueue(async () => {
       await sweepAttempts().catch(noop);
       return restore();
     });
-    if (state.status === "offline") await signOut();
   }
 
   /** Tries again after "Can't connect": on the button and when the app returns to the foreground. */

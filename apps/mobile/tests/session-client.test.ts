@@ -4,6 +4,7 @@ import { test } from "node:test";
 
 import { Schema } from "effect";
 
+import { createTextStores } from "../src/journey/textStores.ts";
 import type { Store, StoreKey } from "../src/session/storage.ts";
 
 // The real session client and the real Worker client run here. Only the outside edges are faked:
@@ -237,33 +238,37 @@ void test("signing out cancels the refresh in flight and revokes the token it wa
   assert.equal(keychain.value("refreshToken"), null);
 });
 
-void test("a stalled launch opens sign-in and ignores a late successful answer", async () => {
+void test("a stalled launch stays offline and ignores a late answer until retry", async () => {
   const { worker, keychain, client } = harness(
     { refreshToken: "refresh-a" },
     { requestTimeoutMs: 30 },
   );
-  worker.auto("sign-out", () => json({}));
   const starting = client.bootstrap();
   const stalled = await worker.next("token");
   await starting;
-  assert.equal(statusOf(client), "unauthenticated");
-  assert.equal(keychain.value("refreshToken"), null);
+  assert.equal(statusOf(client), "offline");
+  assert.equal(keychain.value("refreshToken"), "refresh-a");
   stalled.reply(json(phoneSession("late")));
   await pause(10);
+  assert.equal(statusOf(client), "offline");
+  worker.auto("token", () => json(phoneSession("a2")));
   await client.retry();
-  assert.equal(statusOf(client), "unauthenticated");
-  assert.equal(keychain.value("refreshToken"), null);
-  assert.equal(worker.count("token"), 1);
+  assert.equal(statusOf(client), "authenticated");
+  assert.equal(keychain.value("refreshToken"), "refresh-a2");
+  assert.equal(worker.count("token"), 2);
 });
 
-void test("the deadline covers the response body, not only the headers", async () => {
-  const { worker, client } = harness({ refreshToken: "refresh-a" }, { requestTimeoutMs: 30 });
-  worker.auto("sign-out", () => json({}));
+void test("a response-body timeout preserves the session for retry", async () => {
+  const { worker, keychain, client } = harness(
+    { refreshToken: "refresh-a" },
+    { requestTimeoutMs: 30 },
+  );
   const starting = client.bootstrap();
   const request = await worker.next("token");
   request.reply(stalledBody(request.signal));
   await starting;
-  assert.equal(statusOf(client), "unauthenticated");
+  assert.equal(statusOf(client), "offline");
+  assert.equal(keychain.value("refreshToken"), "refresh-a");
 });
 
 void test("the refresh token is read from the keychain on every refresh, not kept in memory", async () => {
@@ -293,16 +298,17 @@ void test("two refreshes asked for together share one request", async () => {
   assert.equal(worker.count("token"), 1);
 });
 
-void test("a cold start without a connection opens sign-in and forgets the saved token", async () => {
+void test("a cold start without a connection keeps its saved token and recovers on retry", async () => {
   const { worker, keychain, client } = harness({ refreshToken: "refresh-a" });
-  worker.auto("sign-out", () => json({}));
   const starting = client.bootstrap();
   (await worker.next("token")).reply(new TypeError("Network request failed"));
   await starting;
-  assert.equal(statusOf(client), "unauthenticated");
-  assert.equal(keychain.value("refreshToken"), null);
+  assert.equal(statusOf(client), "offline");
+  assert.equal(keychain.value("refreshToken"), "refresh-a");
+  worker.auto("token", () => json(phoneSession("a2")));
   await client.retry();
-  assert.equal(worker.count("token"), 1);
+  assert.equal(statusOf(client), "authenticated");
+  assert.equal(worker.count("token"), 2);
 });
 
 void test("an active session can retry a temporary server error, but a 401 ends it", async () => {
@@ -319,16 +325,17 @@ void test("an active session can retry a temporary server error, but a 401 ends 
   assert.equal(keychain.value("refreshToken"), null);
 });
 
-void test("a keychain read failure at launch opens sign-in rather than trapping the person", async () => {
+void test("a keychain read failure at launch keeps its data and recovers on retry", async () => {
   const { worker, keychain, client } = harness({ refreshToken: "refresh-a" });
   keychain.failReads(true);
   await client.bootstrap();
-  assert.equal(statusOf(client), "unauthenticated");
+  assert.equal(statusOf(client), "offline");
+  assert.equal(keychain.value("refreshToken"), "refresh-a");
   keychain.failReads(false);
+  worker.auto("token", () => json(phoneSession("a2")));
   await client.retry();
-  assert.equal(statusOf(client), "unauthenticated");
-  assert.equal(keychain.value("refreshToken"), null);
-  assert.equal(worker.count("token"), 0);
+  assert.equal(statusOf(client), "authenticated");
+  assert.equal(worker.count("token"), 1);
 });
 
 void test("retry does nothing unless the session is offline", async () => {
@@ -949,12 +956,11 @@ void test("an expired saved session reaches sign-in even when its key cannot be 
   assert.equal(statusOf(client), "unauthenticated");
 });
 
-void test("a saved session that cannot restore opens sign-in", async () => {
+void test("a temporary server error at startup keeps the saved session", async () => {
   const { worker, client } = harness({ refreshToken: "refresh-a" });
   worker.auto("token", () => json({}, 503));
-  worker.auto("sign-out", () => json({}));
   await client.bootstrap();
-  assert.equal(statusOf(client), "unauthenticated");
+  assert.equal(statusOf(client), "offline");
 });
 
 void test("local text cleanup failure cannot prevent auth-key cleanup or sign-in", async () => {
@@ -1005,3 +1011,100 @@ for (const phase of ["restore", "refresh"] as const) {
     assert.equal(worker.count("sign-out"), 0);
   });
 }
+
+function savedChat() {
+  const files = new Map<string, string>();
+  const attachment = new Map([["file:///voice.m4a", "private voice bytes"]]);
+  const stores = createTextStores({
+    file: (name) => ({
+      get exists() {
+        return files.has(name);
+      },
+      textSync: () => files.get(name) ?? "",
+      writeSync: (value) => {
+        files.set(name, value);
+      },
+      delete: () => {
+        files.delete(name);
+      },
+    }),
+    names: () => [...files.keys()],
+  });
+  const text = stores.textStore("me", "group");
+  text.update({
+    draft: "saved draft",
+    pending: [
+      { clientKey: "text", body: "failed text", createdAt: 1, status: "failed" },
+      {
+        clientKey: "voice",
+        body: "",
+        createdAt: 2,
+        status: "failed",
+        attachment: {
+          kind: "voice",
+          uri: "file:///voice.m4a",
+          contentType: "audio/mp4",
+          size: 123,
+          durationMs: 1000,
+          waveform: [0.5],
+        },
+      },
+    ],
+  });
+  let erased = 0;
+  return {
+    files,
+    attachment,
+    text,
+    cleanup: () => {
+      erased += 1;
+      stores.clearAccountText();
+      attachment.clear();
+    },
+    erasures: () => erased,
+  };
+}
+
+for (const failure of ["network", "timeout", "server", "keychain"] as const) {
+  void test(`startup ${failure} preserves saved text and attachments, then retry recovers`, async () => {
+    const chat = savedChat();
+    const saved = new Map(chat.files);
+    const { worker, keychain, client } = harness(
+      { refreshToken: "refresh-a" },
+      { requestTimeoutMs: 30, clearLocalText: chat.cleanup },
+    );
+    if (failure === "keychain") keychain.failReads(true);
+    else if (failure === "server") worker.auto("token", () => json({}, 503));
+    else if (failure === "network") worker.auto("token", () => new TypeError("offline"));
+    await client.bootstrap();
+    assert.equal(statusOf(client), "offline");
+    assert.equal(keychain.value("refreshToken"), "refresh-a");
+    assert.equal(chat.erasures(), 0);
+    assert.deepEqual(chat.files, saved);
+    assert.equal(chat.attachment.get("file:///voice.m4a"), "private voice bytes");
+    keychain.failReads(false);
+    worker.auto("token", () => json(phoneSession("a2")));
+    await client.retry();
+    assert.equal(statusOf(client), "authenticated");
+    assert.equal(chat.erasures(), 0);
+    assert.deepEqual(chat.files, saved);
+    assert.equal(chat.text.get().pending.length, 2);
+    assert.equal(chat.attachment.size, 1);
+  });
+}
+
+void test("a confirmed startup 401 erases saved text and attachments", async () => {
+  const chat = savedChat();
+  const { worker, keychain, client } = harness(
+    { refreshToken: "revoked" },
+    { clearLocalText: chat.cleanup },
+  );
+  worker.auto("token", () => json({ error: "unauthenticated" }, 401));
+  await client.bootstrap();
+  assert.equal(statusOf(client), "unauthenticated");
+  assert.equal(keychain.value("refreshToken"), null);
+  assert.equal(chat.erasures(), 1);
+  assert.equal(chat.files.size, 0);
+  assert.equal(chat.attachment.size, 0);
+  assert.equal(chat.text.get().pending.length, 0);
+});

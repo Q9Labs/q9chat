@@ -3,6 +3,7 @@ import { expect } from "e2e";
 
 import { runJ4bPhone } from "./support/j4b-phone-flow.js";
 import { phoneMediaFiles } from "./support/phone-media.js";
+import { phoneOutboxSnapshot, stopPhone, fixturePendingVoice } from "./support/phone-outbox.js";
 
 void test(
   "J4b: photo, file, peer voice playback and recorder cancel",
@@ -12,6 +13,10 @@ void test(
     await expect(screen.getByLabel("Email")).toBeVisible({ timeout: 120_000 });
     await runJ4bPhone({
       screen,
+      stop: () => stopPhone("ios"),
+      restart: () => app.restart(),
+      fixtureVoice: fixturePendingVoice,
+      outbox: (profile, group) => phoneOutboxSnapshot("ios", profile, group),
       cachedMedia: (profile, group) => phoneMediaFiles("ios", profile, group),
       voice: "peer",
       enter: async (field, value) => {

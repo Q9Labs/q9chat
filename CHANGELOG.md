@@ -31,3 +31,4 @@
 - **Keep sign-in recovery and profile setup consistent**: Keep avatar colours consistent, recover failed sign-out, reconcile setup across tabs, and explain unsupported or oversized profile photos.
 - **Clear phone drafts when signing out**: Signing out forgets local drafts and unsent text. Losing group access clears that group’s local text, and leaving the composer stops typing.
 - **Erase private phone media when access ends**: Leaving or removal erases downloaded group media. Expired sessions erase local chat data before sign-in.
+- **Keep unsent messages during offline phone restarts**: Temporary sign-in connection errors preserve drafts and unsent attachments until Retry can restore the session.

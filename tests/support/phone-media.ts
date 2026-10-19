@@ -5,7 +5,7 @@ import { join } from "node:path";
 
 import { adb } from "./android.js";
 
-function filesBelow(directory: string): string[] {
+export function filesBelow(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const path = join(directory, entry.name);
     return entry.isDirectory() ? filesBelow(path) : entry.isFile() ? [path] : [];

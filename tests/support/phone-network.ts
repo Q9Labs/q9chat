@@ -1,4 +1,9 @@
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import {
+  request as plainRequest,
+  createServer,
+  type IncomingMessage,
+  type ServerResponse,
+} from "node:http";
 import { request as secureRequest } from "node:https";
 import type { Duplex } from "node:stream";
 import { connect } from "node:tls";
@@ -25,6 +30,39 @@ function fault(req: IncomingMessage, res: ServerResponse) {
   }
   return false;
 }
+function forwardAuth(req: IncomingMessage, res: ServerResponse) {
+  if (!req.url?.startsWith("/api/auth/")) return false;
+  {
+    const target = plainRequest(
+      {
+        hostname: "127.0.0.1",
+        port: 3174,
+        path: req.url,
+        method: req.method,
+        headers: req.headers,
+      },
+      (response) => {
+        res.writeHead(response.statusCode ?? 502, response.headers);
+        response.pipe(res);
+      },
+    );
+    target.on("error", () => res.writeHead(502).end());
+    req.pipe(target);
+    return true;
+  }
+}
+function forwardChat(req: IncomingMessage, res: ServerResponse) {
+  const host = req.url === "/upload" || req.url?.startsWith("/files/") ? mediaUpstream : upstream;
+  const target = secureRequest(
+    { hostname: host, path: req.url, method: req.method, headers: headers(req, host) },
+    (response) => {
+      res.writeHead(response.statusCode ?? 502, response.headers);
+      response.pipe(res);
+    },
+  );
+  target.on("error", () => res.writeHead(502).end());
+  req.pipe(target);
+}
 /** A real transport fault at the native app's network boundary, not a replacement backend. */
 const server = createServer((req, res) => {
   if (fault(req, res)) return;
@@ -36,16 +74,8 @@ const server = createServer((req, res) => {
     res.writeHead(503).end("Upload failed for native journey proof");
     return;
   }
-  const host = req.url === "/upload" || req.url?.startsWith("/files/") ? mediaUpstream : upstream;
-  const target = secureRequest(
-    { hostname: host, path: req.url, method: req.method, headers: headers(req, host) },
-    (response) => {
-      res.writeHead(response.statusCode ?? 502, response.headers);
-      response.pipe(res);
-    },
-  );
-  target.on("error", () => res.writeHead(502).end());
-  req.pipe(target);
+  if (forwardAuth(req, res)) return;
+  forwardChat(req, res);
 });
 server.on("upgrade", (req, socket, head) => {
   if (offline) {
