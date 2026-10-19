@@ -13,6 +13,9 @@ export type WriteStand =
   /** Not connected, a write is out: it may finish later, so the person may leave after being told so. */
   | "waiting";
 
+/** What a form says when it is asked to send a write while the connection is down. */
+export const OFFLINE_NOTICE = "You're offline. Try again when you're back online.";
+
 export function standOf(connected: boolean, pending: boolean): WriteStand {
   if (pending) return connected ? "locked" : "waiting";
   return connected ? "ready" : "offline";

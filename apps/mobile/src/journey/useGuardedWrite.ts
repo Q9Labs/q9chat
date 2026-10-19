@@ -1,9 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { Phase } from "./groupRules.ts";
-import { createWriteRun, standOf } from "./pendingWrite.ts";
-
-const OFFLINE_NOTICE = "You're offline. Try again when you're back online.";
+import { createWriteRun, OFFLINE_NOTICE, standOf } from "./pendingWrite.ts";
 
 export type Removal = (event: { repeat: () => void }) => void;
 

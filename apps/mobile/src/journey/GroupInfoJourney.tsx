@@ -1,5 +1,5 @@
 import { api, type Id } from "@q9chat/convex";
-import { useMutation, useQuery } from "convex/react";
+import { useConvexConnectionState, useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
@@ -8,11 +8,14 @@ import { useToast } from "../kit/useToast";
 import { InfoScreen, type InfoSheet } from "../screens/InfoScreen";
 import { config } from "../session/config";
 import { canMessage, groupError, membershipLost } from "./groupRules";
+import { GroupUnavailable } from "./GroupUnavailable";
 import { leaveScreen } from "./leaveScreen";
 import { liveAvatar, livePerson } from "./livePeople";
 import { Loading } from "./Loading";
 import { takeNotice } from "./notice";
+import { createWriteRun, OFFLINE_NOTICE, standOf } from "./pendingWrite";
 import { useCopied } from "./useCopied";
+import { useOffline } from "./useOffline";
 
 const COMING_NEXT = "This is coming in the next journey.";
 
@@ -21,6 +24,8 @@ type Detail = Extract<NonNullable<FunctionReturnType<typeof api.groups.get>>, { 
 function GroupInfoView({ groupId, detail }: { groupId: Id<"groups">; detail: Detail }) {
   const router = useRouter();
   const openPair = useMutation(api.groups.openPair);
+  const { isWebSocketConnected } = useConvexConnectionState();
+  const [pairs] = useState(createWriteRun);
   const [sheet, setSheet] = useState<InfoSheet | null>(null);
   const [toast, showToast] = useToast();
   const { copied, copy } = useCopied();
@@ -31,6 +36,9 @@ function GroupInfoView({ groupId, detail }: { groupId: Id<"groups">; detail: Det
       if (notice) showToast(notice);
     }, [showToast]),
   );
+
+  // A pair that opens after this screen was left (Back, or another screen on top) must not pull the person into it.
+  useFocusEffect(useCallback(() => () => pairs.supersede(), [pairs]));
 
   const link = detail.inviteToken ? `${config.authOrigin}/join/${detail.inviteToken}` : null;
   const soon = () => showToast(COMING_NEXT);
@@ -44,12 +52,14 @@ function GroupInfoView({ groupId, detail }: { groupId: Id<"groups">; detail: Det
     const person = detail.members.find((member) => member.id === personId);
     if (!person || !canMessage(person)) return;
     setSheet(null);
-    try {
-      const pair = await openPair({ profileId: person.id });
-      router.replace({ pathname: "/g/[groupId]", params: { groupId: pair } });
-    } catch (error) {
-      showToast(groupError(error));
+    if (standOf(isWebSocketConnected, false) === "offline") {
+      showToast(OFFLINE_NOTICE);
+      return;
     }
+    const end = await pairs.run(() => openPair({ profileId: person.id }));
+    if (end.stale) return;
+    if (end.ok) router.replace({ pathname: "/g/[groupId]", params: { groupId: end.value } });
+    else showToast(groupError(end.error));
   }
 
   return (
@@ -93,11 +103,14 @@ function GroupInfoView({ groupId, detail }: { groupId: Id<"groups">; detail: Det
 export function GroupInfoJourney({ groupId }: { groupId: Id<"groups"> }) {
   const router = useRouter();
   const detail = useQuery(api.groups.get, { groupId });
+  const offline = useOffline();
   // The pane closes by itself when the group stops being yours.
   const gone = membershipLost(detail);
   useEffect(() => {
     if (gone) leaveScreen(router);
   }, [gone, router]);
+  // Offline with nothing cached the lookup cannot answer, so say so, with a way back, as the group screen does.
+  if (detail === undefined && offline) return <GroupUnavailable denied={false} />;
   if (!detail || detail.status !== "member") return <Loading />;
   return <GroupInfoView groupId={groupId} detail={detail} />;
 }

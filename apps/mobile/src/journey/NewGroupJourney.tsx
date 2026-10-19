@@ -79,7 +79,7 @@ function useSubmit({
           release();
           // The API does not say who was added (someone may have been added meanwhile), so the line does not name anyone.
           postNotice("Group updated");
-          router.back();
+          leaveScreen(router);
         },
         describe,
       );
