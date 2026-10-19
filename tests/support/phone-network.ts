@@ -35,7 +35,7 @@ function forwardAuth(req: IncomingMessage, res: ServerResponse) {
   {
     const target = plainRequest(
       {
-        hostname: "127.0.0.1",
+        hostname: "localhost",
         port: 3174,
         path: req.url,
         method: req.method,
