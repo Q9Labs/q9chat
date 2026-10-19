@@ -419,16 +419,22 @@ export function InfoScreen(props: InfoScreenProps) {
   const { info, sheet } = props;
   return (
     <Screen safeBottom>
-      <PageNav title="Group info" start={{ back: true, onPress: props.onBack }} />
-      <View style={{ flex: 1 }} pointerEvents={props.busy ? "none" : "auto"}>
-        {info.status === "removed" ? (
-          <ScrollView>
-            <Hero avatar={info.avatar} title={info.title} line={`${info.memberCount} members`} />
-            <Note style={{ textAlign: "center" }}>You were removed from this group.</Note>
-          </ScrollView>
-        ) : (
-          <MemberBody info={info} props={props} />
-        )}
+      <View
+        style={{ flex: 1 }}
+        accessibilityElementsHidden={sheet !== null}
+        importantForAccessibility={sheet ? "no-hide-descendants" : "auto"}
+      >
+        <PageNav title="Group info" start={{ back: true, onPress: props.onBack }} />
+        <View style={{ flex: 1 }} pointerEvents={props.busy ? "none" : "auto"}>
+          {info.status === "removed" ? (
+            <ScrollView>
+              <Hero avatar={info.avatar} title={info.title} line={`${info.memberCount} members`} />
+              <Note style={{ textAlign: "center" }}>You were removed from this group.</Note>
+            </ScrollView>
+          ) : (
+            <MemberBody info={info} props={props} />
+          )}
+        </View>
       </View>
       {sheet && info.status === "member" ? (
         <InfoSheets info={info} sheet={sheet} props={props} />

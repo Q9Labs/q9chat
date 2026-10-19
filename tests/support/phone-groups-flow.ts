@@ -163,10 +163,7 @@ export async function runPhoneGroups(p: {
     await screen.getByRole("button", "Leave group", { exact: true }).tap();
     await expect(screen.getByText(`Leave ${leaveTitle}?`)).toBeVisible();
     await p.shot("phone-groups-leave-confirm");
-    await screen
-      .getByRole("group", `Leave ${leaveTitle}?`, { exact: true })
-      .getByRole("button", "Leave group", { exact: true })
-      .tap();
+    await screen.getByRole("button", "Leave group", { exact: true }).tap();
     await expect(screen.getByRole("button", "Account", { exact: true })).toBeVisible();
     await expect(screen.getByRole("button", new RegExp(leaveTitle))).not.toBeVisible();
     if ((await reader.client.query(api.groups.get, { groupId: leaveGroup })) !== null)
