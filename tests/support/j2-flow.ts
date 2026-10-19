@@ -129,6 +129,9 @@ async function createTrio(p: J2Platform, cast: Cast, seen: string[][]) {
   await screen.getByRole("button", `Bilal, ${cast.bilal.email}`).tap();
   await expect(screen.getByRole("button", "Start", { exact: true })).toBeVisible();
   await expect(screen.getByText(NO_LINK)).toBeVisible();
+  // A group of two has no link to share or copy.
+  await expect(screen.getByRole("button", "Copy invite link")).toBeHidden();
+  await expect(screen.getByText("/join/", { exact: false })).toBeHidden();
   await p.shot("03-new-group-pair");
   await pickPerson(p, cast.carla);
   await expect(screen.getByRole("button", "Create", { exact: true })).toBeVisible();
@@ -171,7 +174,8 @@ async function trioInfo(p: J2Platform, cast: Cast) {
   await pickPerson(p, cast.elena);
   await p.shot("07-add-people");
   await screen.getByRole("button", "Add", { exact: true }).tap();
-  await expect(screen.getByText("Added Elena")).toBeVisible();
+  // The API does not say who was added, so the line names no one.
+  await expect(screen.getByText("Group updated")).toBeVisible();
   await expect(screen.getByText("Elena Epsilon")).toBeVisible();
 }
 
@@ -214,11 +218,14 @@ async function danaJoins(p: J2Platform, cast: Cast, token: string) {
 }
 
 /** A pair from Group info: Message on a member. Where the platform has a Back key, it closes the sheet first. */
-async function pairFromInfo(p: J2Platform) {
+async function pairFromInfo(p: J2Platform, cast: Cast) {
   const { screen } = p;
   await screen.getByRole("button", "Group info for Trio").tap();
   await expect(screen.getByText("5 members", { exact: false }).first()).toBeVisible();
   await screen.getByRole("button", "Options for Bilal Beta").tap();
+  await expect(screen.getByRole("button", "Message Bilal")).toBeVisible();
+  // The member sheet shows a name, never the address.
+  await expect(screen.getByText(cast.bilal.email, { exact: false })).toBeHidden();
   await p.shot("09-member-sheet");
   await p.systemBack?.();
   if (p.systemBack) {
@@ -250,6 +257,31 @@ async function staleAndBadLinks(p: J2Platform) {
   await expect(screen.getByText("Trio", { exact: false }).first()).toBeVisible();
 }
 
+/** Dana is removed while she reads Group info: the pane closes, and the removed group leaves Groups once she takes it off her list. */
+async function removedFromGroup(p: J2Platform, cast: Cast) {
+  const { screen } = p;
+  const bilal = new ConvexHttpClient(convexUrl);
+  bilal.setAuth(cast.bilal.session.accessToken);
+  const row = (await bilal.query(api.groups.list, {})).find((group) => group.title === "Trio");
+  if (!row) throw new Error("Bilal's list must hold Trio");
+  const detail = await bilal.query(api.groups.get, { groupId: row.groupId });
+  const dana =
+    detail?.status === "member" ? detail.members.find((m) => m.fullName === "Dana Delta") : null;
+  if (!dana) throw new Error("Dana must be a member of Trio");
+
+  await screen.getByText("Trio", { exact: false }).first().tap();
+  await screen.getByRole("button", "Group info for Trio").tap();
+  await expect(screen.getByText("Group info")).toBeVisible();
+
+  await bilal.mutation(api.groups.removeMember, { groupId: row.groupId, profileId: dana.id });
+  await expect(screen.getByText("You were removed from this group")).toBeVisible({
+    timeout: 30_000,
+  });
+  await p.shot("12-removed");
+  await screen.getByRole("button", "Remove from my list").tap();
+  await expect(screen.getByText("Trio", { exact: false })).toBeHidden({ timeout: 30_000 });
+}
+
 export async function runJ2(p: J2Platform) {
   const stamp = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
   const cast = await makeCast(stamp);
@@ -273,8 +305,9 @@ export async function runJ2(p: J2Platform) {
     await signOutOnPhone(p);
     phoneUsers.add(cast.dana);
     await danaJoins(p, cast, token);
-    await pairFromInfo(p);
+    await pairFromInfo(p, cast);
     await staleAndBadLinks(p);
+    await removedFromGroup(p, cast);
   } finally {
     await live.close();
     await Promise.all(cast.apiUsers.map((session) => deletePhoneProfile(session)));

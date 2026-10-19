@@ -61,7 +61,7 @@ function useSubmit({
   const router = useRouter();
   const { isWebSocketConnected } = useConvexConnectionState();
   const guarded = useGuardedWrite(isWebSocketConnected);
-  usePreventRemove(guarded.holding, guarded.onRemove);
+  const release = usePreventRemove(guarded.holding, guarded.onRemove);
   const createGroup = useMutation(api.groups.create);
   const openPair = useMutation(api.groups.openPair);
   const addMembers = useMutation(api.groups.addMembers);
@@ -75,6 +75,7 @@ function useSubmit({
       guarded.submit(
         () => addMembers({ groupId: add.groupId, profileIds: ids }),
         () => {
+          release();
           // The API does not say who was added (someone may have been added meanwhile), so the line does not name anyone.
           postNotice("Group updated");
           router.back();
@@ -92,7 +93,10 @@ function useSubmit({
               memberIds: ids,
               inviteToken: token,
             }),
-      (groupId) => router.replace({ pathname: "/g/[groupId]", params: { groupId } }),
+      (groupId) => {
+        release();
+        router.replace({ pathname: "/g/[groupId]", params: { groupId } });
+      },
       describe,
     );
   }

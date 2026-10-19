@@ -37,7 +37,7 @@ function GroupView({
   const { isWebSocketConnected } = useConvexConnectionState();
   const forgetRemoval = useMutation(api.groups.dismissRemoval);
   const guarded = useGuardedWrite(isWebSocketConnected);
-  usePreventRemove(guarded.holding, guarded.onRemove);
+  const release = usePreventRemove(guarded.holding, guarded.onRemove);
   const failed = guarded.phase.kind === "failed" ? guarded.phase.message : null;
   // A failed removal from the list says so in a line that goes away, like every other notice here.
   useEffect(() => {
@@ -59,7 +59,10 @@ function GroupView({
     onForget: () =>
       guarded.submit(
         () => forgetRemoval({ groupId }),
-        () => router.dismissTo("/"),
+        () => {
+          release();
+          router.dismissTo("/");
+        },
         () => "Couldn't remove it. Try again.",
       ),
     leavePrompt: guarded.prompt,

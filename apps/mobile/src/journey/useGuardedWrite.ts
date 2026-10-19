@@ -20,6 +20,7 @@ export type Removal = (event: { repeat: () => void }) => void;
 export function useGuardedWrite(connected: boolean) {
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const [asked, setAsked] = useState<{ leave: () => void } | null>(null);
+  const [ended, setEnded] = useState(false);
   const [writes] = useState(createWriteRun);
   const busy = useRef(false);
   const leaving = useRef(false);
@@ -54,6 +55,7 @@ export function useGuardedWrite(connected: boolean) {
       if (end.stale) return;
       if (end.ok) {
         leaving.current = true;
+        setEnded(true);
         done(end.value);
         return;
       }
@@ -66,7 +68,7 @@ export function useGuardedWrite(connected: boolean) {
     phase,
     stand,
     /** True while a write is out: the router should hold every removal of the screen and hand it to `onRemove`. */
-    holding: phase.kind === "pending",
+    holding: phase.kind === "pending" && !ended,
     onRemove,
     submit,
     /** The question to put to a person who wants to leave while the write may not end; null otherwise. */

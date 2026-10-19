@@ -56,13 +56,17 @@ function useJoin(token: string, router: Router) {
   const join = useMutation(api.groups.join);
   const { isWebSocketConnected } = useConvexConnectionState();
   const guarded = useGuardedWrite(isWebSocketConnected);
-  usePreventRemove(guarded.holding, guarded.onRemove);
+  const release = usePreventRemove(guarded.holding, guarded.onRemove);
   return {
     ...guarded,
     accept: () =>
       guarded.submit(
         () => join({ token }),
-        (groupId) => openGroup(router, groupId),
+        (groupId) => {
+          // Release first: a held dismissTo would run again after the push below and pop the group.
+          release();
+          openGroup(router, groupId);
+        },
         groupError,
       ),
   };
