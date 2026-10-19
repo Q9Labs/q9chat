@@ -5,11 +5,13 @@ import { useMemo, useRef, useState } from "react";
 
 import type { MessageHandlers } from "../chat/message.js";
 import { Timeline } from "../chat/timeline-view.js";
-import type { Author, MemberEvent, MessageView } from "../chat/types.js";
+import type { Author, MemberEvent, MessageView, PostView } from "../chat/types.js";
 import { Button } from "../ui/controls.js";
 import { Dialog, DialogActions } from "../ui/overlay.js";
 import { useArrivalAnnouncement } from "./arrival-announcement.js";
 import { journeyError } from "./group-errors.js";
+import { useMediaOutbox } from "./media-outbox.js";
+import { useMediaResources } from "./media-resources.js";
 import { usePhotos } from "./photos.js";
 import { useSenderTyping } from "./sender-typing.js";
 import { TextComposer } from "./text-composer.js";
@@ -67,14 +69,10 @@ function messageView(row: Row, group: Group, photos: ReadonlyMap<string, string>
     author: person,
     renderKey: row.author.isYou ? row.clientKey : row.id,
     mentions: group.members.filter((p) => mentionIds.has(p.id)).map((p) => p.name),
-    attachments: [],
-    attachmentLabels: row.attachments.map((file) => ({
-      id: file.url,
-      label:
-        file.kind === "file"
-          ? `${file.name} · ${file.contentType}`
-          : `${file.kind === "image" ? "Image" : "Voice note"} · ${file.contentType}`,
-    })),
+    attachments: row.attachments.map((file) => {
+      const url = photos.get(file.url) ?? "";
+      return file.kind === "image" ? { ...file, url, label: "Image" } : { ...file, url };
+    }),
     replyTo:
       row.replyTo === null
         ? null
@@ -94,6 +92,7 @@ const handlers: MessageHandlers = {
   onReport: displayOnly,
   onRetry: displayOnly,
   onOpenQuote: displayOnly,
+  onMediaError: displayOnly,
   onTogglePlay: displayOnly,
   onMenuOpenChange: displayOnly,
 };
@@ -384,6 +383,15 @@ function useHistory(group: Group, opened: Opening) {
   };
 }
 
+function pendingMessages(atLatest: boolean, text: readonly PostView[], media: readonly PostView[]) {
+  return atLatest ? [...text, ...media].toSorted((a, b) => a.createdAt - b.createdAt) : [];
+}
+function historyMediaPaths(rows: readonly Row[]) {
+  return rows.flatMap((row) =>
+    row.kind === "post" ? row.attachments.map((file) => file.url) : [],
+  );
+}
+
 function historyPhotoPaths(rows: readonly Row[]) {
   return rows.flatMap((row) => {
     if (row.kind === "event") return [];
@@ -396,6 +404,29 @@ function useAuthorSelection(rows: readonly Row[], loading: boolean) {
   const person = id === null ? null : findAuthor(rows, id);
   if (id !== null && person === null && !loading) select(null);
   return { person, select };
+}
+
+function HistoryNotice({
+  issue,
+  mediaFailed,
+  reload,
+}: {
+  readonly issue: string | undefined;
+  readonly mediaFailed: boolean;
+  readonly reload: () => void;
+}) {
+  if (!issue) return null;
+  return (
+    <p role="alert">
+      {issue}
+      {mediaFailed ? (
+        <>
+          {" "}
+          <Button onClick={reload}>Retry loading media</Button>
+        </>
+      ) : null}
+    </p>
+  );
 }
 
 export function History({
@@ -428,7 +459,12 @@ export function History({
   } = useHistory(group, opened);
   const { person: selectedPerson, select: setAuthor } = useAuthorSelection(rows, loading);
   const [error, setError] = useState("");
+  const [mediaError, setMediaError] = useState("");
   const { photos } = usePhotos(historyPhotoPaths(rows), setError);
+  const { urls: mediaUrls, refresh: reloadMedia } = useMediaResources(
+    historyMediaPaths(rows),
+    setMediaError,
+  );
   const onVisible = useRead(group, opened.read, {
     setError,
     covered,
@@ -436,11 +472,12 @@ export function History({
   });
   const announcement = useArrivalAnnouncement(rows, group.lastSequence, opened.latest, navigation);
   const outbox = useTextOutbox(group, rows);
+  const media = useMediaOutbox(group, rows);
   const senderTyping = useSenderTyping(group.groupId);
   const [latestRequest, requestLatest] = useState(0);
   const messages = [
-    ...historyMessages(rows, group, photos, start, opened.at),
-    ...(atLatest ? outbox.messages : []),
+    ...historyMessages(rows, group, new Map([...photos, ...mediaUrls]), start, opened.at),
+    ...pendingMessages(atLatest, outbox.messages, media.messages),
   ];
   function toLatest() {
     latest();
@@ -451,18 +488,24 @@ export function History({
     senderTyping.clear();
     toLatest();
   }
-  const issue = [error, outbox.error, senderTyping.error].find(Boolean);
+  const issue = [error, mediaError, media.error, outbox.error, senderTyping.error].find(Boolean);
   function changeDraft(value: string) {
     outbox.change(value);
     senderTyping.change(value);
   }
   function retry(message: MessageView) {
     outbox.retry(message.id);
+    media.retry(message.renderKey ?? message.id);
     toLatest();
+  }
+  const showTimeline = rows.length > 0 || !loading;
+  function retryMedia() {
+    setMediaError("");
+    reloadMedia();
   }
   return (
     <>
-      {issue ? <p role="alert">{issue}</p> : null}
+      <HistoryNotice issue={issue} mediaFailed={mediaError !== ""} reload={retryMedia} />
       <output
         className="send-announcement"
         aria-label="Send status"
@@ -471,7 +514,7 @@ export function History({
       >
         <span key={outbox.failure.id}>{outbox.failure.text}</span>
       </output>
-      {rows.length || !loading ? (
+      {showTimeline ? (
         <Timeline
           messages={messages}
           newFromSequence={newFromSequence}
@@ -480,6 +523,7 @@ export function History({
           handlers={{
             ...handlers,
             onRetry: retry,
+            onMediaError: media.setError,
           }}
           onOpenAuthor={(person) => setAuthor(person.id)}
           menuMessageId={null}
@@ -507,6 +551,11 @@ export function History({
         onChange={changeDraft}
         onSend={sendText}
         onBlur={senderTyping.clear}
+        onMedia={(files) => {
+          media.enqueue(files);
+          toLatest();
+        }}
+        onError={media.setError}
       />
       <HistoryAuthor
         person={selectedPerson}

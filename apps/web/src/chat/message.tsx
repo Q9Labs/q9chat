@@ -154,6 +154,7 @@ export interface MessageHandlers {
   readonly onReport: (message: PostView) => void;
   readonly onRetry: (message: PostView) => void;
   readonly onOpenQuote: (reply: ReplyTo) => void;
+  readonly onMediaError: (error: string) => void;
   readonly onTogglePlay: (message: PostView) => void;
   readonly onMenuOpenChange: (message: RunMessage, open: boolean) => void;
 }
@@ -232,20 +233,31 @@ function Attachments({
   message,
   playProgress,
   onTogglePlay,
+  onMediaError,
 }: {
   readonly message: PostView;
   readonly playProgress: number | null;
+  readonly onMediaError: (error: string) => void;
   readonly onTogglePlay: (message: PostView) => void;
 }) {
-  return message.attachments.map((attachment) => {
-    if (attachment.kind === "image") return <ImageTile key={attachment.url} image={attachment} />;
-    if (attachment.kind === "file") return <FileCard key={attachment.url} file={attachment} />;
+  // Slots are immutable within a post, including optimistic-to-live reconciliation.
+  return message.attachments.map((attachment, index) => {
+    const slot = `${message.renderKey ?? message.id}:${index}`;
+    // Safe because attachment slots never reorder within a message.
+    // react-doctor-disable-next-line react-doctor/no-array-index-as-key
+    if (attachment.kind === "image") return <ImageTile key={slot} image={attachment} />;
+    // Safe because attachment slots never reorder within a message.
+    // react-doctor-disable-next-line react-doctor/no-array-index-as-key
+    if (attachment.kind === "file") return <FileCard key={slot} file={attachment} />;
     return (
+      // Safe because attachment slots never reorder within a message.
+      // react-doctor-disable-next-line react-doctor/no-array-index-as-key
       <VoiceRow
-        key={attachment.url}
+        key={slot}
         voice={attachment}
         progress={playProgress}
         onTogglePlay={() => onTogglePlay(message)}
+        onError={onMediaError}
       />
     );
   });
@@ -487,6 +499,7 @@ export function Message({
         message={message}
         playProgress={playProgress}
         onTogglePlay={handlers.onTogglePlay}
+        onMediaError={handlers.onMediaError}
       />
       <ReactionPills
         readOnly={readOnly}

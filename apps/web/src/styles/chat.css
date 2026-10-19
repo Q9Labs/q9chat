@@ -1296,9 +1296,6 @@
 .field:has(textarea:placeholder-shown) .send:not(.keep) {
   display: none;
 }
-.field:not(:has(textarea:placeholder-shown)) .rec {
-  display: none;
-}
 .recording-bar {
   display: flex;
   align-items: center;

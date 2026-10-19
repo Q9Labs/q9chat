@@ -57,16 +57,17 @@ outcomes:
     title: Send text, images, files and voice notes
     area: messages
     state: in_progress
-    summary: Web text sends appear immediately with retry-safe delivery and drafts kept per group. Attachments and sending on the phone remain.
+    summary: Web text, images, files and voice notes send with immediate feedback, safe retries and per-group drafts. Sending on the phone remains.
     theory: theory.md#messages
     code:
       - apps/web/src/journey/text-outbox.ts
       - apps/web/src/journey/text-composer.tsx
+      - apps/web/src/journey/media-outbox.ts
+      - apps/web/src/journey/voice-recorder.ts
     priority: P0
     size: L
-    size_reason: Uploads, previews and browser voice recording plus sending on the phone remain.
+    size_reason: Sending text and attachments on the phone remains.
     remaining:
-      - Upload images, files and voice notes on the web with previews and protected playback or download.
       - Send text, images, files and voice notes on the phone, with immediate delivery, safe retries and per-group drafts.
 
   - id: chat.quote_replies

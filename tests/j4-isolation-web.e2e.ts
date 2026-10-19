@@ -4,6 +4,7 @@ import { expect } from "e2e";
 import { Schema } from "effect";
 
 import { browserEngine, signInDevAccount } from "./support/browser.js";
+import { webOrigin } from "./support/origin.js";
 import { sendWire } from "./support/send-wire.js";
 import { magicCode, removeTestUser } from "./support/workos.js";
 
@@ -30,7 +31,7 @@ async function fixture() {
     memberIds: [b.id],
     inviteToken: crypto.randomUUID().replaceAll("-", ""),
   });
-  const path = `http://localhost:3000/?group=${groupId}`;
+  const path = `${webOrigin}/?group=${groupId}`;
   const field = page.getByRole("textbox", { name: "Message", exact: true });
   const posts = () =>
     a.client.query(api.messages.range, { groupId, fromSequence: 1, toSequence: 100 });
@@ -81,6 +82,12 @@ async function fixture() {
       .getByRole("heading", { name: "Check your email", exact: true })
       .waitFor({ state: "detached" });
   }
+  async function retryRetained() {
+    const retry = page.getByRole("button", { name: "Retry", exact: true });
+    await retry.waitFor();
+    await retry.focus();
+    await page.keyboard.press("Enter");
+  }
   async function signOut() {
     await page.getByRole("button", { name: "Account", exact: true }).click();
     await page.getByRole("button", { name: "Sign out", exact: true }).click();
@@ -114,6 +121,7 @@ async function fixture() {
     open,
     signIn,
     signOut,
+    retryRetained,
     aEmail,
     bEmail,
     cleanup,
@@ -200,9 +208,7 @@ isolationTest("J4 account transport: disconnected A never replays as B", async (
   expect(await f.page.getByRole("button", { name: "Retry", exact: true }).count()).toBe(0);
   await f.signOut();
   await f.signIn(f.aEmail);
-  await f.page.getByRole("button", { name: "Retry", exact: true }).waitFor();
-  await f.page.getByRole("button", { name: "Retry", exact: true }).focus();
-  await f.page.keyboard.press("Enter");
+  await f.retryRetained();
   const ownPost = await f.onePost("A private queued composition");
   expect(ownPost.author.id).toBe(f.a.id);
   expect(ownPost.clientKey).toBe(originalKey);
@@ -572,6 +578,216 @@ isolationTest(
     }
     process.stdout.write(
       "J4 PASS: V8 call counts show steady-state draft keystrokes and peer typing perform no history projection, Timeline render, or timeline rebuild in a full bounded window; initial input is reported separately\n",
+    );
+  },
+);
+
+async function attachmentPosts(f: Awaited<ReturnType<typeof fixture>>) {
+  return (await f.posts()).filter((post) => post.kind === "post" && post.attachments.length > 0);
+}
+
+isolationTest("J4B account transport: queued attachment never becomes B's send", async (f) => {
+  let blocked = false;
+  const connections = new Set<() => Promise<void>>();
+  await f.page.routeWebSocket("wss://quixotic-crab-23.convex.cloud/**", async (socket) => {
+    if (blocked) {
+      await socket.close({ code: 1012, reason: "J4B socket outage" });
+      return;
+    }
+    const server = socket.connectToServer();
+    const disconnect = async () => {
+      await server.close();
+      await socket.close({ code: 1012, reason: "J4B socket outage" });
+    };
+    connections.add(disconnect);
+    socket.onClose(() => connections.delete(disconnect));
+  });
+  await f.open();
+  blocked = true;
+  await Promise.all([...connections].map((disconnect) => disconnect()));
+  await f.page.getByLabel("Choose files", { exact: true }).setInputFiles({
+    name: "A-private.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from("A private retained bytes"),
+  });
+  await f.page.getByText("Waiting for connection", { exact: true }).waitFor();
+  const originalKey = Schema.decodeUnknownSync(Schema.String)(
+    await f.page.evaluate(async () => {
+      return await new Promise((resolve, reject) => {
+        const request = indexedDB.open("q9chat-media-v1", 1);
+        request.onsuccess = () => {
+          const db = request.result;
+          const read = db.transaction("pending").objectStore("pending").getAllKeys();
+          read.onsuccess = () => {
+            const key = read.result[0];
+            if (typeof key !== "string") reject(new Error("Missing media storage key"));
+            else resolve(key.split(":").at(-1));
+            db.close();
+          };
+          read.addEventListener("error", () => reject(read.error), { once: true });
+        };
+        request.addEventListener("error", () => reject(request.error), { once: true });
+      });
+    }),
+  );
+  await f.signOut();
+  await f.signIn(f.bEmail);
+  blocked = false;
+  await f.field.waitFor();
+  await f.field.fill("B media isolation sentinel");
+  await f.field.press("Enter");
+  await f.onePost("B media isolation sentinel");
+  expect(await attachmentPosts(f)).toEqual([]);
+  expect(await f.page.getByRole("button", { name: "Retry", exact: true }).count()).toBe(0);
+  await f.signOut();
+  await f.signIn(f.aEmail);
+  await f.retryRetained();
+  await expect
+    .poll(
+      async () =>
+        (await f.posts()).filter((row) => row.kind === "post" && row.attachments.length > 0).length,
+    )
+    .toBe(1);
+  const restored = (await f.posts()).find(
+    (row) => row.kind === "post" && row.attachments.length > 0,
+  );
+  if (!restored || restored.kind !== "post") throw new Error("Missing restored media post");
+  expect(restored.author.id).toBe(f.a.id);
+  expect(restored.clientKey).toBe(originalKey);
+  expect(restored.attachments[0]?.kind === "file" ? restored.attachments[0].name : "").toBe(
+    "A-private.txt",
+  );
+  process.stdout.write(
+    "PASS W17 W23: socket-blocked A media cannot send as B; mounted A returns and retries the original key by keyboard\n",
+  );
+});
+
+isolationTest("J4B receipt: old deleted attachment cannot replay cached bytes", async (f) => {
+  const wire = await sendWire(f.page);
+  await f.open();
+  wire.set("fail-committed");
+  await f.page.getByLabel("Choose files", { exact: true }).setInputFiles({
+    name: "deleted-media.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from("Never replay this attachment"),
+  });
+  await f.page.getByRole("button", { name: "Retry", exact: true }).waitFor();
+  const post = (await f.posts()).find((row) => row.kind === "post" && row.attachments.length > 0);
+  if (!post || post.kind !== "post") throw new Error("Missing attachment to delete");
+  await f.a.client.mutation(api.messages.remove, { messageId: post.id });
+  await f.seedPosts(305, "Newer than deleted media");
+  await f.a.client.mutation(api.readStates.markRead, { groupId: f.groupId, sequence: 308 });
+  const page = await f.context.newPage();
+  try {
+    await page.goto(f.path, { waitUntil: "commit" });
+    await page.locator('[role=log][aria-busy="false"]').waitFor();
+    const retry = page.getByRole("button", { name: "Retry", exact: true });
+    await retry.waitFor();
+    expect(
+      await page.locator("[role=log] [data-sequence]").first().getAttribute("data-sequence"),
+    ).toBe("201");
+    await retry.click();
+    // Retry disappears when upload starts; the status row retires only after the server receipt.
+    await page.locator(".mst").waitFor({ state: "detached" });
+    expect(await page.locator("a.file").count()).toBe(0);
+    expect(
+      (await f.posts()).filter((row) => row.id === post.id && row.kind === "deleted").length,
+    ).toBe(1);
+    process.stdout.write(
+      "PASS W16: deleted attachment outside the bounded window retires its old receipt without replaying cached bytes\n",
+    );
+  } finally {
+    wire.release();
+    await page.close();
+  }
+});
+
+isolationTest(
+  "J4B destination: late file reads and microphone permission stay abandoned",
+  async (f) => {
+    const otherGroup = await f.a.client.mutation(api.groups.create, {
+      name: "Other media destination",
+      memberIds: [f.b.id],
+      inviteToken: crypto.randomUUID().replaceAll("-", ""),
+    });
+    await f.open();
+    await f.field.fill("Group A draft");
+    await f.page.evaluate(() => {
+      // oxlint-disable-next-line typescript/unbound-method -- Restored or called with its original Blob receiver.
+      const read = Blob.prototype.arrayBuffer;
+      Blob.prototype.arrayBuffer = function (this: Blob) {
+        document.documentElement.dataset["heldRead"] = "true";
+        return new Promise<ArrayBuffer>((resolve, reject) => {
+          window.addEventListener(
+            "q9-release-read",
+            () => {
+              Blob.prototype.arrayBuffer = read;
+              void read.call(this).then(resolve, reject);
+            },
+            { once: true },
+          );
+        });
+      };
+    });
+    await f.page.getByLabel("Choose files", { exact: true }).setInputFiles({
+      name: "abandoned.txt",
+      mimeType: "text/plain",
+      buffer: Buffer.from("Abandoned selection bytes"),
+    });
+    await f.page.waitForFunction(() => document.documentElement.dataset["heldRead"] === "true");
+    await f.page.getByText("Other media destination", { exact: true }).first().click();
+    await f.field.fill("Group B draft");
+    await f.page.evaluate(() => window.dispatchEvent(new Event("q9-release-read")));
+    await f.page
+      .getByRole("button", { name: "Group info for Other media destination", exact: true })
+      .waitFor();
+    expect(await f.field.inputValue()).toBe("Group B draft");
+    await f.page.evaluate(() => {
+      navigator.mediaDevices.getUserMedia = () =>
+        new Promise<MediaStream>((resolve) => {
+          document.documentElement.dataset["heldPermission"] = "true";
+          window.addEventListener(
+            "q9-release-permission",
+            () => {
+              const context = new AudioContext();
+              const stream = context.createMediaStreamDestination().stream;
+              for (const track of stream.getTracks()) {
+                const stop = track.stop.bind(track);
+                track.stop = () => {
+                  stop();
+                  document.documentElement.dataset["stoppedLateTrack"] = "true";
+                  void context.close();
+                };
+              }
+              resolve(stream);
+            },
+            { once: true },
+          );
+        });
+    });
+    await f.page.getByRole("button", { name: "Record a voice note", exact: true }).click();
+    await f.page.waitForFunction(
+      () => document.documentElement.dataset["heldPermission"] === "true",
+    );
+    await f.page.getByText("Isolation conversation", { exact: true }).first().click();
+    await f.page.evaluate(() => window.dispatchEvent(new Event("q9-release-permission")));
+    await f.page.waitForFunction(
+      () => document.documentElement.dataset["stoppedLateTrack"] === "true",
+    );
+    expect(await f.field.inputValue()).toBe("Group A draft");
+    expect(await f.page.getByText("Recording", { exact: true }).count()).toBe(0);
+    expect((await f.posts()).filter((row) => row.kind === "post")).toEqual([]);
+    expect(
+      (
+        await f.a.client.query(api.messages.range, {
+          groupId: otherGroup,
+          fromSequence: 1,
+          toSequence: 100,
+        })
+      ).filter((row) => row.kind === "post"),
+    ).toEqual([]);
+    process.stdout.write(
+      "PASS W09 W18 W19: late file read cannot send into another group; late permission releases every track and preserves both drafts\n",
     );
   },
 );

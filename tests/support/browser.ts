@@ -5,6 +5,7 @@ import { expect } from "e2e";
 import { Schema } from "effect";
 
 import { Session } from "../../apps/web/src/lib/auth/contracts.js";
+import { webOrigin } from "./origin.js";
 import { magicCode } from "./workos.js";
 
 export const browserEngine = web();
@@ -14,7 +15,7 @@ export async function signInDevAccount(
   email: string,
   displayName: string,
 ) {
-  const origin = "http://localhost:3000";
+  const origin = webOrigin;
   const headers = { Origin: origin };
   expect(
     (
@@ -53,8 +54,8 @@ export async function devClient(
   context: ReturnType<NonNullable<ReturnType<typeof surfaceOf>>["context"]>,
   client = new ConvexHttpClient("https://quixotic-crab-23.convex.cloud"),
 ) {
-  const response = await context.request.post("http://localhost:3000/api/auth/token", {
-    headers: { Origin: "http://localhost:3000" },
+  const response = await context.request.post(`${webOrigin}/api/auth/token`, {
+    headers: { Origin: webOrigin },
     data: {},
   });
   expect(response.status()).toBe(200);

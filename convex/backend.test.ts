@@ -576,6 +576,49 @@ describe("authenticated bytes", () => {
     ).toBe(404);
     await drain(t);
   });
+  it.each(["image/png", "audio/mp4"])(
+    "File accepts a sniffed %s upload without weakening strict consumers",
+    async (type) => {
+      const t = fixture();
+      const { alice, bob, groupId } = await group(t);
+      const uploadId = await upload(alice.client, "chosen bytes", type);
+      await expect(
+        bob.client.mutation(api.messages.send, {
+          groupId,
+          clientKey: "foreign",
+          body: "",
+          attachments: [{ kind: "file", uploadId, name: "chosen.bin" }],
+        }),
+      ).rejects.toThrow("bad_attachment");
+      const receipt = await alice.client.mutation(api.messages.send, {
+        groupId,
+        clientKey: "generic",
+        body: "",
+        attachments: [{ kind: "file", uploadId, name: "chosen.bin" }],
+      });
+      const rows = await bob.client.query(api.messages.range, {
+        groupId,
+        fromSequence: receipt.sequence,
+        toSequence: receipt.sequence,
+      });
+      const post = rows[0];
+      if (!post || post.kind !== "post") throw new Error("Missing post");
+      expect(post.attachments[0]).toMatchObject({
+        kind: "file",
+        name: "chosen.bin",
+        contentType: type,
+      });
+      await expect(
+        alice.client.mutation(api.messages.send, {
+          groupId,
+          clientKey: "reuse-generic",
+          body: "",
+          attachments: [{ kind: "file", uploadId, name: "chosen.bin" }],
+        }),
+      ).rejects.toThrow("bad_attachment");
+      await drain(t);
+    },
+  );
   it("rejects unauthenticated and oversized uploads; ignores declared MIME; photo consumption is single-use", async () => {
     const t = fixture();
     const alice = await account(t, "Alice");
@@ -1507,7 +1550,7 @@ it("classifies real containers by signature without parsing their tracks", async
 });
 
 it.each(["long.m4a", "noise.webm", "raw.aac"])(
-  "accepts the real voice regression fixture %s and enforces its recorded kind",
+  "accepts the real voice regression fixture %s as voice or File with single use",
   async (name) => {
     const { readFile } = await import("node:fs/promises");
     const t = fixture();
@@ -1529,7 +1572,7 @@ it.each(["long.m4a", "noise.webm", "raw.aac"])(
         groupId,
         clientKey: "wrong-kind",
         body: "",
-        attachments: [{ kind: "file", uploadId, name }],
+        attachments: [{ kind: "image", uploadId, width: 1, height: 1 }],
       }),
     ).rejects.toThrow("bad_attachment");
     await expect(
@@ -1548,6 +1591,24 @@ it.each(["long.m4a", "noise.webm", "raw.aac"])(
         attachments: [{ kind: "voice", uploadId, durationMs: 10000, waveform: [0] }],
       }),
     ).rejects.toThrow("bad_attachment");
+    const fileResponse = await alice.client.fetch("/upload", {
+      method: "POST",
+      headers: { Authorization: "Bearer test", "Content-Type": "application/octet-stream" },
+      body: new Uint8Array(bytes),
+    });
+    expect(fileResponse.status).toBe(200);
+    const fileUploadId = await t.run(
+      async (ctx) => (await ctx.db.query("uploads").collect()).at(-1)?._id,
+    );
+    if (!fileUploadId) throw new Error("Missing file upload");
+    await expect(
+      alice.client.mutation(api.messages.send, {
+        groupId,
+        clientKey: "file",
+        body: "",
+        attachments: [{ kind: "file", uploadId: fileUploadId, name }],
+      }),
+    ).resolves.toBeDefined();
     await drain(t);
   },
 );

@@ -2,6 +2,8 @@ import { api } from "@q9chat/convex";
 import { ConvexHttpClient } from "convex/browser";
 import { Schema } from "effect";
 
+import { webOrigin } from "./origin.js";
+
 const key = process.env["WORKOS_API_KEY"];
 if (!key || !key.startsWith("sk_test_")) throw new Error("A staging WorkOS key is required");
 const headers = { Authorization: `Bearer ${key}` };
@@ -45,11 +47,11 @@ export async function magicCode(email: string) {
 }
 
 async function authPost(path: string, body: object) {
-  const response = await fetch(`http://localhost:3000/api/auth/${path}`, {
+  const response = await fetch(`${webOrigin}/api/auth/${path}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Origin: "http://localhost:3000",
+      Origin: webOrigin,
       Cookie: [...cookies].map(([name, value]) => `${name}=${value}`).join("; "),
     },
     body: JSON.stringify(body),

@@ -11,6 +11,7 @@
 - **Sign in and find your groups on the phone**: Sign in by email code, Google or Apple, set up a profile with an optional photo, see live group previews and unread counts, manage your account and sign out. A saved sign-in survives a lost connection and shows a retry. Signing out takes effect on the phone at once, even offline, and says so if it fails.
 - **Web conversation history and unread position**: Open a group at its unread divider, load older history, follow live messages and see expiring typing indicators.
 - **Send text on the web**: Messages appear immediately, failed sends can be retried without duplicates, and each group keeps its own draft across reloads.
+- **Send photos, files and voice notes on the web**: Send attachments without losing a text draft. Keep unsent bytes on this device for retry, and open, download or play protected attachments.
 
 ### Fixed
 

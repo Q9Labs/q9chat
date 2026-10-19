@@ -102,7 +102,13 @@ export type Attachment =
       readonly height: number;
       readonly label: string;
     }
-  | { readonly kind: "file"; readonly url: string; readonly name: string; readonly size: number }
+  | {
+      readonly kind: "file";
+      readonly url: string;
+      readonly name: string;
+      readonly size: number;
+      readonly contentType?: string;
+    }
   | {
       readonly kind: "voice";
       readonly url: string;

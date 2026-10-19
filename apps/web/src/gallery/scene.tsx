@@ -28,6 +28,7 @@ const HANDLERS: MessageHandlers = {
   onReport: noop,
   onRetry: noop,
   onOpenQuote: noop,
+  onMediaError: noop,
   onTogglePlay: noop,
   onMenuOpenChange: noop,
 };

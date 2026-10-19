@@ -24,7 +24,7 @@ export async function consume(
   if (
     !upload ||
     upload.ownerId !== ownerId ||
-    upload.kind !== kind ||
+    (kind !== "file" && upload.kind !== kind) ||
     upload.size > MAX_BYTES ||
     upload.size <= 0
   )
