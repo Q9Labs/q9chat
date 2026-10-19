@@ -9,6 +9,8 @@ const newConvexClient = () =>
   new ConvexReactClient(config.convexUrl, { unsavedChangesWarning: false });
 
 let held = { epoch: 0, client: newConvexClient() };
+/** Clients of ended sessions, closed once React has finished with them. */
+const retired: ConvexReactClient[] = [];
 
 /**
  * One Convex client per signed-in session. Convex keeps a mutation that was sent while the phone was
@@ -17,7 +19,7 @@ let held = { epoch: 0, client: newConvexClient() };
  */
 function convexClientFor(epoch: number) {
   if (held.epoch !== epoch) {
-    void held.client.close();
+    retired.push(held.client);
     held = { epoch, client: newConvexClient() };
   }
   return held.client;
@@ -38,6 +40,12 @@ function useConvexSession() {
 /** Restores the saved session once, then feeds Convex its tokens from it. */
 export function SessionProvider({ children }: { children: ReactNode }) {
   const epoch = useSyncExternalStore(sessionClient.subscribe, sessionClient.epoch);
+  const client = convexClientFor(epoch);
+  // Convex's provider clears the old client's auth in its own effect cleanup, which runs before this effect; a client closed any earlier throws there.
+  useEffect(() => {
+    for (const old of retired.splice(0)) void old.close();
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- the effect runs when the client is replaced, so it reads no value from it
+  }, [client]);
   useEffect(() => {
     void sessionClient.bootstrap();
     // Coming back to the app is the moment a lost connection may have returned.
@@ -48,7 +56,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
   return (
     <ConvexProviderWithAuth
-      client={convexClientFor(epoch)}
+      client={client}
       // oxlint-disable-next-line react/hooks -- Convex's provider takes its auth hook as a prop and calls it itself
       useAuth={useConvexSession}
     >
