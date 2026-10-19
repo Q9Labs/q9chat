@@ -7,6 +7,7 @@ import { useState } from "react";
 import { NewGroupScreen } from "../screens/NewGroupScreen";
 import { config } from "../session/config";
 import { groupError, newInviteToken, pairCandidate } from "./groupRules";
+import { leaveScreen } from "./leaveScreen";
 import { livePerson } from "./livePeople";
 import { postNotice } from "./notice";
 import { useCopied } from "./useCopied";
@@ -169,7 +170,7 @@ export function NewGroupJourney({ profile, add }: { profile: ReadyProfile; add?:
               : picker.problem
         }
         onPrimary={submit}
-        onCancel={() => router.back()}
+        onCancel={() => leaveScreen(router)}
       />
     </>
   );

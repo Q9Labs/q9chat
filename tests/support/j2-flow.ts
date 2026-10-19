@@ -81,17 +81,12 @@ type Cast = {
   carla: Person;
   elena: Person;
   allEmails: Set<string>;
-  apiUsers: PhoneSession[];
 };
 
 async function makeCast(stamp: string): Promise<Cast> {
   const allEmails = new Set<string>();
-  const apiUsers: PhoneSession[] = [];
-  const person = async (handle: string, displayName: string) => {
-    const made = await makePerson(allEmails, stamp, handle, displayName);
-    apiUsers.push(made.session);
-    return made;
-  };
+  const person = (handle: string, displayName: string) =>
+    makePerson(allEmails, stamp, handle, displayName);
   const nadia = `q9-j2-nadia-${stamp}@example.net`;
   const dana = `q9-j2-dana-${stamp}@example.net`;
   allEmails.add(nadia).add(dana);
@@ -103,7 +98,6 @@ async function makeCast(stamp: string): Promise<Cast> {
     carla: await person("carla", "Carla Gamma"),
     elena: await person("elena", "Elena Epsilon"),
     allEmails,
-    apiUsers,
   };
 }
 
@@ -150,8 +144,9 @@ async function createTrio(p: J2Platform, cast: Cast, seen: string[][]) {
 
 /** The invite token of Trio, read as Bilal, who is a member. */
 async function trioToken(cast: Cast) {
+  // By now the token Bilal was made with may have run out.
   const bilal = new ConvexHttpClient(convexUrl);
-  bilal.setAuth(cast.bilal.session.accessToken);
+  bilal.setAuth((await signInPhone(cast.bilal.email)).accessToken);
   const row = (await bilal.query(api.groups.list, {})).find((group) => group.title === "Trio");
   if (!row) throw new Error("Bilal's list must hold the new group");
   const detail = await bilal.query(api.groups.get, { groupId: row.groupId });
@@ -257,23 +252,31 @@ async function staleAndBadLinks(p: J2Platform) {
   await expect(screen.getByText("Trio", { exact: false }).first()).toBeVisible();
 }
 
-/** Dana is removed while she reads Group info: the pane closes, and the removed group leaves Groups once she takes it off her list. */
-async function removedFromGroup(p: J2Platform, cast: Cast) {
-  const { screen } = p;
+/** Dana's Trio, as Bilal sees it: the group, and Dana's place in it. */
+async function trioOf(cast: Cast) {
+  // By now the token Bilal was made with may have run out.
   const bilal = new ConvexHttpClient(convexUrl);
-  bilal.setAuth(cast.bilal.session.accessToken);
+  bilal.setAuth((await signInPhone(cast.bilal.email)).accessToken);
   const row = (await bilal.query(api.groups.list, {})).find((group) => group.title === "Trio");
   if (!row) throw new Error("Bilal's list must hold Trio");
   const detail = await bilal.query(api.groups.get, { groupId: row.groupId });
   const dana =
     detail?.status === "member" ? detail.members.find((m) => m.fullName === "Dana Delta") : null;
   if (!dana) throw new Error("Dana must be a member of Trio");
+  return { bilal, groupId: row.groupId, danaId: dana.id };
+}
 
+/** Dana is removed while she reads Group info: the pane closes, and the removed group leaves Groups once she takes it off her list. */
+async function removedFromGroup(p: J2Platform, trio: Awaited<ReturnType<typeof trioOf>>) {
+  const { screen } = p;
   await screen.getByText("Trio", { exact: false }).first().tap();
   await screen.getByRole("button", "Group info for Trio").tap();
   await expect(screen.getByText("Group info")).toBeVisible();
 
-  await bilal.mutation(api.groups.removeMember, { groupId: row.groupId, profileId: dana.id });
+  await trio.bilal.mutation(api.groups.removeMember, {
+    groupId: trio.groupId,
+    profileId: trio.danaId,
+  });
   await expect(screen.getByText("You were removed from this group")).toBeVisible({
     timeout: 30_000,
   });
@@ -307,10 +310,13 @@ export async function runJ2(p: J2Platform) {
     await danaJoins(p, cast, token);
     await pairFromInfo(p, cast);
     await staleAndBadLinks(p);
-    await removedFromGroup(p, cast);
+    const trio = await trioOf(cast);
+    await removedFromGroup(p, trio);
   } finally {
     await live.close();
-    await Promise.all(cast.apiUsers.map((session) => deletePhoneProfile(session)));
+    // A run can outlast an access token, so each person signs in again to delete the account.
+    for (const person of [cast.bilal, cast.carla, cast.elena])
+      await deletePhoneProfile(await signInPhone(person.email));
     for (const email of phoneUsers) await deletePhoneProfile(await signInPhone(email));
     await Promise.all([...cast.allEmails].map((email) => removeTestUser(email)));
   }

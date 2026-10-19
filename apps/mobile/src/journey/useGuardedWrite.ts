@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { Phase } from "./groupRules.ts";
 import { createWriteRun, standOf } from "./pendingWrite.ts";
@@ -20,8 +20,9 @@ export type Removal = (event: { repeat: () => void }) => void;
 export function useGuardedWrite(connected: boolean) {
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const [asked, setAsked] = useState<{ leave: () => void } | null>(null);
-  const [ended, setEnded] = useState(false);
+  const [released, setReleased] = useState(false);
   const [writes] = useState(createWriteRun);
+  const replay = useRef<(() => void) | null>(null);
   const busy = useRef(false);
   const leaving = useRef(false);
   const stand = standOf(connected, phase.kind === "pending");
@@ -33,11 +34,20 @@ export function useGuardedWrite(connected: boolean) {
         leave: () => {
           writes.supersede();
           leaving.current = true;
+          // The router prevents a replay again while the hold is on, so the replay waits for the render that ends it.
+          replay.current = repeat;
+          setReleased(true);
           setAsked(null);
-          repeat();
         },
       });
   };
+
+  useEffect(() => {
+    if (!released || !replay.current) return;
+    const repeat = replay.current;
+    replay.current = null;
+    repeat();
+  }, [released]);
 
   function submit<T>(
     write: () => Promise<T>,
@@ -55,7 +65,7 @@ export function useGuardedWrite(connected: boolean) {
       if (end.stale) return;
       if (end.ok) {
         leaving.current = true;
-        setEnded(true);
+        setReleased(true);
         done(end.value);
         return;
       }
@@ -68,7 +78,7 @@ export function useGuardedWrite(connected: boolean) {
     phase,
     stand,
     /** True while a write is out: the router should hold every removal of the screen and hand it to `onRemove`. */
-    holding: phase.kind === "pending" && !ended,
+    holding: phase.kind === "pending" && !released,
     onRemove,
     submit,
     /** The question to put to a person who wants to leave while the write may not end; null otherwise. */

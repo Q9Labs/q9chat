@@ -36,7 +36,10 @@ void test("a write that ends after an exit was acknowledged is stale, one that e
 /** The navigation guard the router gives a screen: while enabled, a removal reaches the handler instead. */
 function fakeGuard() {
   const guard: { enabled: boolean; handler: Removal | null } = { enabled: false, handler: null };
+  /** Whether the hold was still on at each replay: the router prevents a replay again when it was. */
+  const replays: boolean[] = [];
   return {
+    replays,
     /** What the screen hands the router's `usePreventRemove` on every render. */
     register: (enabled: boolean, handler: Removal) => {
       guard.enabled = enabled;
@@ -46,7 +49,14 @@ function fakeGuard() {
     attemptLeave: () => {
       if (!guard.enabled) return true;
       let left = false;
-      act(() => guard.handler?.({ repeat: () => (left = true) }));
+      act(() =>
+        guard.handler?.({
+          repeat: () => {
+            replays.push(guard.enabled);
+            left = true;
+          },
+        }),
+      );
       return left;
     },
   };
@@ -132,6 +142,15 @@ void test("connection lost while the write is out: leaving asks first, and an ac
   assert.equal(screen.nav.attemptLeave(), true);
   await screen.settle("ok");
   assert.deepEqual(screen.navigated, []);
+});
+
+void test("an acknowledged exit is replayed after the hold is released, not while it is still on", () => {
+  const screen = mountForm();
+  screen.submit();
+  screen.setConnected(false);
+  screen.nav.attemptLeave();
+  act(() => screen.form().prompt?.leave());
+  assert.deepEqual(screen.nav.replays, [false]);
 });
 
 void test("staying after the question keeps the write alive: when it ends, the screen moves on", async () => {

@@ -10,6 +10,7 @@ import { config } from "../session/config";
 import { eventItems } from "./groupEvents";
 import { rowStamp } from "./groupRows";
 import { GroupUnavailable } from "./GroupUnavailable";
+import { leaveScreen } from "./leaveScreen";
 import { liveAvatar } from "./livePeople";
 import { Loading } from "./Loading";
 import { useGuardedWrite } from "./useGuardedWrite";
@@ -52,7 +53,7 @@ function GroupView({
     ),
     offline,
     toast,
-    onBack: () => router.back(),
+    onBack: () => leaveScreen(router),
     onOpenInfo: () => router.push({ pathname: "/g/[groupId]/info", params: { groupId } }),
     onSearch: () => showToast(COMING_NEXT),
     // The removed group stays in Groups until it is taken off the list, then Groups is where this goes back to.
