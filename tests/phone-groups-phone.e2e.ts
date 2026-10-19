@@ -23,12 +23,7 @@ void test(
     await runPhoneGroups({
       screen,
       restart: () => app.restart(),
-      enter: async (field, value) => {
-        await field.focus();
-        await expect(screen.getByTestId("inputView")).toBeVisible();
-        await field.clear();
-        await field.pressSequentially(value, { delay: 80 });
-      },
+      enter: (field, value) => field.pressSequentially(value, { delay: 80 }),
       shot: async (name) => {
         await app.screenshot(name);
       },

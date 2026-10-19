@@ -77,6 +77,8 @@ export async function runPhoneGroups(p: {
     await expect(screen.getByText("Search messages in all your groups.")).toBeVisible();
     await p.enter(screen.getByLabel("Search messages"), "zzznomatch");
     await expect(screen.getByText("No messages match “zzznomatch”.")).toBeVisible();
+    await screen.getByRole("button", "Cancel", { exact: true }).tap();
+    await screen.getByLabel("Search", { exact: true }).tap();
     await p.enter(screen.getByLabel("Search messages"), "Lighthouse");
     const hit = screen.getByRole("button", `${title}, Bilal: Lighthouse launch decision`);
     await expect(hit).toBeVisible();
