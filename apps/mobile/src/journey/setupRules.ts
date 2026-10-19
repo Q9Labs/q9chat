@@ -16,3 +16,10 @@ export async function saveSetup<Photo extends object>(steps: {
   await steps.update(photo);
   return true;
 }
+
+/** The account whose setup save is out, under the session it began in. */
+export type SetupSaving = { userId: string; epoch: number } | null;
+
+/** Setup stays on screen while its save is out, but only for the same account in the same session: signing out ends it. */
+export const savingSetup = (saving: SetupSaving, userId: string, epoch: number) =>
+  saving !== null && saving.userId === userId && saving.epoch === epoch;

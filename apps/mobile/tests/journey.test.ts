@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { groupRows, msUntilMidnight, photoUrlOf, rowStamp } from "../src/journey/groupRows.ts";
 import { saveThenCheck } from "../src/journey/nameRules.ts";
 import { MAX_PHOTO_BYTES, photoTooLarge } from "../src/journey/photoRules.ts";
-import { saveSetup } from "../src/journey/setupRules.ts";
+import { saveSetup, savingSetup } from "../src/journey/setupRules.ts";
 
 const at = (iso: string) => new Date(iso);
 const now = at("2026-10-18T15:30:00");
@@ -204,4 +204,13 @@ void test("a setup save in flight stops writing when the account changes, so the
     true,
   );
   assert.deepEqual(written, ["a"]);
+});
+
+void test("setup stays up only for the account and the session whose save began, so a sign-out ends it", () => {
+  const began = { userId: "user-a", epoch: 3 };
+  assert.equal(savingSetup(began, "user-a", 3), true);
+  // The same account signs out and back in: the session client counts a new session.
+  assert.equal(savingSetup(began, "user-a", 4), false);
+  assert.equal(savingSetup(began, "user-b", 3), false);
+  assert.equal(savingSetup(null, "user-a", 3), false);
 });

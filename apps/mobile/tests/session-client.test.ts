@@ -776,7 +776,10 @@ async function signedOutWithFailedMove(keys: readonly StoreKey[]) {
 }
 
 void test("a sign-out whose pending write failed is finished by the next retry, and a restart stays signed out", async () => {
-  const { worker, keychain, restart, client } = await signedOutWithFailedMove(["pendingRevoke"]);
+  const { worker, keychain, restart, client } = await signedOutWithFailedMove([
+    "pendingRevoke",
+    "refreshToken",
+  ]);
   assert.equal(keychain.value("refreshToken"), "refresh-a");
 
   keychain.failWrites([]);
@@ -809,7 +812,10 @@ void test("a sign-out that listed the token but could not delete it is finished 
 });
 
 void test("a refresh after a failed sign-out move does not bring the account back", async () => {
-  const { worker, keychain, client } = await signedOutWithFailedMove(["pendingRevoke"]);
+  const { worker, keychain, client } = await signedOutWithFailedMove([
+    "pendingRevoke",
+    "refreshToken",
+  ]);
   keychain.failWrites([]);
 
   assert.equal(await client.fetchAccessToken({ forceRefreshToken: true }), null);
@@ -820,7 +826,10 @@ void test("a refresh after a failed sign-out move does not bring the account bac
 });
 
 void test("a sign-in after a failed sign-out move lists the old token first and never moves the new one", async () => {
-  const { worker, keychain, client } = await signedOutWithFailedMove(["pendingRevoke"]);
+  const { worker, keychain, client } = await signedOutWithFailedMove([
+    "pendingRevoke",
+    "refreshToken",
+  ]);
   worker.auto("email/verify", () => json(phoneSession("b")));
 
   // While the keychain still fails, the sign-in fails before it spends the code.
@@ -921,4 +930,77 @@ void test("the epoch moves when a session ends or another account takes over, an
   assert.equal(client.epoch(), first + 1);
   await client.verifyEmail("b@example.net", "123456");
   assert.equal(client.epoch(), first + 1);
+});
+
+/** A phone signed in as A whose keychain cannot save the pending list; the server revoke is answered by `revoke`. */
+async function signedOutWithoutPendingList(revoke: () => Response) {
+  const setup = harness({ refreshToken: "refresh-a" });
+  setup.worker.auto("token", () => json(phoneSession("a")));
+  await setup.client.bootstrap();
+  setup.keychain.failWrites(["pendingRevoke"]);
+  setup.worker.auto("sign-out", revoke);
+  return setup;
+}
+
+void test("when the pending list cannot be saved, the active token is still removed: a restart stays signed out and sends no refresh", async () => {
+  const { worker, keychain, restart, client } = await signedOutWithoutPendingList(() =>
+    json({}, 503),
+  );
+  await assert.rejects(client.signOut());
+  assert.equal(statusOf(client), "unauthenticated");
+  assert.equal(client.revokeStatus(), "failed");
+  assert.equal(keychain.value("refreshToken"), null);
+  assert.equal(keychain.value("pendingRevoke"), null);
+
+  const restarted = restart();
+  await restarted.bootstrap();
+  assert.equal(statusOf(restarted), "unauthenticated");
+  assert.equal(worker.count("token"), 1);
+});
+
+void test("when the pending list cannot be saved, the process still revokes the token it holds in memory", async () => {
+  const { worker, keychain, client } = await signedOutWithoutPendingList(() => json({}, 503));
+  await assert.rejects(client.signOut());
+
+  worker.auto("sign-out", () => json({}));
+  await client.retry();
+  assert.deepEqual(
+    worker.log.filter((entry) => entry.path === "sign-out").map((entry) => entry.body.refreshToken),
+    ["refresh-a", "refresh-a"],
+  );
+  assert.equal(client.revokeStatus(), "idle");
+  assert.equal(keychain.value("refreshToken"), null);
+});
+
+void test("a provider refusal returned to the app ends the attempt with the sign-in error and exchanges nothing", async () => {
+  const { worker, keychain, client, authWindow } = harness({});
+  const signingIn = client.startOAuth("google");
+  const opened = await authWindow(0);
+  const state = opened.url.searchParams.get("state") ?? "";
+  opened.finish({
+    type: "success",
+    url: `q9chat://auth/callback?error=access_denied&state=${state}`,
+  });
+  await assert.rejects(signingIn, SignInIncompleteError);
+  assert.equal(exchanges(worker).length, 0);
+  assert.equal(keychain.value("oauthAttempt"), null);
+  assert.equal(statusOf(client), "loading");
+
+  // The next attempt starts at once: the refused window is not left holding the slot.
+  const again = client.startOAuth("google");
+  await authWindow(1);
+  void again.catch(() => {});
+});
+
+void test("an account that signs out and back in is a new session, so what a screen held for the old one no longer applies", async () => {
+  const { worker, client } = harness({ refreshToken: "refresh-a" });
+  worker.auto("token", () => json(phoneSession("a")));
+  worker.auto("sign-out", () => json({}));
+  worker.auto("email/verify", () => json(phoneSession("a")));
+  await client.bootstrap();
+  const before = client.epoch();
+  await client.signOut();
+  await client.verifyEmail("a@example.net", "123456");
+  assert.equal(accessTokenOf(client), "access-a");
+  assert.notEqual(client.epoch(), before);
 });

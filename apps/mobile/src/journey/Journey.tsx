@@ -1,5 +1,5 @@
 import { firstName } from "@q9chat/domain";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 
 import { PillButton } from "../kit/Buttons";
 import { CantConnectYet, CenterState, OfflinePill } from "../kit/Chrome";
@@ -9,6 +9,7 @@ import { GroupsJourney } from "./GroupsJourney";
 import { Loading } from "./Loading";
 import { postNotice } from "./notice";
 import { SetupJourney } from "./SetupJourney";
+import { savingSetup, type SetupSaving } from "./setupRules";
 import { SignInJourney } from "./SignInJourney";
 import { useSignOut } from "./SignOut";
 import { useStage } from "./useStage";
@@ -62,24 +63,26 @@ const WITHOUT_PROFILE = {
 /** Journey 1: sign in, set up the profile the first time, and land in your groups. */
 export function Journey() {
   const stage = useStage();
-  // Setup stays on screen while that account's profile saves, even after the profile exists; another account never inherits it.
-  const [savingFor, setSavingFor] = useState<string | null>(null);
+  // Setup stays on screen while that account's profile saves, even after the profile exists; another account, or the same one after a sign-out, never inherits it.
+  const [saving, setSaving] = useState<SetupSaving>(null);
+  const epoch = useSyncExternalStore(sessionClient.subscribe, sessionClient.epoch);
   if (stage.kind !== "needsSetup" && stage.kind !== "ready") {
     const View = WITHOUT_PROFILE[stage.kind];
     return <View />;
   }
   const userId = stage.session.user.id;
-  if (stage.kind === "needsSetup" || savingFor === userId)
+  const endSaving = () => setSaving((current) => (current?.userId === userId ? null : current));
+  if (stage.kind === "needsSetup" || savingSetup(saving, userId, epoch))
     return (
       <SetupJourney
         key={userId}
         session={stage.session}
-        onStarted={() => setSavingFor(userId)}
+        onStarted={() => setSaving({ userId, epoch })}
         onFinished={(displayName) => {
           postNotice(`Welcome, ${firstName(displayName)}`);
-          setSavingFor((current) => (current === userId ? null : current));
+          endSaving();
         }}
-        onStopped={() => setSavingFor((current) => (current === userId ? null : current))}
+        onStopped={endSaving}
       />
     );
   return <GroupsJourney profile={stage.profile} />;

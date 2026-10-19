@@ -86,8 +86,19 @@ void test("callback cancellation, malformed state and upstream errors always con
         assert.doesNotMatch(response.headers.get("location") ?? "", /upstream-secret/);
         assert.match(response.headers.get("set-cookie") ?? "", /q9_oauth=;.*Max-Age=0/);
       }
-      const phone = await call("phone", undefined, "?error=access_denied&state=x");
-      assert.match(phone.headers.get("location") ?? "", /\/auth\/error\?reason=phone_failed/);
+      // A provider refusal goes back to the app, without the provider's own description.
+      const refused = await call(
+        "phone",
+        undefined,
+        "?error=access_denied&error_description=secret+words&state=x",
+      );
+      assert.equal(
+        refused.headers.get("location"),
+        "q9chat://auth/callback?error=access_denied&state=x",
+      );
+      // A link with no state cannot be matched to an attempt, so it stays on the web page.
+      const stateless = await call("phone", undefined, "?error=access_denied");
+      assert.match(stateless.headers.get("location") ?? "", /\/auth\/error\?reason=phone_failed/);
     },
     async () => Response.json({ error: "invalid_grant" }, { status: 400 }),
   );

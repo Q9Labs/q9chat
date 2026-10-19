@@ -87,6 +87,8 @@ export function createSessionClient(edges: SessionEdges) {
   let leaving = 0;
   /** Set when a sign-out could not finish moving the departing token; every restore and sign-in finishes that move first. */
   let moveOwed = false;
+  /** A signed-out token whose pending list could not be saved. Its credential is already gone from the keychain, so a restart cannot sign the person back in; it waits here for the server revoke. */
+  let unlisted: string | null = null;
   let cancelable: AbortController | null = null;
   let refreshing: { queued: number; promise: Promise<string | null> } | null = null;
   /** The open sign-in window of this process; a new one starts only when it is null. */
@@ -187,25 +189,27 @@ export function createSessionClient(edges: SessionEdges) {
     return promise;
   }
 
-  /** Revokes one signed-out session, then saves the tokens still waiting. */
-  async function revokeOne(token: string, rest: readonly string[]) {
+  /** Revokes one signed-out session, then saves the tokens still waiting when it came from the saved list. */
+  async function revokeOne(token: string, rest: readonly string[], saved: boolean) {
     await request((options) => authApi.revokeSession(token, options), false);
-    await writePending(store, rest);
+    if (saved) await writePending(store, rest);
   }
 
-  /** Revokes the given signed-out sessions, oldest first, saving the rest after each; throws on the first failure. */
-  async function revokeEach(tokens: readonly string[]) {
+  /** Revokes the given signed-out sessions, oldest first, saving the rest after each; throws on the first failure. The first `savedCount` came from the keychain. */
+  async function revokeEach(tokens: readonly string[], savedCount: number) {
     for (const [index, token] of tokens.entries()) {
       // react-doctor-disable-next-line react-doctor/async-await-in-loop -- one at a time, oldest first: the saved list shrinks after each
-      await revokeOne(token, tokens.slice(index + 1)); // oxlint-disable-line no-await-in-loop -- same
+      await revokeOne(token, tokens.slice(index + 1), index < savedCount); // oxlint-disable-line no-await-in-loop -- same
     }
   }
 
   async function revokePending() {
-    const tokens = await readPending(store);
+    const saved = await readPending(store);
+    const tokens = unlisted && !saved.includes(unlisted) ? [...saved, unlisted] : saved;
     if (tokens.length === 0) return setRevoke("idle");
     setRevoke("revoking");
-    await revokeEach(tokens);
+    await revokeEach(tokens, saved.length);
+    unlisted = null;
     setRevoke("idle");
   }
 
@@ -422,12 +426,25 @@ export function createSessionClient(edges: SessionEdges) {
    */
   async function moveActiveToPending() {
     const active = await store.get("refreshToken");
-    if (active) {
-      const pending = await readPending(store);
-      if (!pending.includes(active)) await writePending(store, [...pending, active]);
-      await store.delete("refreshToken");
-    }
+    if (active) await listAsSignedOut(active);
     await clearAttempts();
+  }
+
+  /**
+   * Lists the token as signed out, then removes it as the active one. When the list cannot be
+   * written, the active credential is removed anyway (the person left, so a restart must not sign
+   * them back in) and the token is kept in memory for the revoke; if that delete fails too, this throws.
+   */
+  async function listAsSignedOut(active: string) {
+    const pending = await readPending(store);
+    try {
+      if (!pending.includes(active)) await writePending(store, [...pending, active]);
+    } catch {
+      await store.delete("refreshToken");
+      unlisted = active;
+      return;
+    }
+    await store.delete("refreshToken");
   }
 
   /**
