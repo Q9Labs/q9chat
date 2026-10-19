@@ -26,6 +26,14 @@ import { clearProfileText } from "./text-outbox.js";
 
 const InviteToken = createContext<string | undefined>(undefined);
 
+const DeletedAccountAction = createContext<((id: ReadyProfile["id"]) => void) | null>(null);
+
+function useDeletedAccountAction() {
+  const action = useContext(DeletedAccountAction);
+  if (!action) throw new Error("Account deletion requires Journey");
+  return action;
+}
+
 const SignOutAction = createContext<(() => void) | null>(null);
 function useSignOutAction() {
   const action = useContext(SignOutAction);
@@ -81,6 +89,44 @@ function useJourneySignOut() {
   return { signOutStatus, leave, clearSignOutStatus: () => setSignOutStatus("idle") };
 }
 
+function useDeletedAccountCleanup(signOut: () => void) {
+  const [deleted, setDeleted] = useState<{
+    readonly id: ReadyProfile["id"];
+    readonly failed: boolean;
+  } | null>(null);
+  async function clean(id: ReadyProfile["id"]) {
+    setDeleted({ id, failed: false });
+    try {
+      await retireAccountTransport();
+      await Promise.all([
+        Promise.resolve().then(() => clearProfileText(id)),
+        clearProfileMedia(id),
+      ]);
+      signOut();
+      setDeleted(null);
+    } catch {
+      setDeleted({ id, failed: true });
+    }
+  }
+  return {
+    complete: (id: ReadyProfile["id"]) => void clean(id),
+    screen: deleted ? (
+      <div className="center">
+        <p>
+          {deleted.failed
+            ? "Your account is deleted, but we couldn't remove saved data from this browser. Allow storage access, then try again to finish signing out."
+            : "Removing saved data from this browser…"}
+        </p>
+        {deleted.failed ? (
+          <button type="button" onClick={() => void clean(deleted.id)}>
+            Try again
+          </button>
+        ) : null}
+      </div>
+    ) : null,
+  };
+}
+
 export function Journey({
   authError,
   inviteToken,
@@ -90,7 +136,9 @@ export function Journey({
 }) {
   const session = useSession();
   const [now, setNow] = useState(Date.now);
-  const { signOutStatus, leave, clearSignOutStatus } = useJourneySignOut();
+  const signOut = useJourneySignOut();
+  const { signOutStatus, leave } = signOut;
+  const deletion = useDeletedAccountCleanup(leave);
   const arrivalMethod = authError ? null : session.method;
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 30_000);
@@ -98,33 +146,51 @@ export function Journey({
   }, []);
   return (
     <SignOutAction.Provider value={leave}>
-      <AppRoot clock={{ now }}>
-        {session.status === "loading" ? (
-          <Loading />
-        ) : session.user === null ? (
-          <SignInJourney
-            authError={authError}
-            signOutStatus={signOutStatus}
-            onSignInAttempt={clearSignOutStatus}
-          />
-        ) : (
-          <InviteToken.Provider value={inviteToken}>
-            <AccountTransport key={session.user.id}>
-              <ProfileGate />
-            </AccountTransport>
-          </InviteToken.Provider>
-        )}
-        {signOutStatus === "failed" ? (
-          <Toast
-            message="Couldn't sign out. Try again."
-            action={{ label: "Try again", onClick: leave }}
-          />
-        ) : null}
-        {session.status !== "loading" ? (
-          <OAuthArrival key={arrivalMethod ?? "signed-out"} method={arrivalMethod} />
-        ) : null}
-      </AppRoot>
+      <DeletedAccountAction.Provider value={deletion.complete}>
+        <AppRoot clock={{ now }}>
+          {deletion.screen ?? (
+            <SessionJourney authError={authError} inviteToken={inviteToken} signOut={signOut} />
+          )}
+          {signOutStatus === "failed" ? (
+            <Toast
+              message="Couldn't sign out. Try again."
+              action={{ label: "Try again", onClick: leave }}
+            />
+          ) : null}
+          {session.status !== "loading" ? (
+            <OAuthArrival key={arrivalMethod ?? "signed-out"} method={arrivalMethod} />
+          ) : null}
+        </AppRoot>
+      </DeletedAccountAction.Provider>
     </SignOutAction.Provider>
+  );
+}
+
+function SessionJourney({
+  authError,
+  inviteToken,
+  signOut,
+}: {
+  readonly authError: boolean;
+  readonly inviteToken: string | undefined;
+  readonly signOut: ReturnType<typeof useJourneySignOut>;
+}) {
+  const session = useSession();
+  if (session.status === "loading") return <Loading />;
+  if (session.user === null)
+    return (
+      <SignInJourney
+        authError={authError}
+        signOutStatus={signOut.signOutStatus}
+        onSignInAttempt={signOut.clearSignOutStatus}
+      />
+    );
+  return (
+    <InviteToken.Provider value={inviteToken}>
+      <AccountTransport key={session.user.id}>
+        <ProfileGate />
+      </AccountTransport>
+    </InviteToken.Provider>
   );
 }
 
@@ -313,6 +379,7 @@ function Account({
   const signOut = useSignOutAction();
   const update = useMutation(api.profiles.update);
   const deleteAccount = useMutation(api.profiles.deleteAccount);
+  const completeDeletion = useDeletedAccountAction();
   const [deleting, setDeleting] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState("");
@@ -356,13 +423,7 @@ function Account({
     setDeleteError("");
     try {
       await deleteAccount({});
-      await retireAccountTransport();
-      try {
-        clearProfileText(me.id);
-        await clearProfileMedia(me.id);
-      } finally {
-        signOut();
-      }
+      completeDeletion(me.id);
     } catch {
       setDeleteError("Couldn't delete your account. Try again.");
     } finally {

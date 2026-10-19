@@ -22,7 +22,8 @@ test(
     const emailB = `q9-j56-b-${stamp}@example.net`;
     const a = await signInDevAccount(surface.context(), emailA, "Amira Actions");
     const b = await signInDevAccount(peer, emailB, "Bilal Actions");
-    const shot = (name: string) => page.screenshot({ path: `artifacts/j5-j6/${name}.png` });
+    const shot = (name: string) =>
+      page.screenshot({ animations: "disabled", path: `artifacts/j5-j6/${name}.png` });
     let peerDeleted = false;
     try {
       const groupId = await a.client.mutation(api.groups.create, {
@@ -79,6 +80,8 @@ test(
           }),
         )
         .toBe(true);
+      await field.press("ArrowUp");
+      expect(await field.inputValue()).toBe("");
       await shot("distant-quote");
       await b.client.mutation(api.messages.send, {
         groupId,
@@ -128,6 +131,12 @@ test(
       await shot("mine-more");
       await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
       await field.fill("My final reply");
+      await recentRow.hover();
+      expect(await recentRow.getByRole("button", { name: "Reply", exact: true }).count()).toBe(0);
+      expect(await edited.getByRole("button", { name: "More actions", exact: true }).count()).toBe(
+        0,
+      );
+      expect(await field.inputValue()).toBe("My final reply");
       await field.press("Enter");
       await peerPage.locator(".txt", { hasText: "My final reply" }).waitFor();
       await recentRow.hover();
@@ -139,6 +148,32 @@ test(
       await shot("reaction");
       await pill.click();
       await expect.poll(() => peerPage.locator(`#m-${recent.messageId} .chip`).count()).toBe(0);
+      await page.evaluate(() => {
+        navigator.mediaDevices.getUserMedia = async () => {
+          const context = new AudioContext();
+          await context.resume();
+          const oscillator = context.createOscillator();
+          const destination = context.createMediaStreamDestination();
+          oscillator.connect(destination);
+          oscillator.start();
+          for (const track of destination.stream.getTracks())
+            track.addEventListener("ended", () => {
+              oscillator.stop();
+              void context.close();
+            });
+          return destination.stream;
+        };
+      });
+      await page.getByRole("button", { name: "Record a voice note", exact: true }).click();
+      await page.getByText("Recording", { exact: true }).waitFor();
+      await recentRow.hover();
+      await recentRow.getByRole("button", { name: "Reply", exact: true }).click();
+      await expect.poll(() => page.locator(".recording-bar .dur").textContent()).not.toBe("0:00");
+      await page.getByRole("button", { name: "Send voice note", exact: true }).click();
+      const voiceReply = peerPage.locator(".msg").filter({
+        has: peerPage.getByRole("button", { name: "Play voice note", exact: true }),
+      });
+      await voiceReply.getByRole("button", { name: /Quoted message from You/ }).waitFor();
       await recentRow.hover();
       await recentRow.getByRole("button", { name: "More actions", exact: true }).click();
       await page.getByRole("menuitem", { name: "Report", exact: true }).click();
@@ -189,11 +224,33 @@ test(
           };
         });
       }, b.id);
+      await peerPage.evaluate(() => {
+        // eslint-disable-next-line @typescript-eslint/unbound-method -- The wrapper forwards the original Storage receiver with call.
+        const remove = Storage.prototype.removeItem;
+        let denied = false;
+        Storage.prototype.removeItem = function (key: string) {
+          if (!denied && key.endsWith(":draft-group:draft")) {
+            denied = true;
+            throw new DOMException("Test storage denial", "SecurityError");
+          }
+          return remove.call(this, key);
+        };
+      });
       await peerPage.getByRole("button", { name: "Account", exact: true }).click();
       await peerPage.getByRole("button", { name: "Delete account", exact: true }).click();
       await peerPage.getByRole("dialog", { name: "Delete your account?" }).waitFor();
-      await peerPage.screenshot({ path: "artifacts/j5-j6/delete-account.png" });
+      await peerPage.screenshot({
+        animations: "disabled",
+        path: "artifacts/j5-j6/delete-account.png",
+      });
       await peerPage.getByRole("button", { name: "Delete account", exact: true }).click();
+      await peerPage
+        .getByText("Your account is deleted, but we couldn't remove saved data", { exact: false })
+        .waitFor();
+      expect(
+        await peerPage.getByRole("button", { name: "Email me a code", exact: true }).count(),
+      ).toBe(0);
+      await peerPage.getByRole("button", { name: "Try again", exact: true }).click();
       await peerPage.getByRole("button", { name: "Email me a code", exact: true }).waitFor();
       peerDeleted = true;
       const retained = await peerPage.evaluate(async (owner) => {

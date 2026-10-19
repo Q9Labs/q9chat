@@ -482,6 +482,7 @@ function useQuoteNavigation(
   loading: boolean,
   latest: () => void,
   jumpTo: (sequence: number) => void,
+  searchHighlight: string | null,
 ) {
   const [target, setTarget] = useState<{ readonly id: string; readonly received: number } | null>(
     null,
@@ -498,7 +499,7 @@ function useQuoteNavigation(
     document.getElementById(`m-${target.id}`)?.scrollIntoView({ block: "center" });
   }, [target, loading, rows]);
   return {
-    highlightId: target?.id ?? null,
+    highlightId: target?.id ?? searchHighlight,
     latestRequest,
     toLatest,
     open: (reply: { readonly id: string; readonly sequence: number }) => {
@@ -560,16 +561,16 @@ export function History({
     jumpTo,
     sequence: newFromSequence,
   } = useHistory(group, opened);
-  const highlightId = useSearchHighlight(rows, opened.target, loading);
+  const searchHighlight = useSearchHighlight(rows, opened.target, loading);
   const { person: selectedPerson, select: setAuthor } = useAuthorSelection(rows, loading);
   const [error, setError] = useState("");
-  const actions = useMessageActions(rows, setError);
+  const actions = useMessageActions(rows, setError, atLatest);
   const {
-    highlightId: quoteHighlightId,
+    highlightId,
     latestRequest,
     toLatest,
     open: openQuote,
-  } = useQuoteNavigation(group.lastSequence, rows, loading, latest, jumpTo);
+  } = useQuoteNavigation(group.lastSequence, rows, loading, latest, jumpTo, searchHighlight);
   const historyMedia = useHistoryMedia(rows, setError);
   const { photos, resources, playback } = historyMedia;
   const onVisible = useRead(group, opened.read, {
@@ -638,7 +639,7 @@ export function History({
       </output>
       {showTimeline ? (
         <Timeline
-          readOnly={actions.busy}
+          readOnly={actions.readOnly}
           messages={renderedMessages}
           newFromSequence={newFromSequence}
           typing={[]}
@@ -652,7 +653,7 @@ export function History({
           }}
           onOpenAuthor={(person) => setAuthor(person.id)}
           menuMessageId={actions.menu}
-          highlightId={quoteHighlightId ?? highlightId}
+          highlightId={highlightId}
           reading={{
             initialSequence: opened.target,
             onVisible,

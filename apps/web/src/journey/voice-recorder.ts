@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import type { Recording } from "../chat/composer.js";
 import { durationLabel } from "../chat/format.js";
@@ -88,6 +88,10 @@ export function useVoiceRecorder(
   onError: (error: string) => void,
 ) {
   const [recording, setRecording] = useState<Recording | null>(null);
+  const delivery = useRef(onSend);
+  useLayoutEffect(() => {
+    delivery.current = onSend;
+  }, [onSend]);
   const capture = useRef<Capture | null>(null);
   const owner = useRef({ active: true, requesting: false });
   const release = useCallback(
@@ -158,7 +162,7 @@ export function useVoiceRecorder(
         onError("Couldn't save that recording. Record a shorter note and try again.");
         return;
       }
-      onSend([
+      delivery.current([
         { kind: "voice", blob, durationMs: value.durationMs, waveform: [...value.waveform] },
       ]);
     };

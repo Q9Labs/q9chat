@@ -67,6 +67,7 @@ function composerMode(mode: Mode | null): ComposerMode | null {
 function useMessageComposer(
   rows: readonly Row[],
   perform: ReturnType<typeof useActionFeedback>["perform"],
+  atLatest: boolean,
 ) {
   const edit = useMutation(api.messages.edit);
   const [mode, setMode] = useState<Mode | null>(null);
@@ -103,6 +104,7 @@ function useMessageComposer(
         );
     },
     editLast: () => {
+      if (!atLatest || mode?.type === "edit") return;
       const post = rows.findLast(
         (row): row is Post =>
           row.kind === "post" &&
@@ -200,9 +202,13 @@ function useReactionPeople() {
   };
 }
 
-export function useMessageActions(rows: readonly Row[], onError: (error: string) => void) {
+export function useMessageActions(
+  rows: readonly Row[],
+  onError: (error: string) => void,
+  atLatest: boolean,
+) {
   const feedback = useActionFeedback(onError);
-  const composer = useMessageComposer(rows, feedback.perform);
+  const composer = useMessageComposer(rows, feedback.perform, atLatest);
   const moderation = useMessageModeration(feedback, composer.cancelDeleted);
   const people = useReactionPeople();
   const react = useMutation(api.messages.react);
@@ -267,6 +273,7 @@ export function useMessageActions(rows: readonly Row[], onError: (error: string)
     handlers,
     menu,
     busy: feedback.busy,
+    readOnly: feedback.busy || composer.editDraft !== undefined,
     people: people.people,
     covered: moderation.covered,
     dialogs: (
