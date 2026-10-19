@@ -16,6 +16,27 @@ import {
 import { type PhoneSession } from "./workos.js";
 
 type Row = FunctionReturnType<typeof api.messages.range>[number];
+// A quoted row can enter the accessibility tree before its scroll position settles.
+async function holdWhenStill(target: Locator) {
+  let previous = "";
+  let since = Date.now();
+  await expect
+    .poll(
+      async () => {
+        const box = await target.boundingBox();
+        const current = JSON.stringify(box);
+        if (!box || current !== previous) {
+          previous = current;
+          since = Date.now();
+        }
+        return box !== null && Date.now() - since >= 750;
+      },
+      { timeout: 10_000, interval: 200 },
+    )
+    .toBe(true);
+  await target.longPress();
+}
+
 export async function runJ5J6Phone(p: {
   screen: Screen;
   enter: (field: Locator, value: string) => Promise<void>;
@@ -81,7 +102,7 @@ export async function runJ5J6Phone(p: {
     await p.screen.getByRole("button", "Quoted message from Bilal. Go to it.").tap();
     const originalBubble = p.screen.getByLabel("Bilal: A message to quote", { exact: true });
     await expect(originalBubble).toBeVisible();
-    await originalBubble.longPress();
+    await holdWhenStill(originalBubble);
     await expect(p.screen.getByRole("button", "Report", { exact: true })).toBeVisible();
     await expect(p.screen.getByRole("button", "Edit", { exact: true })).not.toBeVisible();
     await p.shot("actions-sheet");
@@ -98,7 +119,7 @@ export async function runJ5J6Phone(p: {
         ),
       )
       .toBe(true);
-    await p.screen.getByLabel("Nadia: Reply from phone", { exact: true }).longPress();
+    await holdWhenStill(p.screen.getByLabel("Nadia: Reply from phone", { exact: true }));
     await p.screen.getByRole("button", "Edit", { exact: true }).tap();
     await p.screen.getByRole("textbox", /^Message(?: |$)/).fill("");
     await p.enter(p.screen.getByRole("textbox", /^Message(?: |$)/), "Edited from phone");
@@ -121,7 +142,7 @@ export async function runJ5J6Phone(p: {
         ),
       )
       .toBe(true);
-    await p.screen.getByLabel("Nadia: Edited from phone", { exact: true }).longPress();
+    await holdWhenStill(p.screen.getByLabel("Nadia: Edited from phone", { exact: true }));
     await p.screen.getByRole("button", "React with 👍", { exact: true }).tap();
     await expect
       .poll(() =>
@@ -134,24 +155,24 @@ export async function runJ5J6Phone(p: {
       )
       .toBe(true);
     const reaction = p.screen.getByRole("button", /^👍 1:/);
-    await reaction.longPress();
+    await holdWhenStill(reaction);
     await expect(p.screen.getByText("Reactions", { exact: true })).toBeVisible();
     await expect(p.screen.getByText("You", { exact: true })).toBeVisible();
     await p.shot("actions-reactions");
     await p.screen.getByRole("button", "Close", { exact: true }).tap();
     await p.screen.getByRole("button", "Quoted message from Bilal. Go to it.").last().tap();
     await expect(originalBubble).toBeVisible();
-    await originalBubble.longPress();
+    await holdWhenStill(originalBubble);
     await p.screen.getByRole("button", "Report", { exact: true }).tap();
     await p.screen.getByRole("radio", "Spam", { exact: true }).tap();
     await p.screen.getByRole("button", "Send report", { exact: true }).tap();
     await expect(p.screen.getByText("Thanks. We'll review this message.")).toBeVisible();
     await p.screen.getByRole("button", "Jump to latest", { exact: true }).tap();
-    await p.screen.getByLabel("Nadia: Edited from phone", { exact: true }).longPress();
+    await holdWhenStill(p.screen.getByLabel("Nadia: Edited from phone", { exact: true }));
     await p.screen.getByRole("button", "Delete", { exact: true }).tap();
     await expect(p.screen.getByText("Delete this message?")).toBeVisible();
     await p.screen.getByRole("button", "Delete", { exact: true }).tap();
-    await expect(p.screen.getByText("You deleted this message")).toBeVisible();
+    await expect(p.screen.getByLabel("Nadia: Message deleted", { exact: true })).toBeVisible();
     await expect
       .poll(() => rows.some((row) => row.kind === "deleted" && row.author.id === reader.id))
       .toBe(true);
