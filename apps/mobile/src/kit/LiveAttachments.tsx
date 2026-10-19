@@ -11,6 +11,7 @@ import type { MessageContent } from "../types";
 import { FileCard, VoiceNote } from "./MessageParts";
 import { ImageAuthContext } from "./photoAuth";
 import { Press } from "./Press";
+import { MediaScopeContext, type MediaScope } from "./privateMedia";
 
 type Attachment = Extract<MessageContent, { kind: "attachments" }>["files"][number];
 function useSource(url: string) {
@@ -21,18 +22,25 @@ function useSource(url: string) {
   };
 }
 
-async function privateFile(source: ReturnType<typeof useSource>, name: string) {
-  const directory = new Directory(Paths.cache, `q9-share-${randomUUID()}`);
-  directory.create();
-  const target = new File(directory, name);
-  if (source.uri.startsWith("file:")) new File(source.uri).copySync(target);
-  else
-    await File.downloadFileAsync(
-      source.uri,
-      target,
-      source.headers ? { headers: source.headers } : {},
-    );
-  return target.uri;
+async function privateFile(
+  source: ReturnType<typeof useSource>,
+  name: string,
+  scope: MediaScope | null,
+) {
+  if (!scope) throw new Error("Private media needs a group membership");
+  return scope.download(randomUUID(), async (directoryName) => {
+    const directory = new Directory(Paths.cache, directoryName);
+    directory.create();
+    const target = new File(directory, name);
+    if (source.uri.startsWith("file:")) new File(source.uri).copySync(target);
+    else
+      await File.downloadFileAsync(
+        source.uri,
+        target,
+        source.headers ? { headers: source.headers } : {},
+      );
+    return target.uri;
+  });
 }
 
 function Photo({ file }: { file: Extract<Attachment, { kind: "image" }> }) {
@@ -70,19 +78,27 @@ function Photo({ file }: { file: Extract<Attachment, { kind: "image" }> }) {
   );
 }
 function Voice({ file }: { file: Extract<Attachment, { kind: "voice" }> }) {
+  const scope = useContext(MediaScopeContext);
   const source = useSource(file.url);
   const player = useAudioPlayer(null);
   const status = useAudioPlayerStatus(player);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const busy = useRef(false);
-  const local = useRef<string | null>(null);
+  const local = useRef<Awaited<ReturnType<typeof privateFile>> | null>(null);
   async function load() {
-    if (local.current && !status.error) return;
+    if (local.current && !status.error) {
+      local.current.assertActive();
+      return;
+    }
     // The protected endpoint returns a complete file, not AVPlayer byte ranges.
-    const uri = await privateFile(source, file.contentType === "audio/mp4" ? "voice.m4a" : "voice");
-    local.current = uri;
-    player.replace({ uri });
+    const cached = await privateFile(
+      source,
+      file.contentType === "audio/mp4" ? "voice.m4a" : "voice",
+      scope,
+    );
+    local.current = cached;
+    player.replace({ uri: cached.uri });
   }
   async function toggle() {
     if (busy.current) return;
@@ -98,6 +114,7 @@ function Voice({ file }: { file: Extract<Attachment, { kind: "voice" }> }) {
       await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
       if (status.didJustFinish || (status.duration > 0 && status.currentTime >= status.duration))
         await player.seekTo(0);
+      local.current?.assertActive();
       player.play();
     } catch {
       local.current = null;
@@ -124,6 +141,7 @@ function Voice({ file }: { file: Extract<Attachment, { kind: "voice" }> }) {
   );
 }
 function Download({ file }: { file: Extract<Attachment, { kind: "file" }> }) {
+  const scope = useContext(MediaScopeContext);
   const source = useSource(file.url);
   const [state, setState] = useState<"idle" | "loading" | "failed">("idle");
   async function open() {
@@ -133,9 +151,10 @@ function Download({ file }: { file: Extract<Attachment, { kind: "file" }> }) {
       const name =
         file.name.replace(/[^\p{L}\p{N} ._-]/gu, "_").replace(/^\.+$/u, "attachment") ||
         "attachment";
-      const uri = await privateFile(source, name);
-      // Android's chooser can resolve before the receiving app reads the file. Sign-out clears this private cache.
-      await Sharing.shareAsync(uri, { mimeType: file.contentType, dialogTitle: file.name });
+      const cached = await privateFile(source, name, scope);
+      // Keep the app-owned copy until membership ends; exported copies belong to the user.
+      cached.assertActive();
+      await Sharing.shareAsync(cached.uri, { mimeType: file.contentType, dialogTitle: file.name });
       setState("idle");
     } catch {
       setState("failed");

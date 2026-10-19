@@ -23,6 +23,7 @@ export async function runJ4bPhone(p: {
   pickPhoto: () => Promise<void>;
   pickFile: () => Promise<void>;
   openFile: () => Promise<void>;
+  cachedMedia: (profile: string, group: string) => string[];
   shot: (name: string) => Promise<void> | void;
 }) {
   const { stamp, email, peerEmail, emails } = phoneEmails("j4b");
@@ -136,10 +137,14 @@ export async function runJ4bPhone(p: {
     ).not.toBeVisible();
     await p.shot("j4b-after");
     await p.screen.getByRole("button", "Pause voice note").tap();
+    const cached = p.cachedMedia(reader.id, groupId);
+    expect(cached.some((path) => path.endsWith("/voice.m4a"))).toBe(true);
+    expect(cached.some((path) => path.endsWith("/q9-attachment.txt"))).toBe(true);
     await peer.client.mutation(api.groups.removeMember, { groupId, profileId: reader.id });
     await expect(p.screen.getByText("You were removed from this group")).toBeVisible();
     await expect(p.screen.getByRole("textbox", /^Message(?: |$)/)).not.toBeVisible();
     await expect(p.screen.getByLabel("Photo attachment")).not.toBeVisible();
+    await expect.poll(() => p.cachedMedia(reader.id, groupId)).toEqual([]);
     await p.shot("j4b-removed");
     await signOutPhone(p.screen);
   } catch (error) {

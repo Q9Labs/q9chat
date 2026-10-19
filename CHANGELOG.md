@@ -30,3 +30,4 @@
 - **Harden sign-in redirects and session lifecycle**: Keep OAuth callbacks on-site, prevent one-time-code replays and late sign-in after sign-out, synchronize open tabs, and budget email authentication requests.
 - **Keep sign-in recovery and profile setup consistent**: Keep avatar colours consistent, recover failed sign-out, reconcile setup across tabs, and explain unsupported or oversized profile photos.
 - **Clear phone drafts when signing out**: Signing out forgets local drafts and unsent text. Losing group access clears that group’s local text, and leaving the composer stops typing.
+- **Erase private phone media when access ends**: Leaving or removal erases downloaded group media. Expired sessions erase local chat data before sign-in.

@@ -3,6 +3,7 @@ import { expect } from "e2e";
 
 import { adb, openDevClient, shot } from "./support/android.js";
 import { runJ4bPhone } from "./support/j4b-phone-flow.js";
+import { phoneMediaFiles } from "./support/phone-media.js";
 
 void test(
   "J4b: send photo, file and voice with retry",
@@ -14,6 +15,7 @@ void test(
     await expect(screen.getByLabel("Email")).toBeVisible({ timeout: 120_000 });
     await runJ4bPhone({
       screen,
+      cachedMedia: (profile, group) => phoneMediaFiles("android", profile, group),
       voice: "record",
       enter: (field, value) => field.fill(value),
       shot,

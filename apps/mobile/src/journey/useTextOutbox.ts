@@ -6,6 +6,7 @@ import { randomUUID } from "expo-crypto";
 import { File } from "expo-file-system";
 import { useEffect, useState, useSyncExternalStore } from "react";
 
+import { privateMedia } from "../kit/privateMedia";
 import { sessionClient } from "../session/client";
 import { config } from "../session/config";
 import { keepAttachment, uploadAttachment } from "./attachments";
@@ -19,6 +20,7 @@ export function useTextOutbox(group: Group, rows: readonly Row[]) {
   const me = group.members.find((person) => person.isYou);
   if (!me) throw new Error("Member query did not include the caller");
   const store = textStore(me.id, group.groupId);
+  const [media] = useState(() => privateMedia.open(me.id, group.groupId));
   const [openingSequence] = useState(group.lastSequence);
   const state = useSyncExternalStore(store.subscribe, store.get);
   const { isWebSocketConnected: connected } = useConvexConnectionState();
@@ -98,6 +100,7 @@ export function useTextOutbox(group: Group, rows: readonly Row[]) {
     }
   }
   return {
+    media,
     ...state,
     me,
     pending,

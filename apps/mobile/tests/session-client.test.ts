@@ -976,3 +976,32 @@ void test("local text cleanup failure cannot prevent auth-key cleanup or sign-in
   assert.equal(statusOf(client), "unauthenticated");
   assert.equal(keychain.value("refreshToken"), null);
 });
+
+for (const phase of ["restore", "refresh"] as const) {
+  void test(`a 401 during ${phase} erases chat data before completing session teardown`, async () => {
+    const local = new Map([
+      ["draft", "private"],
+      ["voice.m4a", "private bytes"],
+    ]);
+    const { worker, keychain, client } = harness(
+      { refreshToken: "refresh-a" },
+      {
+        clearLocalText: () => {
+          local.clear();
+        },
+      },
+    );
+    if (phase === "refresh") {
+      worker.auto("token", () => json(phoneSession("a")));
+      await client.bootstrap();
+      assert.equal(local.size, 2);
+    }
+    worker.auto("token", () => json({ error: "session_expired" }, 401));
+    if (phase === "restore") await client.bootstrap();
+    else await client.fetchAccessToken({ forceRefreshToken: true });
+    assert.equal(statusOf(client), "unauthenticated");
+    assert.equal(keychain.value("refreshToken"), null);
+    assert.equal(local.size, 0);
+    assert.equal(worker.count("sign-out"), 0);
+  });
+}

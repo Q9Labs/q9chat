@@ -15,6 +15,7 @@ import {
 
 import { PillButton } from "../kit/Buttons";
 import { noop } from "../kit/noop";
+import { MediaScopeContext } from "../kit/privateMedia";
 import { TimelineRow, UnreadDivider, JumpToLatest, type GroupActions } from "../kit/Timeline";
 import { config } from "../session/config";
 import { T } from "../theme/Text";
@@ -210,47 +211,49 @@ export function LiveHistory({ group, target = null }: { group: Group; target?: n
     if (id === rows.at(-1)?.id) place();
   }
   return (
-    <View style={{ flex: 1 }}>
-      <HistoryStatus error={read.error} retry={read.retry} failed={failed} />
+    <MediaScopeContext.Provider value={text.media}>
       <View style={{ flex: 1 }}>
-        <ScrollView
-          ref={scroll}
-          accessibilityLabel="Messages"
-          keyboardShouldPersistTaps="handled"
-          scrollEventThrottle={100}
-          onLayout={(event) => {
-            viewport.current.metrics.height = event.nativeEvent.layout.height;
-            // Android can dispatch layout before its ScrollView can accept the new bottom offset.
-            requestAnimationFrame(place);
-          }}
-          onContentSizeChange={(_, height) => {
-            viewport.current.metrics.content = height;
-            place();
-          }}
-          onScroll={onScroll}
-          contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 12 }}
-        >
-          <HistoryPage
-            group={group}
-            rows={rows}
-            paging={{ window, latest, loading, navigate }}
-            unread={opening.boundary}
-            target={opening.target}
-            today={today}
-            actions={{ ...READ_ONLY, tappedId, onToggleTime: toggleTime }}
-            onRowLayout={onRowLayout}
-            onContentLayout={(id, box) => {
-              contentBoxes.current.set(id, box);
-              measureVisible();
+        <HistoryStatus error={read.error} retry={read.retry} failed={failed} />
+        <View style={{ flex: 1 }}>
+          <ScrollView
+            ref={scroll}
+            accessibilityLabel="Messages"
+            keyboardShouldPersistTaps="handled"
+            scrollEventThrottle={100}
+            onLayout={(event) => {
+              viewport.current.metrics.height = event.nativeEvent.layout.height;
+              // Android can dispatch layout before its ScrollView can accept the new bottom offset.
+              requestAnimationFrame(place);
             }}
-          />
-          <PendingPosts text={text} actions={READ_ONLY} />
-        </ScrollView>
-        <JumpControl shown={away || window.last < latest} onPress={toLatest} />
+            onContentSizeChange={(_, height) => {
+              viewport.current.metrics.content = height;
+              place();
+            }}
+            onScroll={onScroll}
+            contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 12 }}
+          >
+            <HistoryPage
+              group={group}
+              rows={rows}
+              paging={{ window, latest, loading, navigate }}
+              unread={opening.boundary}
+              target={opening.target}
+              today={today}
+              actions={{ ...READ_ONLY, tappedId, onToggleTime: toggleTime }}
+              onRowLayout={onRowLayout}
+              onContentLayout={(id, box) => {
+                contentBoxes.current.set(id, box);
+                measureVisible();
+              }}
+            />
+            <PendingPosts text={text} actions={READ_ONLY} />
+          </ScrollView>
+          <JumpControl shown={away || window.last < latest} onPress={toLatest} />
+        </View>
+        <IncomingTyping groupId={group.groupId} />
+        <TextComposer text={text} group={group} onSent={toLatest} />
       </View>
-      <IncomingTyping groupId={group.groupId} />
-      <TextComposer text={text} group={group} onSent={toLatest} />
-    </View>
+    </MediaScopeContext.Provider>
   );
 }
 

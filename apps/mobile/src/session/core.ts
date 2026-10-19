@@ -156,13 +156,14 @@ export function createSessionClient(edges: SessionEdges) {
       const token = await store.get("refreshToken");
       if (!token) {
         publishUnlessLeaving({ status: "unauthenticated" });
+        clearLocalText();
         return null;
       }
       const next = await request((options) => authApi.refreshSession(token, options));
       if (!next) {
         // A confirmed 401: the session is gone for good.
-        await store.delete("refreshToken");
         publishUnlessLeaving({ status: "unauthenticated" });
+        await clearLocalSession();
         return null;
       }
       await adopt(next);
@@ -417,6 +418,29 @@ export function createSessionClient(edges: SessionEdges) {
     }
   }
 
+  function clearLocalText() {
+    try {
+      edges.clearLocalText?.();
+    } catch {
+      /* Continue clearing auth keys after local-file failure. */
+    }
+  }
+
+  /** Shared by explicit sign-out and a rejected saved session or refresh. */
+  async function clearLocalSession() {
+    liveWindow = null;
+    delivered = null;
+    jar.clear();
+    clearLocalText();
+    // One unavailable key must not prevent the other local session keys from being removed.
+    await Promise.all([
+      store.delete("pendingInvite").catch(noop),
+      store.delete("refreshToken").catch(noop),
+      store.delete("oauthAttempt").catch(noop),
+      store.delete("emailAttempt").catch(noop),
+    ]);
+  }
+
   /** Ends the local session immediately; storage cleanup and server revocation cannot block sign-in. */
   async function signOut(): Promise<void> {
     leaving += 1;
@@ -428,18 +452,7 @@ export function createSessionClient(edges: SessionEdges) {
     const token = await enqueue(async () => {
       try {
         const active = await store.get("refreshToken").catch(() => null);
-        try {
-          edges.clearLocalText?.();
-        } catch {
-          /* Continue clearing auth keys after local-file failure. */
-        }
-        // One unavailable key must not prevent the other local session keys from being removed.
-        await Promise.all([
-          store.delete("pendingInvite").catch(noop),
-          store.delete("refreshToken").catch(noop),
-          store.delete("oauthAttempt").catch(noop),
-          store.delete("emailAttempt").catch(noop),
-        ]);
+        await clearLocalSession();
         return active;
       } finally {
         leaving -= 1;

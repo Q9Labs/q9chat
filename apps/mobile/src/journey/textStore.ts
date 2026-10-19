@@ -1,5 +1,6 @@
 import { Directory, File, Paths } from "expo-file-system";
 
+import { privateMedia } from "../kit/privateMedia";
 import { createTextStores } from "./textStores";
 
 const stores = createTextStores({
@@ -16,11 +17,13 @@ function clearAttachments(scope: string) {
 }
 
 export function clearGroupText(profile: string, group: string) {
+  privateMedia.clearGroup(profile, group);
   stores.clearGroupText(profile, group);
   clearAttachments(`${profile}-${group}`);
 }
 
 export function retainGroupText(profile: string, groups: readonly string[]) {
+  privateMedia.retainGroups(profile, groups);
   stores.retainGroupText(profile, groups);
   const prefix = `q9-attachment-${profile}-`;
   for (const entry of new Directory(Paths.document).list()) {
@@ -34,11 +37,9 @@ export function retainGroupText(profile: string, groups: readonly string[]) {
 }
 
 export function clearAccountText() {
+  privateMedia.clearAccount();
   const owner = new File(Paths.document, "q9-text-profile.json");
   const profile = owner.exists ? owner.textSync() : null;
   stores.clearAccountText();
   if (profile) clearAttachments(profile);
-  for (const entry of new Directory(Paths.cache).list()) {
-    if (entry instanceof Directory && entry.name.startsWith("q9-share-")) entry.delete();
-  }
 }
