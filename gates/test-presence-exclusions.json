@@ -21,6 +21,7 @@
     "apps/web/src/journey/sign-in.tsx": "Live browser behavior is exercised by tests/j1-web.e2e.ts against staging WorkOS and the dev Convex deployment, rather than mocking the auth and subscription boundaries.",
     "apps/web/src/journey/setup.tsx": "Live browser behavior is exercised by tests/j1-web.e2e.ts against staging WorkOS and the dev Convex deployment, rather than mocking the auth and subscription boundaries.",
     "apps/web/src/journey/oauth.ts": "OAuth start, one-shot consumption, cancellation, replay, reload and denied-storage behavior are exercised by tests/j1-web.e2e.ts with a real session; real vendor click-through belongs to the browser lane.",
-    "apps/web/src/journey/oauth-arrival.tsx": "One-shot provider confirmation and reload behavior are exercised in tests/j1-web.e2e.ts with a real session and an overridden provider label; real vendor click-through belongs to the browser lane."
+    "apps/web/src/journey/oauth-arrival.tsx": "One-shot provider confirmation and reload behavior are exercised in tests/j1-web.e2e.ts with a real session and an overridden provider label; real vendor click-through belongs to the browser lane.",
+    "apps/web/src/journey/group-controls.tsx": "Covered through real WorkOS accounts and the dev Convex deployment by tests/j9-web.e2e.ts; direct imports would bypass the live membership and notification boundaries."
   }
 }

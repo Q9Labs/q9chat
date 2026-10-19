@@ -86,6 +86,7 @@ export interface GroupDetail {
 
 export interface RemovedGroup {
   readonly status: "removed";
+  readonly memberCount: number;
   readonly title: string;
   readonly avatar: Avatar;
   readonly removedBy: string;

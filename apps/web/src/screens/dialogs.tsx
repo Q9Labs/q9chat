@@ -536,21 +536,24 @@ interface ConfirmProps {
   readonly title: string;
   readonly body: string;
   readonly confirmLabel: string;
+  readonly pending?: boolean;
+  readonly error?: string;
   readonly onConfirm: () => void;
   readonly onClose: () => void;
 }
 
-function Confirm({ title, body, confirmLabel, onConfirm, onClose }: ConfirmProps) {
+function Confirm({ title, body, confirmLabel, onConfirm, onClose, pending, error }: ConfirmProps) {
   return (
-    <Dialog label={title} onClose={onClose}>
+    <Dialog label={title} onClose={pending ? () => {} : onClose}>
       <h3>{title}</h3>
       <p className="sub">{body}</p>
+      {error ? <p role="alert">{error}</p> : null}
       <DialogActions>
-        <Button data-autofocus="" onClick={onClose}>
+        <Button data-autofocus="" disabled={pending} onClick={onClose}>
           Cancel
         </Button>
-        <Button variant="solidDanger" onClick={onConfirm}>
-          {confirmLabel}
+        <Button variant="solidDanger" disabled={pending} onClick={onConfirm}>
+          {pending ? "Saving…" : confirmLabel}
         </Button>
       </DialogActions>
     </Dialog>
@@ -558,6 +561,8 @@ function Confirm({ title, body, confirmLabel, onConfirm, onClose }: ConfirmProps
 }
 
 interface Closable {
+  readonly pending?: boolean;
+  readonly error?: string;
   readonly onConfirm: () => void;
   readonly onClose: () => void;
 }
