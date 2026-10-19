@@ -20,6 +20,7 @@
 - **Production phone build settings**: Store builds connect to the same Q9 Chat service as the web app. Development builds keep their local settings.
 - **Desktop notifications for mentions and replies**: Turn on desktop notifications after opening a group, choose which groups can interrupt, and open a notification at its message.
 - **Send text from your phone**: Send text on iOS and Android, retry failed messages after a restart, keep a draft in each group and see who is typing.
+- **Use chat in a narrow browser**: Groups, conversations and Group info now use one full-width pane below 720 pixels. Back returns to Groups, and message and recording controls stay within reach.
 
 ### Fixed
 

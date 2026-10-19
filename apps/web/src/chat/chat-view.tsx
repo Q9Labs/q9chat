@@ -1,3 +1,5 @@
+import { Link } from "@tanstack/react-router";
+
 import { Avatar } from "../ui/avatar.js";
 import { Button, IconButton } from "../ui/controls.js";
 import { Icon } from "../ui/icons.js";
@@ -51,6 +53,14 @@ function ChatTitle({
 export function ChatHeader({ group, onOpenInfo, onSearchGroup }: ChatHeaderProps) {
   return (
     <header className="chat-header">
+      <Link
+        className="groups-back"
+        to="/"
+        search={{ group: undefined, message: undefined, authError: undefined }}
+        aria-label="Back to Groups"
+      >
+        <Icon name="chevron" />
+      </Link>
       <ChatTitle group={group} onOpenInfo={onOpenInfo} />
       <span className="spacer" />
       {group.status === "member" ? (

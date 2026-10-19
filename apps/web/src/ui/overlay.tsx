@@ -55,7 +55,9 @@ function wrapTarget(items: readonly HTMLElement[], backwards: boolean): HTMLElem
 /** Keeps Tab and Shift+Tab inside the panel. */
 function trapTab(event: KeyboardEvent<HTMLElement>) {
   if (event.key !== "Tab") return;
-  const items = [...event.currentTarget.querySelectorAll<HTMLElement>(FOCUSABLE)];
+  const items = [...event.currentTarget.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
+    (item) => item.getClientRects().length > 0,
+  );
   const target = wrapTarget(items, event.shiftKey);
   if (target === null) return;
   event.preventDefault();
