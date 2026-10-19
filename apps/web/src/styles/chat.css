@@ -1884,7 +1884,7 @@
 .tip {
   position: absolute;
   z-index: 80;
-  transform: translate(-50%, -100%);
+  transform: translateY(-100%);
   background: var(--tx);
   color: var(--s0);
   font-size: 12px;
@@ -2167,6 +2167,12 @@
 }
 
 /* search: a field at the top, results below */
+.search-input-row {
+  display: contents;
+}
+.search-cancel {
+  display: none;
+}
 .sin {
   display: flex;
   align-items: center;
@@ -2447,4 +2453,214 @@ a.file {
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
+}
+
+.groups-back {
+  display: none;
+}
+
+/* One pane below 720px; spacing follows the approved phone mock. */
+@media (max-width: 719px) {
+  .wl,
+  .wl.with-info {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .wl > .main,
+  .wl.has-selection > .side,
+  .wl.with-info > .main {
+    display: none;
+  }
+  .wl.has-selection:not(.with-info) > .main {
+    display: flex;
+  }
+  .wl.with-info > .info {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .side,
+  .info {
+    background: var(--s0);
+  }
+  .stop {
+    height: 56px;
+    padding-inline: 20px 12px;
+  }
+  .stop .wm {
+    font-size: 22px;
+  }
+  .search-box {
+    height: 40px;
+    margin: 4px 16px 8px;
+  }
+  .row {
+    grid-template-columns: 48px minmax(0, 1fr) auto;
+    padding: 10px 8px;
+  }
+  .row .av {
+    width: 48px;
+    height: 48px;
+    font-size: 16px;
+  }
+  .ttl {
+    font-size: 16px;
+  }
+  .pv {
+    font-size: 14.5px;
+  }
+  .meta {
+    font-size: 13px;
+  }
+  .chat-header {
+    height: 56px;
+    padding-inline: 4px 6px;
+    gap: 2px;
+  }
+  .groups-back {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    flex: none;
+    color: inherit;
+    border-radius: 50%;
+  }
+  .groups-back svg {
+    width: 26px;
+    height: 26px;
+    transform: rotate(180deg);
+  }
+  .groups-back:dir(rtl) svg {
+    transform: none;
+  }
+  .chat-title {
+    padding-block: 2px;
+    padding-inline: 2px 8px;
+    flex: 1;
+  }
+  .chat-title .av {
+    width: 32px;
+    height: 32px;
+  }
+  .chat-title b {
+    font-size: 16px;
+  }
+  .chat-title .tt {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .chat-header > .spacer {
+    display: none;
+  }
+  .chat-header .ib {
+    width: 44px;
+    height: 44px;
+  }
+  .tl {
+    padding: 4px 12px 8px;
+  }
+  .mg {
+    gap: 8px;
+  }
+  .mg > .avb .av {
+    width: 28px;
+    height: 28px;
+    font-size: 11px;
+  }
+  .mg > .avb {
+    margin-block-start: 21px;
+  }
+  .msg {
+    max-width: 80%;
+  }
+  .mg:not(.mine) .msg {
+    max-width: calc(100% - 36px);
+  }
+  .typing {
+    margin-inline-start: 36px;
+  }
+  .hz,
+  .mine .hz {
+    position: static;
+    flex-direction: row;
+    height: auto;
+    max-width: 100%;
+    padding: 4px 0;
+    flex-wrap: wrap;
+    opacity: 1;
+    visibility: visible;
+  }
+  .hz .ab {
+    width: 36px;
+    height: 36px;
+  }
+  .composer {
+    padding: 6px 10px max(10px, env(safe-area-inset-bottom));
+  }
+  .recording-bar {
+    gap: 6px;
+    padding-inline-start: 10px;
+  }
+  .recording-bar .wave {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .recording-bar .btn {
+    padding-inline: 10px;
+    flex: none;
+  }
+  .file {
+    max-width: 100%;
+    min-width: 0;
+  }
+  .notice-banner {
+    margin: 4px 16px 10px;
+    flex-wrap: wrap;
+    padding: 12px;
+  }
+  .notice-banner > span {
+    flex-basis: calc(100% - 32px);
+  }
+  .notice-banner .btn {
+    flex: 1;
+  }
+  .search-input-row {
+    display: flex;
+    align-items: center;
+    flex: none;
+  }
+  .search-input-row .sin {
+    flex: 1;
+    min-width: 0;
+    margin-inline-end: 0;
+  }
+  .sin input {
+    min-width: 0;
+  }
+  .search-cancel {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    padding-inline: 12px;
+    color: var(--tx);
+  }
+  .search-hints {
+    display: none;
+  }
+  .dlg,
+  .dlg.wide,
+  .dlg.top {
+    inset: 0;
+    transform: none;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    max-height: none;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .dlg.enter {
+    animation: fade 0.15s ease-out;
+  }
 }

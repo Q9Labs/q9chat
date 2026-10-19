@@ -169,6 +169,7 @@ export function ChatScene(scene: ChatScene) {
   return (
     <>
       <ChatShell
+        hasSelection={scene.selected !== null}
         onOpenSearch={scene.onOpenSearch ?? noop}
         sidebar={<SceneSidebar scene={scene} />}
         banner={
@@ -197,6 +198,7 @@ export function GroupsScene({
   return (
     <>
       <ChatShell
+        hasSelection={false}
         onOpenSearch={noop}
         sidebar={
           <Sidebar

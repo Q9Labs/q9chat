@@ -3,6 +3,7 @@ import { useEffect, useEffectEvent, type ReactNode } from "react";
 import { LogoMark } from "../ui/brand.js";
 
 interface ChatShellProps {
+  readonly hasSelection: boolean;
   readonly sidebar: ReactNode;
   /** The permission banner, shown above the main pane. */
   readonly banner?: ReactNode;
@@ -14,7 +15,14 @@ interface ChatShellProps {
 }
 
 /** Sidebar, main pane and an optional 320px info column. */
-export function ChatShell({ sidebar, banner, main, info, onOpenSearch }: ChatShellProps) {
+export function ChatShell({
+  sidebar,
+  banner,
+  main,
+  info,
+  onOpenSearch,
+  hasSelection,
+}: ChatShellProps) {
   const open = useEffectEvent(onOpenSearch);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -29,7 +37,9 @@ export function ChatShell({ sidebar, banner, main, info, onOpenSearch }: ChatShe
   }, []);
 
   return (
-    <div className={`wl${info === undefined ? "" : " with-info"}`}>
+    <div
+      className={`wl${info === undefined ? "" : " with-info"}${hasSelection ? " has-selection" : ""}`}
+    >
       {sidebar}
       <main className="main">
         {banner}

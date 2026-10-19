@@ -111,12 +111,18 @@ export function useTimelineViewport(
       scrollToLatest(log.current);
     }
   };
-  useLayoutEffect((): (() => void) | undefined => {
-    const el = log.current;
-    if (!el) return () => {};
+  useLayoutEffect(() => {
     if (requestedLatest.current !== latestRequest) {
       requestedLatest.current = latestRequest;
       jumping.current = true;
+    }
+  }, [latestRequest]);
+  useLayoutEffect((): (() => void) | undefined => {
+    const el = log.current;
+    // A narrow pane can be hidden by Groups or Group info without unmounting.
+    if (!el?.clientHeight) {
+      paging.current = true;
+      return () => {};
     }
     const previous = position.current;
     const first = messages[0]?.id;
