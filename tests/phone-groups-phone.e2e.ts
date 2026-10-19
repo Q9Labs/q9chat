@@ -24,7 +24,9 @@ void test(
       screen,
       enter: async (field, value) => {
         await field.focus();
-        await field.fill(value);
+        await expect(screen.getByTestId("inputView")).toBeVisible();
+        await field.clear();
+        await field.pressSequentially(value, { delay: 80 });
       },
       shot: async (name) => {
         await app.screenshot(name);

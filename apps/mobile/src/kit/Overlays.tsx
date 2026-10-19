@@ -189,6 +189,7 @@ export function ConfirmSheet({
   title,
   text,
   confirmLabel,
+  confirmTestID,
   cancelLabel = "Cancel",
   danger = true,
   confirmDisabled,
@@ -199,6 +200,7 @@ export function ConfirmSheet({
   title: string;
   text: string;
   confirmLabel: string;
+  confirmTestID?: string | undefined;
   cancelLabel?: string;
   danger?: boolean;
   confirmDisabled?: boolean | undefined;
@@ -214,6 +216,7 @@ export function ConfirmSheet({
       <View style={{ marginTop: children ? 20 : 0, gap: 8 }}>
         <PillButton
           label={confirmLabel}
+          testID={confirmTestID}
           size="sheet"
           variant={danger ? "solidDanger" : "solid"}
           disabled={confirmDisabled}
