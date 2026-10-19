@@ -116,7 +116,7 @@ export function SignInJourney() {
     }
   }
 
-  const notice = noticeOf(revoke, signOut.complete, signOut.leave, toast);
+  const notice = noticeOf(revoke, signOut.complete, () => void sessionClient.retry(), toast);
 
   if (codeEmail === null)
     return (

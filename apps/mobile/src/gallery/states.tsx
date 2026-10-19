@@ -20,7 +20,12 @@ import {
 import photoAsset from "../fixtures/photo.png";
 import { noop } from "../kit/noop";
 import { AccountScreen } from "../screens/AccountScreen";
-import { CodeScreen, ProfileScreen, SignInScreen } from "../screens/AuthScreens";
+import {
+  CodeScreen,
+  OfflineRestoreScreen,
+  ProfileScreen,
+  SignInScreen,
+} from "../screens/AuthScreens";
 import { ChatScreen, type ChatScreenProps } from "../screens/ChatScreen";
 import { GroupsScreen } from "../screens/GroupsScreen";
 import { InfoScreen, type InfoScreenProps } from "../screens/InfoScreen";
@@ -684,6 +689,12 @@ export const STATES: GalleryState[] = [
         toast={null}
       />
     ),
+  },
+  {
+    id: "offline-restore",
+    title: "Saved session cannot be refreshed",
+    group: "Auth",
+    render: () => <OfflineRestoreScreen onRetry={noop} onSignOut={noop} />,
   },
   {
     id: "account-unsaved",

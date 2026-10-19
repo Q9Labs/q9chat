@@ -4,6 +4,7 @@ import { useState, useSyncExternalStore } from "react";
 import { PillButton } from "../kit/Buttons";
 import { CantConnectYet, CenterState, OfflinePill } from "../kit/Chrome";
 import { Screen } from "../kit/Chrome";
+import { OfflineRestoreScreen } from "../screens/AuthScreens";
 import { sessionClient } from "../session/client";
 import { GroupsJourney } from "./GroupsJourney";
 import { Loading } from "./Loading";
@@ -29,15 +30,9 @@ function AccountUnavailable() {
 }
 
 function CantConnect() {
+  const signOut = useSignOut();
   return (
-    <Screen>
-      <CenterState
-        icon="ban"
-        title="Can't connect. Try again."
-        text="Your sign-in is saved. Check your connection and try again."
-        action={<PillButton label="Try again" onPress={() => void sessionClient.retry()} />}
-      />
-    </Screen>
+    <OfflineRestoreScreen onRetry={() => void sessionClient.retry()} onSignOut={signOut.leave} />
   );
 }
 

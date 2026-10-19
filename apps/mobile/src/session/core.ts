@@ -66,11 +66,14 @@ const noop = () => {};
 
 /**
  * The phone session. Every operation that touches the keychain or changes the session (restore,
- * refresh, sign-in, sign-out, the revoke retry, the OAuth attempt) runs through one FIFO queue, start
- * to finish: keychain read, Worker request, keychain write, publish. So no write can land between
- * another operation's read and write, and a late answer can never undo a newer change. Only a
- * sign-out jumps ahead in one way: it cancels the request in flight and hides the session at once.
- * The refresh token is read from the keychain inside each operation and never kept here.
+ * refresh, sign-in, sign-out, the OAuth attempt) runs through one FIFO queue, start to finish:
+ * keychain read, Worker request, keychain write, publish. So no write can land between another
+ * operation's read and write, and a late answer can never undo a newer change. A sign-out cancels the
+ * request in flight and hides the session at once, and its keychain step is the first thing in the
+ * queue after that: server revokes are not queued. They run from the saved list, one at a time, each
+ * with its own short keychain steps, so nothing that waits on the network ever stands in front of a
+ * sign-out's durable write. The refresh token is read from the keychain inside each operation and
+ * never kept here.
  */
 export function createSessionClient(edges: SessionEdges) {
   const { store } = edges;
@@ -87,6 +90,8 @@ export function createSessionClient(edges: SessionEdges) {
   let leaving = 0;
   /** Set when a sign-out could not finish moving the departing token; every restore and sign-in finishes that move first. */
   let moveOwed = false;
+  /** The run of server revokes that is going, if any. */
+  let revoker: Promise<void> | null = null;
   /** A signed-out token whose pending list could not be saved. Its credential is already gone from the keychain, so a restart cannot sign the person back in; it waits here for the server revoke. */
   let unlisted: string | null = null;
   let cancelable: AbortController | null = null;
@@ -189,38 +194,54 @@ export function createSessionClient(edges: SessionEdges) {
     return promise;
   }
 
-  /** Revokes one signed-out session, then saves the tokens still waiting when it came from the saved list. */
-  async function revokeOne(token: string, rest: readonly string[], saved: boolean) {
-    await request((options) => authApi.revokeSession(token, options), false);
-    if (saved) await writePending(store, rest);
-  }
-
-  /** Revokes the given signed-out sessions, oldest first, saving the rest after each; throws on the first failure. The first `savedCount` came from the keychain. */
-  async function revokeEach(tokens: readonly string[], savedCount: number) {
-    for (const [index, token] of tokens.entries()) {
-      // react-doctor-disable-next-line react-doctor/async-await-in-loop -- one at a time, oldest first: the saved list shrinks after each
-      await revokeOne(token, tokens.slice(index + 1), index < savedCount); // oxlint-disable-line no-await-in-loop -- same
-    }
-  }
-
-  async function revokePending() {
+  /** The signed-out tokens still to revoke: the saved list, then one that could not be saved. */
+  async function waiting(): Promise<readonly string[]> {
     const saved = await readPending(store);
-    const tokens = unlisted && !saved.includes(unlisted) ? [...saved, unlisted] : saved;
-    if (tokens.length === 0) return setRevoke("idle");
-    setRevoke("revoking");
-    await revokeEach(tokens, saved.length);
-    unlisted = null;
-    setRevoke("idle");
+    return unlisted && !saved.includes(unlisted) ? [...saved, unlisted] : saved;
   }
 
-  async function revokeOrFail() {
-    try {
+  async function dropWaiting(token: string) {
+    const saved = await readPending(store);
+    if (saved.includes(token))
+      await writePending(
+        store,
+        saved.filter((other) => other !== token),
+      );
+    if (unlisted === token) unlisted = null;
+  }
+
+  /**
+   * Revokes the waiting tokens one at a time, oldest first, each read from the saved list. Only the
+   * keychain steps go through the queue; the Worker request does not, so a sign-out never waits behind
+   * one. The step that finds the list empty also ends the run, so a sign-out that lists a token after
+   * it starts a new run.
+   */
+  async function revokeNext(): Promise<void> {
+    const token = await enqueue(async () => {
       await settleSignOut();
-      await revokePending();
-    } catch (error) {
+      const [first] = await waiting();
+      if (first === undefined) {
+        revoker = null;
+        setRevoke("idle");
+      } else setRevoke("revoking");
+      return first;
+    });
+    if (token === undefined) return;
+    await request((options) => authApi.revokeSession(token, options), false);
+    await enqueue(() => dropWaiting(token));
+    await revokeNext();
+  }
+
+  /** Starts a run of server revokes, or joins the one that is going; rejects when the server did not confirm one. */
+  function revokeOrFail(): Promise<void> {
+    if (revoker) return revoker;
+    const run: Promise<void> = revokeNext().catch((error: unknown) => {
+      if (revoker === run) revoker = null;
       setRevoke("failed");
       throw error;
-    }
+    });
+    revoker = run;
+    return run;
   }
 
   /**
@@ -246,7 +267,7 @@ export function createSessionClient(edges: SessionEdges) {
       await sweepAttempts().catch(noop);
       return restore();
     });
-    await enqueue(revokeOrFail).catch(noop);
+    await revokeOrFail().catch(noop);
   }
 
   /** Tries again after "Can't connect" or a failed revoke: on the button and when the app returns to the foreground. */
@@ -255,7 +276,7 @@ export function createSessionClient(edges: SessionEdges) {
       publish({ status: "loading" });
       await refresh();
     }
-    if (revoke === "failed") await enqueue(revokeOrFail).catch(noop);
+    if (revoke === "failed") await revokeOrFail().catch(noop);
     await enqueue(sweepAttempts).catch(noop);
   }
 
@@ -469,8 +490,7 @@ export function createSessionClient(edges: SessionEdges) {
       } finally {
         leaving -= 1;
       }
-      await revokeOrFail();
-    });
+    }).then(revokeOrFail);
   }
 
   const subscribe = (listener: () => void) => {

@@ -1004,3 +1004,72 @@ void test("an account that signs out and back in is a new session, so what a scr
   assert.equal(accessTokenOf(client), "access-a");
   assert.notEqual(client.epoch(), before);
 });
+
+void test("an older revoke in flight does not keep the current account signed in on disk: killed before it ends, the restart is signed out", async () => {
+  const { worker, keychain, restart, client } = harness({
+    refreshToken: "refresh-b",
+    pendingRevoke: JSON.stringify(["refresh-old"]),
+  });
+  worker.auto("token", () => json(phoneSession("b")));
+  const starting = client.bootstrap();
+  const oldRevoke = await worker.next("sign-out");
+  assert.equal(oldRevoke.body.refreshToken, "refresh-old");
+
+  void client.signOut().catch(() => {});
+  await tick();
+  await tick();
+  // The older revoke is still waiting on the server, and the new sign-out is already on disk.
+  assert.equal(keychain.value("refreshToken"), null);
+  assert.equal(keychain.value("pendingRevoke"), JSON.stringify(["refresh-old", "refresh-b"]));
+
+  // The process dies here: a new client on the same keychain is signed out and does not refresh.
+  const restarted = restart();
+  worker.auto("sign-out", () => json({}));
+  await restarted.bootstrap();
+  assert.equal(statusOf(restarted), "unauthenticated");
+  assert.equal(worker.count("token"), 1);
+  assert.equal(keychain.value("pendingRevoke"), null);
+  void starting.catch(() => {});
+});
+
+void test("the retry on the sign-in screen revokes only: a live email attempt survives it", async () => {
+  const { worker, keychain, client } = harness({ pendingRevoke: JSON.stringify(["refresh-old"]) });
+  startsEmailWithCookie(worker);
+  worker.auto("sign-out", () => json({}, 503));
+  await client.bootstrap();
+  assert.equal(client.revokeStatus(), "failed");
+
+  await client.startEmail("b@example.net");
+  worker.auto("sign-out", () => json({}));
+  await client.retry();
+  assert.equal(client.revokeStatus(), "idle");
+  assert.notEqual(keychain.value("emailAttempt"), null);
+
+  await client.verifyEmail("b@example.net", "123456");
+  assert.equal(accessTokenOf(client), "access-b");
+  assert.equal(
+    worker.log.findLast((entry) => entry.path === "email/verify")?.cookie,
+    "q9_email=email-transaction-1",
+  );
+});
+
+void test("from the offline restore screen, signing out works without the network and queues the revoke", async () => {
+  const { worker, keychain, restart, client } = harness({ refreshToken: "refresh-a" });
+  worker.auto("token", () => json({}, 503));
+  worker.auto("sign-out", () => json({}, 503));
+  await client.bootstrap();
+  assert.equal(statusOf(client), "offline");
+
+  await assert.rejects(client.signOut());
+  assert.equal(statusOf(client), "unauthenticated");
+  assert.equal(keychain.value("refreshToken"), null);
+  assert.equal(keychain.value("pendingRevoke"), JSON.stringify(["refresh-a"]));
+  assert.equal(client.revokeStatus(), "failed");
+
+  // Back online, the next launch finishes the revoke and stays signed out.
+  const restarted = restart();
+  worker.auto("sign-out", () => json({}));
+  await restarted.bootstrap();
+  assert.equal(statusOf(restarted), "unauthenticated");
+  assert.equal(keychain.value("pendingRevoke"), null);
+});

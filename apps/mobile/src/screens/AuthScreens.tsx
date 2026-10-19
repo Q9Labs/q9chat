@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { PhotoPicker } from "../kit/Avatar";
 import { PillButton } from "../kit/Buttons";
+import { Screen, CenterState } from "../kit/Chrome";
 import { FieldIcon, Label, Note, TextField } from "../kit/Field";
 import { AppleGlyph, GoogleGlyph, Icon } from "../kit/Icon";
 import { Wordmark } from "../kit/Logo";
@@ -450,5 +451,30 @@ export function ProfileScreen({
         onPress={onContinue}
       />
     </AuthFrame>
+  );
+}
+
+/** A saved session that could not be refreshed: try again, or leave this account without the network. */
+export function OfflineRestoreScreen({
+  onRetry,
+  onSignOut,
+}: {
+  onRetry: () => void;
+  onSignOut: () => void;
+}) {
+  return (
+    <Screen>
+      <CenterState
+        icon="ban"
+        title="Can't connect. Try again."
+        text="Your sign-in is saved. Check your connection and try again, or sign out."
+        action={
+          <View style={{ gap: 8, alignItems: "center" }}>
+            <PillButton label="Try again" onPress={onRetry} />
+            <PillButton label="Sign out" onPress={onSignOut} />
+          </View>
+        }
+      />
+    </Screen>
   );
 }
