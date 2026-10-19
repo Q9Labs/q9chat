@@ -78,7 +78,6 @@ function IncomingTyping({ groupId }: { groupId: Group["groupId"] }) {
 type ViewportState = {
   metrics: { offset: number; height: number; content: number };
   lastScrollOffset: number;
-  userScrolling: boolean;
   placed: boolean;
   following: boolean;
   anchor: { id: string; offset: number } | null;
@@ -101,7 +100,6 @@ export function LiveHistory({ group }: { group: Group }) {
   const viewport = useRef<ViewportState>({
     metrics: { offset: 0, height: 0, content: 0 },
     lastScrollOffset: 0,
-    userScrolling: false,
     placed: false,
     following: opening.unread === null,
     anchor: null,
@@ -192,13 +190,12 @@ export function LiveHistory({ group }: { group: Group }) {
   function onScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
     const m = viewport.current.metrics;
     m.offset = event.nativeEvent.contentOffset.y;
-    viewport.current.following = followAfterScroll({
-      following: viewport.current.following,
-      from: viewport.current.lastScrollOffset,
-      to: m.offset,
-      atBottom: window.last >= latest && m.content - m.offset - m.height <= 2,
-      userScrolling: viewport.current.userScrolling,
-    });
+    viewport.current.following = followAfterScroll(
+      viewport.current.following,
+      viewport.current.lastScrollOffset,
+      m.offset,
+      window.last >= latest && m.content - m.offset - m.height <= 2,
+    );
     viewport.current.lastScrollOffset = m.offset;
     updateAway();
     saveAnchor();
@@ -221,25 +218,14 @@ export function LiveHistory({ group }: { group: Group }) {
           scrollEventThrottle={100}
           onLayout={(event) => {
             viewport.current.metrics.height = event.nativeEvent.layout.height;
-            place();
+            // Android can dispatch layout before its ScrollView can accept the new bottom offset.
+            requestAnimationFrame(place);
           }}
           onContentSizeChange={(_, height) => {
             viewport.current.metrics.content = height;
             place();
           }}
           onScroll={onScroll}
-          onScrollBeginDrag={() => {
-            viewport.current.userScrolling = true;
-          }}
-          onScrollEndDrag={() => {
-            viewport.current.userScrolling = false;
-          }}
-          onMomentumScrollBegin={() => {
-            viewport.current.userScrolling = true;
-          }}
-          onMomentumScrollEnd={() => {
-            viewport.current.userScrolling = false;
-          }}
           contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 12 }}
         >
           <HistoryPage
