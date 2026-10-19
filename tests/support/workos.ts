@@ -17,7 +17,6 @@ const events = Schema.Struct({
 });
 
 const retrievedChallenges = new Set<string>();
-const cookies = new Map<string, string>();
 
 export async function magicCode(email: string) {
   // Read the challenge created by our UI/public API, never replace it with another challenge.
@@ -47,7 +46,7 @@ export async function magicCode(email: string) {
   throw new Error("No Magic Auth event for the fresh test user");
 }
 
-async function authPost(path: string, body: object) {
+async function authPost(path: string, body: object, cookies: Map<string, string>) {
   const response = await fetch(`${authOrigin}/api/auth/${path}`, {
     method: "POST",
     headers: {
@@ -100,25 +99,31 @@ export async function removeTestUser(email: string) {
 export type PhoneSession = Schema.Schema.Type<typeof phoneSession>;
 
 export async function signInPhone(email: string): Promise<PhoneSession> {
-  await authPost("email/start", { email });
+  const cookies = new Map<string, string>();
+  await authPost("email/start", { email }, cookies);
   return Schema.decodeUnknownSync(phoneSession)(
     await (
-      await authPost("email/verify", {
-        email,
-        code: await magicCode(email),
-        client: "phone",
-      })
+      await authPost(
+        "email/verify",
+        {
+          email,
+          code: await magicCode(email),
+          client: "phone",
+        },
+        cookies,
+      )
     ).json(),
   );
 }
 
 export async function deletePhoneProfile(session: PhoneSession) {
+  const cookies = new Map<string, string>();
   const fresh = Schema.decodeUnknownSync(phoneSession)(
-    await (await authPost("token", { refreshToken: session.refreshToken })).json(),
+    await (await authPost("token", { refreshToken: session.refreshToken }, cookies)).json(),
   );
   const client = new ConvexHttpClient("https://quixotic-crab-23.convex.cloud");
   client.setAuth(fresh.accessToken);
   if ((await client.query(api.profiles.me, {}))?.status === "ready")
     await client.mutation(api.profiles.deleteAccount, {});
-  await authPost("sign-out", { refreshToken: fresh.refreshToken });
+  await authPost("sign-out", { refreshToken: fresh.refreshToken }, cookies);
 }
