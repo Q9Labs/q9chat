@@ -27,6 +27,7 @@ const bodyLimitCopy = "Use 4,000 characters or fewer.";
 
 function textStore(key: string) {
   let sendQueue: Promise<unknown> = Promise.resolve();
+  let sendLifetime: AbortSignal | undefined;
   const restored: { readonly text: TextState; readonly error: string } = loadText(key);
   let snapshot = { ...restored, saveError: "", failure: { id: 0, text: "" } };
   let delivery = {
@@ -58,7 +59,14 @@ function textStore(key: string) {
     for (const listener of listeners) listener();
   }
   return {
-    dispatch: (send: () => Promise<FunctionReturnType<typeof api.messages.send>>) => {
+    dispatch: (
+      lifetime: AbortSignal,
+      send: () => Promise<FunctionReturnType<typeof api.messages.send>>,
+    ) => {
+      if (sendLifetime !== lifetime) {
+        sendLifetime = lifetime;
+        sendQueue = Promise.resolve();
+      }
       const next = sendQueue.then(send, send);
       sendQueue = next.catch(() => {});
       return next;
@@ -219,7 +227,7 @@ export function useTextOutbox(group: Group, rows: readonly Row[]) {
         ),
     });
     try {
-      const receipt = await store.dispatch(async () => {
+      const receipt = await store.dispatch(lifetime, async () => {
         if (abandoned()) throw new Error("Send cancelled");
         const replyToId = post.reply ? await replyId(client, group.groupId, post.reply) : undefined;
         if (abandoned()) throw new Error("Send cancelled");
