@@ -1,4 +1,5 @@
 import { MAX_NAME, saveThenCheck } from "./nameRules.ts";
+import { createWriteRun, standOf } from "./pendingWrite.ts";
 
 /** What the sheet over Account says when the name cannot be saved before leaving. */
 type Unsaved = {
@@ -81,8 +82,8 @@ type Plan =
 /** Why a changed name cannot be saved right now, or null when it can. */
 function problemWith(name: string, connected: boolean, inFlight: boolean): keyof typeof ASK | null {
   if (!name || name.length > MAX_NAME) return "invalid";
-  if (!connected) return inFlight ? "waiting" : "offline";
-  return null;
+  const stand = standOf(connected, inFlight);
+  return stand === "offline" || stand === "waiting" ? stand : null;
 }
 
 /** What an exit does, from the field, the saved name, the connection, a photo change and whether a save is out. */
@@ -106,8 +107,8 @@ export function createNameEditor(initial: NameEditorInputs) {
   let inputs = initial;
   let state: NameEditorState = { draft: null, saving: false, unsaved: null };
   const listeners = new Set<() => void>();
-  /** Counts the answers given to the person; an exit started before the latest one is over. */
-  let turn = 0;
+  /** An exit started before the person's latest answer is over: its save may end, but nothing leaves. */
+  const writes = createWriteRun();
 
   const set = (patch: Partial<NameEditorState>) => {
     state = { ...state, ...patch };
@@ -118,23 +119,15 @@ export function createNameEditor(initial: NameEditorInputs) {
 
   /** Saves `name`, then leaves if the field still holds it; a rejected save asks instead. */
   async function saveThenLeave(name: string, leave: () => void) {
-    turn += 1;
-    const mine = turn;
     set({ saving: true });
-    let outcome: "saved" | "edited" | "failed";
-    try {
-      const unchanged = await saveThenCheck(name, inputs.save, () => state.draft ?? "");
-      outcome = unchanged ? "saved" : "edited";
-    } catch {
-      outcome = "failed";
-    } finally {
-      set({ saving: false });
-    }
-    if (mine !== turn) return;
-    if (outcome === "saved") {
+    const end = await writes.run(() => saveThenCheck(name, inputs.save, () => state.draft ?? ""));
+    set({ saving: false });
+    if (end.stale) return;
+    if (!end.ok) ask("failed", leave);
+    else if (end.value) {
       if (inputs.photoBusy) ask("photo", leave);
       else leave();
-    } else if (outcome === "failed") ask("failed", leave);
+    }
   }
 
   async function exit(leave: () => void) {
@@ -146,7 +139,7 @@ export function createNameEditor(initial: NameEditorInputs) {
 
   /** Drops the draft, so nothing holds the screen back from leaving. */
   function clear() {
-    turn += 1;
+    writes.supersede();
     set({ draft: null, unsaved: null });
   }
 
@@ -158,7 +151,7 @@ export function createNameEditor(initial: NameEditorInputs) {
     clear,
     change: (next: string) => set({ draft: next }),
     keepEditing: () => {
-      turn += 1;
+      writes.supersede();
       set({ unsaved: null });
     },
     discard: () => {

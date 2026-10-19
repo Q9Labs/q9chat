@@ -7,6 +7,7 @@ import { Field, LinkBox, Note, TextField } from "../kit/Field";
 import { Icon } from "../kit/Icon";
 import { noop } from "../kit/noop";
 import { Press } from "../kit/Press";
+import { WriteExitSheet } from "../kit/WriteExitSheet";
 import { useTheme } from "../theme";
 import { T } from "../theme/Text";
 import { fonts, radius } from "../theme/tokens";
@@ -37,8 +38,12 @@ export type NewGroupScreenProps = {
   /** "Create", "Start", "Open" or "Add". */
   primaryLabel: string;
   primaryEnabled: boolean;
-  /** A save is out: every way off this screen and every field is off until it ends. */
+  /** A write is out: every field, suggestion and the primary button are off until it ends. */
   pending: boolean;
+  /** A write is out and the connection is up: every way off this screen is off too. */
+  locked: boolean;
+  /** Asked when someone leaves while a write is out and the connection is down; null otherwise. */
+  leavePrompt: { leave: () => void; stay: () => void } | null;
   /** What went wrong with the last try, in plain words. */
   error: string | null;
   onPrimary: () => void;
@@ -143,7 +148,11 @@ function PeopleInput({
   );
 }
 
-function Suggestions({ suggestions, onPick }: Pick<NewGroupScreenProps, "suggestions" | "onPick">) {
+function Suggestions({
+  suggestions,
+  onPick,
+  pending,
+}: Pick<NewGroupScreenProps, "suggestions" | "onPick" | "pending">) {
   if (!suggestions.length) return null;
   return (
     <View accessibilityLabel="People" style={{ marginTop: 6 }}>
@@ -152,7 +161,7 @@ function Suggestions({ suggestions, onPick }: Pick<NewGroupScreenProps, "suggest
           key={person.id}
           accessibilityRole="button"
           accessibilityLabel={person.email ? `${person.name}, ${person.email}` : person.name}
-          onPress={() => onPick(person.id)}
+          onPress={pending ? noop : () => onPick(person.id)}
           scaleTo={1}
           style={{
             minHeight: 48,
@@ -217,6 +226,36 @@ function Hint({ hint }: { hint: PeopleHint }) {
   );
 }
 
+/** The invite link under the people field: none for a pair, the link to copy otherwise. */
+function InviteLinkField({
+  add,
+  link,
+  copied,
+  onCopy,
+}: {
+  add: boolean;
+  link: string | null;
+  copied: boolean;
+  onCopy: () => void;
+}) {
+  return (
+    <Field label="Invite link">
+      {link === null ? (
+        <Note style={{ marginTop: 0 }}>Add a name or more people to get an invite link.</Note>
+      ) : (
+        <>
+          <LinkBox link={link} copied={copied} onCopy={onCopy} />
+          <Note style={{ marginTop: 0 }}>
+            {add
+              ? "Anyone with the link can join and read the whole group."
+              : "Anyone with the link can join once the group exists."}
+          </Note>
+        </>
+      )}
+    </Field>
+  );
+}
+
 /** Create or add people: name, people chips with suggestions, and the invite link. */
 export function NewGroupScreen(props: NewGroupScreenProps) {
   const add = props.mode === "add";
@@ -224,7 +263,7 @@ export function NewGroupScreen(props: NewGroupScreenProps) {
     <Screen safeBottom>
       <PageNav
         title={add ? "Add people" : "New group"}
-        start={{ label: "Cancel", onPress: props.onCancel, disabled: props.pending }}
+        start={{ label: "Cancel", onPress: props.onCancel, disabled: props.locked }}
         end={{
           label: props.primaryLabel,
           strong: true,
@@ -253,29 +292,32 @@ export function NewGroupScreen(props: NewGroupScreenProps) {
             onUnpick={props.onUnpick}
             locked={props.pending}
           />
-          <Suggestions suggestions={props.suggestions} onPick={props.onPick} />
+          <Suggestions
+            suggestions={props.suggestions}
+            onPick={props.onPick}
+            pending={props.pending}
+          />
           <Hint hint={props.hint} />
         </Field>
-        <Field label="Invite link">
-          {props.inviteLink === null ? (
-            <Note style={{ marginTop: 0 }}>Add a name or more people to get an invite link.</Note>
-          ) : (
-            <>
-              <LinkBox link={props.inviteLink} copied={props.copied} onCopy={props.onCopyLink} />
-              <Note style={{ marginTop: 0 }}>
-                {add
-                  ? "Anyone with the link can join and read the whole group."
-                  : "Anyone with the link can join once the group exists."}
-              </Note>
-            </>
-          )}
-        </Field>
+        <InviteLinkField
+          add={add}
+          link={props.inviteLink}
+          copied={props.copied}
+          onCopy={props.onCopyLink}
+        />
         {props.error ? (
           <T accessibilityRole="alert" size={13} color="er" style={{ marginHorizontal: 2 }}>
             {props.error}
           </T>
         ) : null}
       </ScrollView>
+      {props.leavePrompt ? (
+        <WriteExitSheet
+          title={add ? "These people aren't added yet" : "Your group isn't created yet"}
+          onLeave={props.leavePrompt.leave}
+          onStay={props.leavePrompt.stay}
+        />
+      ) : null}
     </Screen>
   );
 }

@@ -1,15 +1,16 @@
 import { api, type Id } from "@q9chat/convex";
-import { useMutation } from "convex/react";
+import { useConvexConnectionState, useMutation } from "convex/react";
 import * as Crypto from "expo-crypto";
 import { Stack, useRouter, usePreventRemove } from "expo-router";
-import { useRef, useState } from "react";
+import { useState } from "react";
 
 import { NewGroupScreen } from "../screens/NewGroupScreen";
 import { config } from "../session/config";
-import { groupError, newInviteToken, pairCandidate, type Phase } from "./groupRules";
+import { groupError, newInviteToken, pairCandidate } from "./groupRules";
 import { livePerson } from "./livePeople";
 import { postNotice } from "./notice";
 import { useCopied } from "./useCopied";
+import { useGuardedWrite } from "./useGuardedWrite";
 import { type Found, usePeoplePicker } from "./usePeoplePicker";
 import type { ReadyProfile } from "./useStage";
 
@@ -39,8 +40,9 @@ function primaryLabel(
 }
 
 /**
- * The call behind the primary button. While it is out, the only way off the screen is its own move
- * after it succeeds: Cancel, the Android Back button and the swipe are off.
+ * The call behind the primary button, held by `useGuardedWrite`: while it is out the only way off
+ * the screen is its own move after it succeeds, unless the connection is down and the person
+ * chooses to leave.
  */
 function useSubmit({
   add,
@@ -57,51 +59,44 @@ function useSubmit({
   pairWith: Found["id"] | null;
 }) {
   const router = useRouter();
-  const [phase, setPhase] = useState<Phase>({ kind: "idle" });
-  const busy = useRef(false);
-  const leaving = useRef(false);
+  const { isWebSocketConnected } = useConvexConnectionState();
+  const guarded = useGuardedWrite(isWebSocketConnected);
+  usePreventRemove(guarded.holding, guarded.onRemove);
   const createGroup = useMutation(api.groups.create);
   const openPair = useMutation(api.groups.openPair);
   const addMembers = useMutation(api.groups.addMembers);
-  usePreventRemove(phase.kind === "pending", ({ repeat }) => {
-    if (leaving.current) repeat();
-  });
 
-  async function call() {
-    const ids = people.map((person) => person.id);
+  const ids = people.map((person) => person.id);
+  const trimmed = name.trim();
+  const describe = (cause: unknown) => groupError(cause, people.length);
+
+  function submit() {
     if (add) {
-      await addMembers({ groupId: add.groupId, profileIds: ids });
-      postNotice(`Added ${people.map((person) => person.name).join(", ")}`);
-      leaving.current = true;
-      router.back();
+      guarded.submit(
+        () => addMembers({ groupId: add.groupId, profileIds: ids }),
+        () => {
+          // The API does not say who was added (someone may have been added meanwhile), so the line does not name anyone.
+          postNotice("Group updated");
+          router.back();
+        },
+        describe,
+      );
       return;
     }
-    const trimmed = name.trim();
-    const groupId = pairWith
-      ? await openPair({ profileId: pairWith })
-      : await createGroup({
-          ...(trimmed ? { name: trimmed } : {}),
-          memberIds: ids,
-          inviteToken: token,
-        });
-    leaving.current = true;
-    router.replace({ pathname: "/g/[groupId]", params: { groupId } });
+    guarded.submit(
+      () =>
+        pairWith
+          ? openPair({ profileId: pairWith })
+          : createGroup({
+              ...(trimmed ? { name: trimmed } : {}),
+              memberIds: ids,
+              inviteToken: token,
+            }),
+      (groupId) => router.replace({ pathname: "/g/[groupId]", params: { groupId } }),
+      describe,
+    );
   }
-
-  const fail = (message: string) => setPhase({ kind: "failed", message });
-
-  async function submit() {
-    if (busy.current) return;
-    busy.current = true;
-    setPhase({ kind: "pending" });
-    try {
-      await call();
-    } catch (cause) {
-      busy.current = false;
-      setPhase({ kind: "failed", message: groupError(cause, people.length) });
-    }
-  }
-  return { phase, fail, submit: () => void submit() };
+  return { ...guarded, submit };
 }
 
 /**
@@ -121,7 +116,7 @@ export function NewGroupJourney({ profile, add }: { profile: ReadyProfile; add?:
   // The link is shown before the group exists, so the phone makes its token.
   const [token] = useState(() => add?.inviteToken ?? newInviteToken(Crypto.getRandomBytes));
   const pairWith = add ? null : pairCandidate(name, picker.people);
-  const { phase, fail, submit } = useSubmit({
+  const { phase, prompt, stand, submit } = useSubmit({
     add,
     name,
     token,
@@ -129,16 +124,18 @@ export function NewGroupJourney({ profile, add }: { profile: ReadyProfile; add?:
     pairWith,
   });
   const { copied, copy } = useCopied();
+  // A copy that fails says so on its own, apart from the write that may be out.
+  const [copyFailed, setCopyFailed] = useState(false);
 
   async function copyLink() {
-    if (!(await copy(inviteUrl(token)))) fail("Couldn't copy the link. Try again.");
+    setCopyFailed(!(await copy(inviteUrl(token))));
   }
   return (
     <>
       <Stack.Screen
         options={{
-          gestureEnabled: phase.kind !== "pending",
-          fullScreenGestureEnabled: phase.kind !== "pending",
+          gestureEnabled: stand !== "locked",
+          fullScreenGestureEnabled: stand !== "locked",
         }}
       />
       <NewGroupScreen
@@ -158,7 +155,15 @@ export function NewGroupJourney({ profile, add }: { profile: ReadyProfile; add?:
         primaryLabel={primaryLabel(mode, pairWith, picker.pairGroupId)}
         primaryEnabled={canSubmit(mode, picker.people.length, name)}
         pending={phase.kind === "pending"}
-        error={phase.kind === "failed" ? phase.message : picker.problem}
+        locked={stand === "locked"}
+        leavePrompt={prompt}
+        error={
+          phase.kind === "failed"
+            ? phase.message
+            : copyFailed
+              ? "Couldn't copy the link. Try again."
+              : picker.problem
+        }
         onPrimary={submit}
         onCancel={() => router.back()}
       />

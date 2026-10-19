@@ -1,15 +1,18 @@
 import { api } from "@q9chat/convex";
-import { useMutation, useQuery } from "convex/react";
+import { useConvexConnectionState, useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { useRouter } from "expo-router";
-import { useEffect, useRef, useState } from "react";
+import { usePreventRemove, useRouter } from "expo-router";
+import { useEffect } from "react";
 
 import { PillButton } from "../kit/Buttons";
 import { CenterState, PageNav, Screen } from "../kit/Chrome";
+import { WriteExitSheet } from "../kit/WriteExitSheet";
 import { isInviteToken } from "../session/storage";
 import { T } from "../theme/Text";
 import { groupError, invalidInviteCopy, removedInviteCopy, type Phase } from "./groupRules";
 import { Loading } from "./Loading";
+import { useGuardedWrite } from "./useGuardedWrite";
+import { useOffline } from "./useOffline";
 
 type Router = ReturnType<typeof useRouter>;
 type InviteInfo = FunctionReturnType<typeof api.groups.inviteInfo>;
@@ -48,23 +51,21 @@ function useSettled(view: View, router: Router) {
   }, [groupId, router]);
 }
 
+/** Join is one write behind the button, held like create and add: Back waits for it, or asks when it may not end. */
 function useJoin(token: string, router: Router) {
   const join = useMutation(api.groups.join);
-  const [phase, setPhase] = useState<Phase>({ kind: "idle" });
-  const busy = useRef(false);
-  async function accept() {
-    if (busy.current) return;
-    busy.current = true;
-    setPhase({ kind: "pending" });
-    try {
-      const groupId = await join({ token });
-      openGroup(router, groupId);
-    } catch (cause) {
-      busy.current = false;
-      setPhase({ kind: "failed", message: groupError(cause) });
-    }
-  }
-  return { phase, accept: () => void accept() };
+  const { isWebSocketConnected } = useConvexConnectionState();
+  const guarded = useGuardedWrite(isWebSocketConnected);
+  usePreventRemove(guarded.holding, guarded.onRemove);
+  return {
+    ...guarded,
+    accept: () =>
+      guarded.submit(
+        () => join({ token }),
+        (groupId) => openGroup(router, groupId),
+        groupError,
+      ),
+  };
 }
 
 /** The same words as the invite page on the web. */
@@ -96,22 +97,40 @@ function InviteCard({ info, phase, onJoin }: { info: Card; phase: Phase; onJoin:
   );
 }
 
-/** A link to a group: who it is, and one button to join. */
+/** A link to a group: who it is, and one button to join. The header's Back stays through the lookup, so a link never traps. */
 export function JoinJourney({ token }: { token: string }) {
   const router = useRouter();
+  const offline = useOffline();
   const view = useInvite(token);
   useSettled(view, router);
-  const { phase, accept } = useJoin(token, router);
-  if (view.kind === "loading" || view.kind === "member") return <Loading />;
+  const { phase, stand, prompt, accept } = useJoin(token, router);
   const close = () => router.dismissTo("/");
+  if (view.kind === "member") return <Loading />;
   return (
     <Screen>
-      <PageNav title="" start={{ back: true, onPress: close }} />
-      {view.kind === "card" ? (
+      <PageNav title="" start={{ back: true, onPress: close, disabled: stand === "locked" }} />
+      {view.kind === "loading" ? (
+        offline ? (
+          <CenterState
+            icon="wifiOff"
+            title="Can't connect"
+            text="This invite will load when you're back online."
+          />
+        ) : (
+          <Loading />
+        )
+      ) : view.kind === "card" ? (
         <InviteCard info={view.info} phase={phase} onJoin={accept} />
       ) : (
         <CenterState icon="mail" title="Link not valid" text={invalidInviteCopy} />
       )}
+      {prompt ? (
+        <WriteExitSheet
+          title="You haven't joined yet"
+          onLeave={prompt.leave}
+          onStay={prompt.stay}
+        />
+      ) : null}
     </Screen>
   );
 }

@@ -1,7 +1,9 @@
+import { PillButton } from "../kit/Buttons";
 import { CenterState, OfflinePill, Screen } from "../kit/Chrome";
 import { noop } from "../kit/noop";
 import { Toast } from "../kit/Overlays";
 import { Timeline } from "../kit/Timeline";
+import { WriteExitSheet } from "../kit/WriteExitSheet";
 import type { Avatar as AvatarData, TimelineItem } from "../types";
 import { ChatHeader } from "./ChatScreen";
 
@@ -20,6 +22,10 @@ export type GroupScreenProps = {
   onBack: () => void;
   onOpenInfo: () => void;
   onSearch: () => void;
+  /** "Remove from my list" in the removed view. */
+  onForget: () => void;
+  /** Asked when someone leaves while that is still going through offline; null otherwise. */
+  leavePrompt: { leave: () => void; stay: () => void } | null;
 };
 
 // Posts are not shown yet, so nothing in the timeline can be tapped.
@@ -48,6 +54,7 @@ export function GroupScreen(props: GroupScreenProps) {
           icon="ban"
           title="You were removed from this group"
           text={`${props.removed.by} removed you ${props.removed.when}. Only members can read a group, so its messages are hidden.`}
+          action={<PillButton label="Remove from my list" onPress={props.onForget} />}
         />
       ) : (
         <>
@@ -60,6 +67,13 @@ export function GroupScreen(props: GroupScreenProps) {
           />
         </>
       )}
+      {props.leavePrompt ? (
+        <WriteExitSheet
+          title="It isn't removed yet"
+          onLeave={props.leavePrompt.leave}
+          onStay={props.leavePrompt.stay}
+        />
+      ) : null}
       {props.toast ? <Toast text={props.toast} /> : null}
     </Screen>
   );

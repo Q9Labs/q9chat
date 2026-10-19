@@ -116,6 +116,8 @@ function newGroup(over: Partial<NewGroupScreenProps>): ReactElement {
     primaryLabel: "Create",
     primaryEnabled: false,
     pending: false,
+    locked: false,
+    leavePrompt: null,
     error: null,
     ...over,
   };

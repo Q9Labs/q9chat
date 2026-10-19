@@ -1,7 +1,8 @@
 import { api, type Id } from "@q9chat/convex";
-import { useQuery } from "convex/react";
+import { useConvexConnectionState, useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { useRouter } from "expo-router";
+import { usePreventRemove, useRouter } from "expo-router";
+import { useEffect } from "react";
 
 import { useToast } from "../kit/useToast";
 import { GroupScreen } from "../screens/GroupScreen";
@@ -11,6 +12,7 @@ import { rowStamp } from "./groupRows";
 import { GroupUnavailable } from "./GroupUnavailable";
 import { liveAvatar } from "./livePeople";
 import { Loading } from "./Loading";
+import { useGuardedWrite } from "./useGuardedWrite";
 import { useOffline } from "./useOffline";
 
 const COMING_NEXT = "This is coming in the next journey.";
@@ -32,6 +34,15 @@ function GroupView({
   const router = useRouter();
   const [toast, showToast] = useToast();
   const offline = useOffline();
+  const { isWebSocketConnected } = useConvexConnectionState();
+  const forgetRemoval = useMutation(api.groups.dismissRemoval);
+  const guarded = useGuardedWrite(isWebSocketConnected);
+  usePreventRemove(guarded.holding, guarded.onRemove);
+  const failed = guarded.phase.kind === "failed" ? guarded.phase.message : null;
+  // A failed removal from the list says so in a line that goes away, like every other notice here.
+  useEffect(() => {
+    if (failed) showToast(failed);
+  }, [failed, showToast]);
   const base = {
     title: detail.title,
     avatar: liveAvatar(
@@ -44,6 +55,14 @@ function GroupView({
     onBack: () => router.back(),
     onOpenInfo: () => router.push({ pathname: "/g/[groupId]/info", params: { groupId } }),
     onSearch: () => showToast(COMING_NEXT),
+    // The removed group stays in Groups until it is taken off the list, then Groups is where this goes back to.
+    onForget: () =>
+      guarded.submit(
+        () => forgetRemoval({ groupId }),
+        () => router.dismissTo("/"),
+        () => "Couldn't remove it. Try again.",
+      ),
+    leavePrompt: guarded.prompt,
   };
   if (detail.status === "removed")
     return (
