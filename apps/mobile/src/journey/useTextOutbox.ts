@@ -13,8 +13,10 @@ import { textStore } from "./textStore";
 type Group = Extract<FunctionReturnType<typeof api.groups.get>, { status: "member" }>;
 type Row = FunctionReturnType<typeof api.messages.range>[number];
 
-export function useTextOutbox(group: Group, rows: readonly Row[], account: string) {
-  const store = textStore(account, group.groupId);
+export function useTextOutbox(group: Group, rows: readonly Row[]) {
+  const me = group.members.find((person) => person.isYou);
+  if (!me) throw new Error("Member query did not include the caller");
+  const store = textStore(me.id, group.groupId);
   const [openingSequence] = useState(group.lastSequence);
   const state = useSyncExternalStore(store.subscribe, store.get);
   const { isWebSocketConnected: connected } = useConvexConnectionState();
@@ -87,6 +89,7 @@ export function useTextOutbox(group: Group, rows: readonly Row[], account: strin
   }
   return {
     ...state,
+    me,
     pending,
     notice: (message: string) => store.error(message),
     change(draft: string) {

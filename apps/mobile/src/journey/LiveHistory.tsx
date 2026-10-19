@@ -95,10 +95,7 @@ export function LiveHistory({ group }: { group: Group }) {
     read: group.lastReadSequence,
   }));
   const { window, setWindow, rows, loading, failed } = useHistoryPages(group, opening.unread);
-  const me = group.members.find((person) => person.isYou);
-  // Membership queries always include the caller.
-  if (!me) throw new Error("Member query did not include the caller");
-  const text = useTextOutbox(group, rows, me.id);
+  const text = useTextOutbox(group, rows);
   const latest = pageOf(group.lastSequence);
   const scroll = useRef<ScrollViewInstance>(null);
   const boxes = useRowBoxes(rows);
@@ -248,7 +245,7 @@ export function LiveHistory({ group }: { group: Group }) {
               measureVisible();
             }}
           />
-          <PendingPosts text={text} me={me} actions={READ_ONLY} />
+          <PendingPosts text={text} actions={READ_ONLY} />
         </ScrollView>
         <JumpControl shown={away || window.last < latest} onPress={toLatest} />
       </View>

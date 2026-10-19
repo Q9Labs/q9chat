@@ -47,8 +47,6 @@ export async function magicCode(email: string) {
   throw new Error("No Magic Auth event for the fresh test user");
 }
 
-const authOrigin = process.env["J1_AUTH_ORIGIN"] ?? "http://localhost:3000";
-
 async function authPost(path: string, body: object) {
   const response = await fetch(`${authOrigin}/api/auth/${path}`, {
     method: "POST",

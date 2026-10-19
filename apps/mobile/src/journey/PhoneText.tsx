@@ -15,15 +15,8 @@ import type { useTextOutbox } from "./useTextOutbox";
 type Group = Extract<FunctionReturnType<typeof api.groups.get>, { status: "member" }>;
 type Text = ReturnType<typeof useTextOutbox>;
 
-export function PendingPosts({
-  text,
-  me,
-  actions,
-}: {
-  text: Text;
-  me: Group["members"][number];
-  actions: GroupActions;
-}) {
+export function PendingPosts({ text, actions }: { text: Text; actions: GroupActions }) {
+  const { me } = text;
   return (
     <>
       {text.pending.map((post) => (
