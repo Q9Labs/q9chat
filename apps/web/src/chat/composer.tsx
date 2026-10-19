@@ -204,7 +204,7 @@ function ComposerField(props: ComposerFieldProps) {
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={onKeyDown}
           onBlur={props.onBlur}
-          aria-invalid={value.length > 4000 || undefined}
+          aria-invalid={value.trimEnd().length > 4000 || undefined}
         />
         {editing ? null : (
           <button

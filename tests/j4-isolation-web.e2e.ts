@@ -253,16 +253,30 @@ isolationTest("J4 tab drafts: stale tab send cannot erase a newer draft", async 
         (await f.posts()).some((row) => row.kind === "post" && row.body === "Old tab B draft"),
       )
       .toBe(true);
-    await f.page.bringToFront();
-    await f.page.reload({ waitUntil: "commit" });
-    await f.field.waitFor();
     expect(await f.field.inputValue()).toBe("Newer unsent tab A draft");
-    process.stdout.write(
-      "J4 PASS: a stale tab send cannot erase another tab's newer draft, including after reload\n",
-    );
+    // Check the persisted composition before navigation, so a navigation timeout cannot
+    // conceal the stale tab's write. Read either version's deliberate storage format.
+    expect(
+      await f.page.evaluate(
+        (key) => sessionStorage.getItem(key) ?? localStorage.getItem(key),
+        `q9chat:text:${f.a.id}:${f.groupId}:draft`,
+      ),
+    ).toBe("Newer unsent tab A draft");
   } finally {
     await tab.close();
   }
+  // The interleaving is complete. Close its sender before the separate durability check.
+  await f.page.bringToFront();
+  const beforeReload = await f.page.evaluate(() => performance.timeOrigin);
+  await f.page.reload({ waitUntil: "commit" });
+  expect(await f.page.evaluate((previous) => performance.timeOrigin > previous, beforeReload)).toBe(
+    true,
+  );
+  await f.field.waitFor();
+  expect(await f.field.inputValue()).toBe("Newer unsent tab A draft");
+  process.stdout.write(
+    "J4 PASS: a stale tab send cannot erase another tab's newer draft; preserved after sender closes and a fresh-document reload\n",
+  );
 });
 
 isolationTest(
@@ -466,8 +480,12 @@ isolationTest(
         )
         .toBe(3);
       await f.field.fill("Draft measurement");
+      const fill = await counts();
+      await f.field.type(" first keyboard input");
+      const firstKeys = await counts();
       await f.field.type(" thirty separate composer keystrokes");
       const draft = await counts();
+      process.stdout.write(`J4 INPUT PHASES: ${JSON.stringify({ fill, firstKeys, draft })}\n`);
       await f.b.client.mutation(api.typing.start, { groupId: f.groupId });
       await f.page.getByText("Bilal is typing", { exact: true }).waitFor();
       await f.b.client.mutation(api.typing.stop, { groupId: f.groupId });
@@ -483,7 +501,7 @@ isolationTest(
       await profiler.detach();
     }
     process.stdout.write(
-      "J4 PASS: V8 call counts show draft keystrokes and peer typing perform no history projection, Timeline render, or timeline rebuild in a full bounded window\n",
+      "J4 PASS: V8 call counts show steady-state draft keystrokes and peer typing perform no history projection, Timeline render, or timeline rebuild in a full bounded window; initial input is reported separately\n",
     );
   },
 );

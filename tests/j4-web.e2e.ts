@@ -216,6 +216,7 @@ test(
       await field.press("Enter");
       expect(wire.sends.length).toBe(beforeLimit);
       await field.fill("x".repeat(4000) + "\n  ");
+      expect(await field.getAttribute("aria-invalid")).toBe(null);
       expect(await page.getByRole("button", { name: "Send", exact: true }).isEnabled()).toBe(true);
       await field.press("Enter");
       await committed("x".repeat(4000));
