@@ -14,6 +14,7 @@
 - **Send text on the web**: Messages appear immediately, failed sends can be retried without duplicates, and each group keeps its own draft across reloads.
 - **Find old messages on the web**: Search your groups as you type, then open a result at its highlighted message.
 - **Manage group membership and mute on web**: Mute or unmute a group, leave with confirmation, remove a member, and clear a removal notice.
+- **Production phone build settings**: Store builds connect to the same Q9 Chat service as the web app. Development builds keep their local settings.
 
 ### Fixed
 
