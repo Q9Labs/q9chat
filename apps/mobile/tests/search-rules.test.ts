@@ -18,6 +18,7 @@ void test("snippets preserve text and emphasize the last typed word without rege
     ["a+b today", "a+b", "a+b"],
     ["hello", "missing", ""],
     ["hello", "", ""],
+    // cspell:ignore بالفريق بالف
     ["مرحبا بالفريق", "بالف", "بالف"],
   ]) {
     if (text === undefined || query === undefined) throw new Error("Missing case");
