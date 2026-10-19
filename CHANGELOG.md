@@ -15,6 +15,8 @@
 - **Find old messages on the web**: Search your groups as you type, then open a result at its highlighted message.
 - **Manage group membership and mute on web**: Mute or unmute a group, leave with confirmation, remove a member, and clear a removal notice.
 
+- **Desktop notifications for mentions and replies**: Turn on desktop notifications after opening a group, choose which groups can interrupt, and open a notification at its message.
+
 ### Fixed
 
 - **Local development**: Keep generated build output and local server logs out of git.

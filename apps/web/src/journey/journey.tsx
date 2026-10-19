@@ -14,7 +14,9 @@ import { ChatShell, PickAGroup } from "../screens/shell.js";
 import { NoGroupsYet, Sidebar } from "../screens/sidebar.js";
 import { Toast } from "../ui/overlay.js";
 import { AppRoot } from "../ui/root.js";
+import { stopDesktopNotifications } from "./desktop-notifications.js";
 import { GroupJourneyBoundary, useGroupJourney } from "./groups.js";
+import { Notifications } from "./notifications.js";
 import { OAuthArrival } from "./oauth-arrival.js";
 import { isPhotoRejection, photoSelectionError, uploadPhoto, usePhotos } from "./photos.js";
 import { useSearchJourney } from "./search.js";
@@ -66,14 +68,16 @@ function useJourneySignOut() {
     const started = ++generation.current;
     signOutSession.current = currentSession.current;
     setSignOutStatus("pending");
-    void signOut().then(
-      () => {
-        if (started === generation.current) setSignOutStatus("complete");
-      },
-      () => {
-        if (started === generation.current) setSignOutStatus("failed");
-      },
-    );
+    void stopDesktopNotifications()
+      .then(signOut)
+      .then(
+        () => {
+          if (started === generation.current) setSignOutStatus("complete");
+        },
+        () => {
+          if (started === generation.current) setSignOutStatus("failed");
+        },
+      );
   }, [signOut, signOutStatus]);
   return { signOutStatus, leave, clearSignOutStatus: () => setSignOutStatus("idle") };
 }
@@ -217,6 +221,15 @@ function useSelectedGroup(groups: readonly LiveGroup[] | undefined) {
   return groups?.find((row) => row.groupId === search.group)?.groupId ?? null;
 }
 
+function notificationGroup(
+  groups: FunctionReturnType<typeof api.groups.list> | undefined,
+  selected: LiveGroup["groupId"] | null,
+) {
+  return (
+    groups?.find((row) => row.groupId === selected && row.status === "member")?.groupId ?? null
+  );
+}
+
 function Groups({
   profile,
   welcome,
@@ -270,6 +283,12 @@ function Groups({
             onNewGroup={workspace.newGroup}
             onSearch={search.openAll}
             onAccount={() => setAccountOpen(true)}
+          />
+        }
+        banner={
+          <Notifications
+            groupId={notificationGroup(groups, workspace.selected)}
+            onNotice={setNotice}
           />
         }
         main={workspace.main}
