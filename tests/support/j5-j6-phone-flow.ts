@@ -160,6 +160,7 @@ export async function runJ5J6Phone(p: {
     await expect(p.screen.getByText("You", { exact: true })).toBeVisible();
     await p.shot("actions-reactions");
     await p.screen.getByRole("button", "Close", { exact: true }).tap();
+    await expect(p.screen.getByText("Reactions", { exact: true })).not.toBeVisible();
     await p.screen.getByRole("button", "Quoted message from Bilal. Go to it.").last().tap();
     await expect(originalBubble).toBeVisible();
     await holdWhenStill(originalBubble);
