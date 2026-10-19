@@ -45,6 +45,12 @@
           "photosPermission": "Q9 Chat uses your photos so you can choose a profile picture."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "ca32262b-b798-4a89-bd97-bd051e71d5c4"
+      }
+    },
+    "owner": "q9labs"
   }
 }

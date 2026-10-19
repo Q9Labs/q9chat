@@ -7,6 +7,8 @@ import { httpAction } from "./_generated/server";
 import { sniff } from "./lib/sniff";
 import { MAX_BYTES } from "./lib/uploads";
 const origins = new Set(["http://localhost:3000", "https://chat.q9labs.ai"]);
+const testOrigin = process.env["WEB_TEST_ORIGIN"];
+if (testOrigin && /^http:\/\/localhost:\d+$/u.test(testOrigin)) origins.add(testOrigin);
 function cors(request: Request) {
   const headers = new Headers({ Vary: "Origin", "Cache-Control": "private" });
   const origin = request.headers.get("Origin");

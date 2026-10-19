@@ -4,6 +4,7 @@ import type { ConvexHttpClient } from "convex/browser";
 import { expect } from "e2e";
 
 import { browserEngine, devClient, expectMainFullWidth } from "./support/browser.js";
+import { webOrigin } from "./support/origin.js";
 import { magicCode, removeTestUser } from "./support/workos.js";
 
 function required<T>(value: T | null | undefined, message: string): T {
@@ -25,7 +26,7 @@ test(
     async function failGoogle() {
       await expect(screen.getByRole("button", "Email me a code")).toBeVisible();
       await screen.getByRole("button", "Continue with Google", { exact: true }).tap();
-      await surface.page().waitForURL((url) => url.origin !== "http://localhost:3000");
+      await surface.page().waitForURL((url) => url.origin !== webOrigin);
       // Follow the real error route used when the OAuth provider fails or is cancelled.
       await app.open("/auth/error");
     }
@@ -49,10 +50,10 @@ test(
       );
     }
     async function peer(context: typeof bContext, person: string, name: string) {
-      const headers = { Origin: "http://localhost:3000" };
+      const headers = { Origin: webOrigin };
       expect(
         (
-          await context.request.post("http://localhost:3000/api/auth/email/start", {
+          await context.request.post(`${webOrigin}/api/auth/email/start`, {
             headers,
             data: { email: email(person) },
           })
@@ -60,7 +61,7 @@ test(
       ).toBe(200);
       expect(
         (
-          await context.request.post("http://localhost:3000/api/auth/email/verify", {
+          await context.request.post(`${webOrigin}/api/auth/email/verify`, {
             headers,
             data: { email: email(person), code: await magicCode(email(person)), client: "web" },
           })
@@ -88,7 +89,7 @@ test(
     }
     try {
       await surface.context().grantPermissions(["clipboard-read", "clipboard-write"], {
-        origin: "http://localhost:3000",
+        origin: webOrigin,
       });
       await browser.setViewport({ width: 1280, height: 800 });
       await browser.emulateMedia({ colorScheme: "light" });
@@ -97,10 +98,7 @@ test(
       // Separate real cookie jars: these pages remain open to observe live list updates.
       const bPage = await bContext.newPage();
       const cPage = await cContext.newPage();
-      await Promise.all([
-        bPage.goto("http://localhost:3000/"),
-        cPage.goto("http://localhost:3000/"),
-      ]);
+      await Promise.all([bPage.goto(`${webOrigin}/`), cPage.goto(`${webOrigin}/`)]);
       await Promise.all([
         bPage.getByRole("heading", { name: "No groups yet" }).waitFor(),
         cPage.getByRole("heading", { name: "No groups yet" }).waitFor(),
@@ -197,7 +195,7 @@ test(
       await expect(screen.getByRole("tooltip")).toHaveText("Copied");
       const link = await surface.page().evaluate(() => navigator.clipboard.readText());
       await expect(browser.locator(".info .link-box code")).toHaveText(link.replace("http://", ""));
-      expect(new URL(link).origin).toBe("http://localhost:3000");
+      expect(new URL(link).origin).toBe(webOrigin);
       expect(new URL(link).pathname).toMatch(/^\/join\/[A-Za-z0-9]{16}$/u);
       expect(await surface.page().evaluate(() => navigator.clipboard.readText())).toBe(link);
       await app.screenshot("j2-04-group-info-copied");

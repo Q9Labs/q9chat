@@ -1,20 +1,24 @@
-import { surfaceOf, test } from "@e2e-dev/web";
+import { test } from "@e2e-dev/web";
 import { api } from "@q9chat/convex";
 import { expect } from "e2e";
 
-import { browserEngine, signInDevAccount } from "./support/browser.js";
+import { liveSurface, signInDevAccount } from "./support/browser.js";
 import { removeTestUser } from "./support/workos.js";
 
 test(
   "J7: search your groups and open an old message",
   { timeout: 300_000 },
   async ({ app, browser }) => {
-    const surface = surfaceOf(browserEngine);
-    if (!surface) throw new Error("Missing live browser");
+    const surface = liveSurface();
     await app.open("/");
     const page = surface.page();
     const email = `q9-j7-${Date.now()}@example.net`;
     const account = await signInDevAccount(surface.context(), email, "Search Journey");
+    async function expectSearchBlocked() {
+      await page.keyboard.press("Meta+k");
+      await expect(browser.locator("dialog[open]")).toHaveCount(1);
+      await expect(browser.locator('input[aria-label="Search messages"]')).toHaveCount(0);
+    }
     try {
       await browser.setViewport({ width: 1280, height: 800 });
       await browser.emulateMedia({ colorScheme: "light" });
@@ -134,14 +138,10 @@ test(
       await field.press("Escape");
       await page.getByRole("button", { name: "New group", exact: true }).click();
       await page.getByRole("dialog", { name: "New group", exact: true }).waitFor();
-      await page.keyboard.press("Meta+k");
-      await expect(browser.locator("dialog[open]")).toHaveCount(1);
-      await expect(browser.locator('input[aria-label="Search messages"]')).toHaveCount(0);
+      await expectSearchBlocked();
       await page.keyboard.press("Escape");
       await page.getByRole("button", { name: "Account", exact: true }).click();
-      await page.keyboard.press("Meta+k");
-      await expect(browser.locator("dialog[open]")).toHaveCount(1);
-      await expect(browser.locator('input[aria-label="Search messages"]')).toHaveCount(0);
+      await expectSearchBlocked();
       await page.getByRole("button", { name: "Sign out", exact: true }).click();
       await expect(browser.locator(".search-box")).toHaveCount(0);
       await page.getByRole("button", { name: "Email me a code", exact: true }).waitFor();

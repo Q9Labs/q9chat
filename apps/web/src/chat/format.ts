@@ -65,13 +65,18 @@ export function durationLabel(ms: number): string {
 }
 
 /** "84 KB · PDF" from a byte count and a file name. */
-export function fileMeta(bytes: number, name: string): string {
+export function fileMeta(bytes: number, name: string, contentType?: string): string {
   const size =
     bytes >= 1_000_000
       ? `${(bytes / 1_048_576).toFixed(1)} MB`
       : `${Math.max(1, Math.round(bytes / 1024))} KB`;
   const dot = name.lastIndexOf(".");
-  const kind = dot > 0 ? name.slice(dot + 1).toUpperCase() : "File";
+  const kind =
+    contentType && contentType !== "application/octet-stream"
+      ? contentType.split("/").at(-1)?.toUpperCase()
+      : dot > 0
+        ? name.slice(dot + 1).toUpperCase()
+        : "File";
   return `${size} · ${kind}`;
 }
 

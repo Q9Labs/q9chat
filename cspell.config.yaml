@@ -1,6 +1,9 @@
 version: "0.2"
 language: en
 useGitignore: true
+# WorkOS client IDs are identifiers, not words.
+ignoreRegExpList:
+  - /\bclient_[0-9A-Z]{26}\b/g
 files:
   - "**/*.{md,mdx,ts,tsx,js,mjs,cjs,json,jsonc,yaml,yml}"
 ignorePaths:

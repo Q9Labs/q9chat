@@ -17,7 +17,7 @@ function httpActionOrigin(): string {
     "Set VITE_CONVEX_SITE_URL to the local Convex HTTP-action origin (normally http://127.0.0.1:3211).",
   );
 }
-const httpOrigin = httpActionOrigin();
+export const httpOrigin = httpActionOrigin();
 export function photoSelectionError(file: File) {
   return file.size > 20_000_000 ? "That photo is over 20 MB. Choose a smaller one." : null;
 }
@@ -29,7 +29,7 @@ export function isPhotoRejection(error: unknown) {
       Schema.is(Schema.Struct({ code: Schema.Literal("bad_attachment") }))(error.data))
   );
 }
-const uploadResponse = Schema.Struct({
+export const uploadResponse = Schema.Struct({
   // Convex validates the table at profiles.update; check the encoded ID at this HTTP boundary.
   uploadId: Schema.String.pipe(
     Schema.filter((id): id is Id<"uploads"> => /^[a-z0-9]{32}$/u.test(id)),

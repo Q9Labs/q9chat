@@ -6,6 +6,7 @@ import { Schema } from "effect";
 
 import { Session } from "../apps/web/src/lib/auth/contracts.js";
 import { browserEngine, expectMainFullWidth } from "./support/browser.js";
+import { webOrigin } from "./support/origin.js";
 import {
   magicCode,
   removeTestUser,
@@ -149,7 +150,7 @@ async function checkSignOutGenerations({ browser, screen }: WebJourney, email: s
     await browser.reload();
     await expect(screen.getByRole("button", "Account", { exact: true })).toBeVisible();
     peer = await surface.context().newPage();
-    await peer.goto("http://localhost:3000/");
+    await peer.goto(`${webOrigin}/`);
     await peer.getByRole("button", { name: "Account", exact: true }).waitFor();
 
     // The successful held response also deletes the cookie before another sign-in is offered.

@@ -5,6 +5,7 @@ import { api } from "@q9chat/convex";
 import { expect } from "e2e";
 
 import { browserEngine, signInDevAccount } from "./support/browser.js";
+import { webOrigin } from "./support/origin.js";
 import { removeTestUser } from "./support/workos.js";
 
 test(
@@ -78,7 +79,7 @@ test(
       await page.getByRole("dialog").getByRole("button", { name: "Cancel", exact: true }).click();
       expect((await bilal.client.query(api.groups.get, { groupId }))?.status).toBe("member");
       const peer = await peerContext.newPage();
-      await peer.goto(`http://localhost:3000/?group=${groupId}`);
+      await peer.goto(`${webOrigin}/?group=${groupId}`);
       await peer.getByRole("log").getByText("Private history for current members.").waitFor();
       await member.hover();
       await member.getByRole("button", { name: "Remove", exact: true }).click();
