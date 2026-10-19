@@ -41,7 +41,7 @@ function Navigator() {
         <Stack.Protected guard={ready}>
           <Stack.Screen name="account" />
           <Stack.Screen name="new-group" />
-          <Stack.Screen name="g/[groupId]/index" />
+          <Stack.Screen name="g/[groupId]" />
           <Stack.Screen name="g/[groupId]/info" />
           <Stack.Screen name="g/[groupId]/add" />
         </Stack.Protected>

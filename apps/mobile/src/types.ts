@@ -114,8 +114,6 @@ export type GroupInfo = {
   title: string;
   avatar: Avatar;
   memberCount: number;
-  /** Pairs show the partner's email under the name. */
-  partnerEmail: string | null;
   members: Member[];
   notify: Notify;
   inviteLink: string | null;

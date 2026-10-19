@@ -213,11 +213,6 @@ function MemberRow({ member, onOptions }: { member: Member; onOptions: () => voi
         <T weight={600} numberOfLines={1}>
           {member.isYou ? `${member.fullName} (you)` : member.fullName}
         </T>
-        {member.email ? (
-          <T size={12} color="mu" numberOfLines={1}>
-            {member.email}
-          </T>
-        ) : null}
       </View>
       {member.isYou ? null : (
         <IconButton
@@ -305,7 +300,7 @@ function MemberBody({ info, props }: { info: GroupInfo; props: InfoScreenProps }
       <Hero
         avatar={info.avatar}
         title={info.title}
-        line={info.kind === "pair" ? (info.partnerEmail ?? "") : `${info.memberCount} members`}
+        line={isGroup ? `${info.memberCount} members` : ""}
       />
       {isGroup ? <QuickActions {...props} /> : null}
       <NotifySection
@@ -335,7 +330,6 @@ function MemberOptions({ member, props }: { member: Member; props: InfoScreenPro
           <T size={14} weight={600}>
             {member.name}
           </T>
-          {member.email ? ` · ${member.email}` : ""}
         </T>
       </View>
       {member.deleted ? null : (

@@ -7,7 +7,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useToast } from "../kit/useToast";
 import { InfoScreen, type InfoSheet } from "../screens/InfoScreen";
 import { config } from "../session/config";
-import { groupError } from "./groupRules";
+import { canMessage, groupError, membershipLost } from "./groupRules";
+import { leaveScreen } from "./leaveScreen";
 import { liveAvatar, livePerson } from "./livePeople";
 import { Loading } from "./Loading";
 import { takeNotice } from "./notice";
@@ -41,7 +42,7 @@ function GroupInfoView({ groupId, detail }: { groupId: Id<"groups">; detail: Det
 
   async function messageMember(personId: string) {
     const person = detail.members.find((member) => member.id === personId);
-    if (!person || person.deleted) return;
+    if (!person || !canMessage(person)) return;
     setSheet(null);
     try {
       const pair = await openPair({ profileId: person.id });
@@ -60,7 +61,6 @@ function GroupInfoView({ groupId, detail }: { groupId: Id<"groups">; detail: Det
         title: detail.title,
         avatar: liveAvatar(detail.avatar, detail.kind, config.siteUrl),
         memberCount: detail.memberCount,
-        partnerEmail: null,
         members: detail.members.map((member) => livePerson(member, config.siteUrl)),
         notify: detail.notify,
         inviteLink: link ? link.replace(/^https?:\/\//u, "") : null,
@@ -68,7 +68,7 @@ function GroupInfoView({ groupId, detail }: { groupId: Id<"groups">; detail: Det
       sheet={sheet}
       copied={copied}
       toast={toast}
-      onBack={() => router.back()}
+      onBack={() => leaveScreen(router)}
       onAddPeople={() => router.push({ pathname: "/g/[groupId]/add", params: { groupId } })}
       onCopyLink={() => void copyLink()}
       onSearch={soon}
@@ -94,9 +94,9 @@ export function GroupInfoJourney({ groupId }: { groupId: Id<"groups"> }) {
   const router = useRouter();
   const detail = useQuery(api.groups.get, { groupId });
   // The pane closes by itself when the group stops being yours.
-  const gone = detail !== undefined && detail?.status !== "member";
+  const gone = membershipLost(detail);
   useEffect(() => {
-    if (gone) router.back();
+    if (gone) leaveScreen(router);
   }, [gone, router]);
   if (!detail || detail.status !== "member") return <Loading />;
   return <GroupInfoView groupId={groupId} detail={detail} />;

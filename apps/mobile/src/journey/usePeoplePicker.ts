@@ -3,7 +3,7 @@ import { useConvex, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useEffect, useState } from "react";
 
-import { groupError, MAX_QUERY, pairCandidate, pickerHint, pickerLimit } from "./groupRules";
+import { groupError, MAX_QUERY, offered, pairCandidate, pickerHint, pickInto } from "./groupRules";
 
 export type Found = FunctionReturnType<typeof api.people.find>[number];
 
@@ -73,8 +73,7 @@ export function usePeoplePicker({
   const [people, setPeople] = useState<readonly Found[]>([]);
   const [limit, setLimit] = useState<string | null>(null);
   const matches = useMatches(query);
-  const chosen = new Set([...people.map((person) => person.id), ...members]);
-  const suggestions = (matches ?? []).filter((person) => !chosen.has(person.id));
+  const suggestions = offered(matches, people, members);
   const pair = usePairWith(mode === "create" ? pairCandidate(name, people) : null);
 
   return {
@@ -89,10 +88,10 @@ export function usePeoplePicker({
     pick: (id: string) => {
       const person = suggestions.find((match) => match.id === id);
       if (!person) return;
-      const over = pickerLimit(mode, people.length + 1);
-      setLimit(over);
-      if (over) return;
-      setPeople([...people, person]);
+      const next = pickInto(mode, people, person);
+      setLimit(next.limit);
+      if (next.limit) return;
+      setPeople(next.people);
       setQuery("");
     },
     unpick: (id: string) => {

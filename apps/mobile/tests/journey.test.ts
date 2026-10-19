@@ -31,7 +31,7 @@ void test("the 20 MB photo cap is exact", () => {
   assert.equal(photoTooLarge(MAX_PHOTO_BYTES + 1), true);
 });
 
-const avatar = { color: "#0369a1", lightColor: "#38bdf8", initials: "SJ", photo: null };
+const avatar = { color: "#0369a1", lightColor: "#38bdf8", initials: "SJ", photo: null } as const;
 const person = {
   id: "p1",
   name: "Sara",

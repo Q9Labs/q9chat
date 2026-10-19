@@ -15,6 +15,34 @@ export function pickerLimit(mode: "create" | "add", count: number): string | nul
   return mode === "add" && count > ADD_LIMIT ? "Add up to 50 people at a time." : null;
 }
 
+/** Picking `person` into `chosen`: the next list, or the reason it cannot be added (the list stays as it was). */
+export function pickInto<Person>(
+  mode: "create" | "add",
+  chosen: readonly Person[],
+  person: Person,
+): { people: readonly Person[]; limit: string | null } {
+  const limit = pickerLimit(mode, chosen.length + 1);
+  return limit ? { people: chosen, limit } : { people: [...chosen, person], limit: null };
+}
+
+/** The matches to suggest: not anyone already picked, and not anyone already in the group. */
+export function offered<Found extends { id: string }>(
+  matches: readonly Found[] | undefined,
+  picked: readonly { id: string }[],
+  members: readonly string[],
+): Found[] {
+  const taken = new Set([...picked.map((person) => person.id), ...members]);
+  return (matches ?? []).filter((match) => !taken.has(match.id));
+}
+
+/** A pair can be opened with someone else who still has an account. */
+export const canMessage = (member: { deleted: boolean; isYou: boolean }) =>
+  !member.deleted && !member.isYou;
+
+/** What `groups.get` says once Group info is open: it closes when the group is gone, or no longer yours. */
+export const membershipLost = (detail: { status: string } | null | undefined) =>
+  detail !== undefined && detail?.status !== "member";
+
 const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
 
 type Match = { id: string };

@@ -5,12 +5,17 @@ import { test } from "node:test";
 import { ConvexError } from "convex/values";
 
 import {
+  canMessage,
   groupError,
+  membershipLost,
   newInviteToken,
+  offered,
   pairCandidate,
   pickerHint,
   pickerLimit,
+  pickInto,
 } from "../src/journey/groupRules.ts";
+import { livePerson } from "../src/journey/livePeople.ts";
 
 void test("adding stops at 50 people per call, and creating a group has no such cap", () => {
   assert.equal(pickerLimit("add", 50), null);
@@ -69,4 +74,48 @@ void test("a new invite token is 16 base62 characters and skips the biased bytes
     newInviteToken(() => stream.shift() ?? new Uint8Array(24)),
     "A".repeat(16),
   );
+});
+
+const people = (count: number) =>
+  Array.from({ length: count }, (_, index) => ({ id: `p${index}` }));
+
+void test("picking the 51st person into an add is refused and leaves the list as it was, in create it goes through", () => {
+  const fifty = people(50);
+  const refused = pickInto("add", fifty, { id: "extra" });
+  assert.equal(refused.people, fifty);
+  assert.equal(refused.limit, "Add up to 50 people at a time.");
+  assert.equal(pickInto("add", people(49), { id: "extra" }).people.length, 50);
+  assert.equal(pickInto("create", fifty, { id: "extra" }).people.length, 51);
+});
+
+void test("suggestions leave out people already picked and people already in the group", () => {
+  const matches = [{ id: "a" }, { id: "b" }, { id: "c" }];
+  assert.deepEqual(offered(matches, [{ id: "a" }], ["c"]), [{ id: "b" }]);
+});
+
+void test("Message is offered for a member who is someone else and has an account, never for a deleted one or yourself", () => {
+  assert.equal(canMessage({ deleted: false, isYou: false }), true);
+  assert.equal(canMessage({ deleted: true, isYou: false }), false);
+  assert.equal(canMessage({ deleted: false, isYou: true }), false);
+});
+
+void test("Group info closes when the group stops being yours: gone, no access or removed, but not while it loads", () => {
+  const notAnswered = new Map<string, { status: string }>().get("group");
+  assert.equal(membershipLost(notAnswered), false);
+  assert.equal(membershipLost(null), true);
+  assert.equal(membershipLost({ status: "removed" }), true);
+  assert.equal(membershipLost({ status: "member" }), false);
+});
+
+const avatar = { color: "#0369a1", lightColor: "#38bdf8", initials: "BB", photo: null } as const;
+
+void test("a person shows an email only when the server sent one for an exact match", () => {
+  const found = { id: "p1", name: "Bilal", fullName: "Bilal Beta", avatar };
+  assert.equal(
+    livePerson({ ...found, email: "bilal@example.net" }, "https://x").email,
+    "bilal@example.net",
+  );
+  assert.equal(livePerson({ ...found, email: null }, "https://x").email, "");
+  const member = { ...found, isYou: false, deleted: false };
+  assert.equal(livePerson(member, "https://x").email, "");
 });

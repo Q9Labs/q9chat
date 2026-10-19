@@ -1,7 +1,19 @@
-import type { Avatar, Person } from "../types";
+import type { api } from "@q9chat/convex";
+import type { FunctionReturnType } from "convex/server";
 
-/** The avatar every query result carries; a group has no color, a pair or a person has one. */
-type LiveAvatar = { color: string; lightColor: string; initials: string; photo: string | null };
+import type { Avatar, Person } from "../types.ts";
+
+type Group = NonNullable<FunctionReturnType<typeof api.groups.get>>;
+/** Someone `people.find` returned: an email comes only with an exact match. */
+type Found = FunctionReturnType<typeof api.people.find>[number];
+/** A member as `groups.get` shows them: no email. */
+type Member = Extract<Group, { status: "member" }>["members"][number];
+type LiveAvatar = Member["avatar"];
+/** Who a screen shows: the shared fields, then what only a search result (email) or only a member (you, deleted) carries. */
+type LivePerson = { id: string; name: string; fullName: string; avatar: LiveAvatar } & (
+  | Pick<Found, "email">
+  | Pick<Member, "isYou" | "deleted">
+);
 
 /** The URL of a protected photo on the Convex HTTP origin; the Avatar sends the access token with it. */
 export const photoUrlOf = (siteUrl: string, path: string | null) =>
@@ -18,23 +30,12 @@ export const liveAvatar = (avatar: LiveAvatar, kind: "group" | "pair", siteUrl: 
         photoUrl: photoUrlOf(siteUrl, avatar.photo),
       };
 
-type LivePerson = {
-  id: string;
-  name: string;
-  fullName: string;
-  /** Only `people.find` on an exact email match carries one; everyone else is shown without. */
-  email?: string | null;
-  isYou?: boolean;
-  deleted?: boolean;
-  avatar: LiveAvatar;
-};
-
 export const livePerson = (person: LivePerson, siteUrl: string): Person => ({
   id: person.id,
   name: person.name,
   fullName: person.fullName,
-  email: person.email ?? "",
+  email: "email" in person ? (person.email ?? "") : "",
   avatar: liveAvatar(person.avatar, "pair", siteUrl),
-  isYou: person.isYou ?? false,
-  deleted: person.deleted ?? false,
+  isYou: "isYou" in person && person.isYou,
+  deleted: "deleted" in person && person.deleted,
 });
