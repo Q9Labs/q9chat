@@ -8,18 +8,21 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 
 import type { GroupListRow, Me } from "../chat/types.js";
 import { AccountTransport } from "../lib/account-transport.js";
+import { retireAccountTransport } from "../lib/convex.js";
 import { useSession } from "../lib/session.js";
-import { AccountDialog } from "../screens/dialogs.js";
+import { AccountDialog, DeleteAccountDialog } from "../screens/dialogs.js";
 import { ChatShell, PickAGroup } from "../screens/shell.js";
 import { NoGroupsYet, Sidebar } from "../screens/sidebar.js";
 import { Toast } from "../ui/overlay.js";
 import { AppRoot } from "../ui/root.js";
 import { GroupJourneyBoundary, useGroupJourney } from "./groups.js";
+import { clearProfileMedia } from "./media-storage.js";
 import { OAuthArrival } from "./oauth-arrival.js";
 import { isPhotoRejection, photoSelectionError, uploadPhoto, usePhotos } from "./photos.js";
 import { useSearchJourney } from "./search.js";
 import { ProfileSetup } from "./setup.js";
 import { SignInJourney } from "./sign-in.js";
+import { clearProfileText } from "./text-outbox.js";
 
 const InviteToken = createContext<string | undefined>(undefined);
 
@@ -280,7 +283,7 @@ function Groups({
       {workspace.dialog}
       {accountOpen ? (
         <Account
-          me={me}
+          me={{ ...me, id: profile.id }}
           onClose={() => setAccountOpen(false)}
           onNotice={setNotice}
           onPhotoChange={refreshPhotos}
@@ -301,7 +304,7 @@ function Account({
   onNotice,
   onPhotoChange,
 }: {
-  readonly me: Me;
+  readonly me: Me & { readonly id: ReadyProfile["id"] };
   readonly onClose: () => void;
   readonly onNotice: (message: string) => void;
   readonly onPhotoChange: () => void;
@@ -309,6 +312,10 @@ function Account({
   const { fetchAccessToken } = useSession();
   const signOut = useSignOutAction();
   const update = useMutation(api.profiles.update);
+  const deleteAccount = useMutation(api.profiles.deleteAccount);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const [name, setName] = useState(me.displayName);
   const busy = useRef(false);
   const picker = useRef<HTMLInputElement>(null);
@@ -338,6 +345,31 @@ function Account({
       busy.current = false;
     }
   }
+  async function confirmDelete() {
+    if (busy.current) return;
+    if (!navigator.onLine) {
+      setDeleteError("You're offline. Reconnect and try again.");
+      return;
+    }
+    busy.current = true;
+    setDeleteBusy(true);
+    setDeleteError("");
+    try {
+      await deleteAccount({});
+      await retireAccountTransport();
+      try {
+        clearProfileText(me.id);
+        await clearProfileMedia(me.id);
+      } finally {
+        signOut();
+      }
+    } catch {
+      setDeleteError("Couldn't delete your account. Try again.");
+    } finally {
+      busy.current = false;
+      setDeleteBusy(false);
+    }
+  }
   async function closeAccount() {
     if (busy.current) return;
     busy.current = true;
@@ -351,6 +383,18 @@ function Account({
       busy.current = false;
     }
   }
+
+  if (deleting)
+    return (
+      <DeleteAccountDialog
+        pending={deleteBusy}
+        error={deleteError}
+        onConfirm={() => void confirmDelete()}
+        onClose={() => {
+          if (!deleteBusy) setDeleting(false);
+        }}
+      />
+    );
 
   return (
     <>
@@ -372,7 +416,7 @@ function Account({
         onNameChange={setName}
         onUploadPhoto={() => picker.current?.click()}
         onRemovePhoto={() => void changePhoto(null)}
-        onDeleteAccount={() => onNotice("This is coming in the next journey.")}
+        onDeleteAccount={() => setDeleting(true)}
         onSignOut={signOut}
         onClose={() => void closeAccount()}
       />

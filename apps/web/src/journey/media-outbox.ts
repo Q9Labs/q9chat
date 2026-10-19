@@ -10,6 +10,7 @@ import { useSession } from "../lib/session.js";
 import { journeyError } from "./group-errors.js";
 import { loadMedia, removeMedia, saveMedia, type Media, type SavedMedia } from "./media-storage.js";
 import { httpOrigin, uploadResponse } from "./photos.js";
+import { replyId, type QuotedReply } from "./quoted-reply.js";
 
 type Group = Extract<FunctionReturnType<typeof api.groups.get>, { status: "member" }>;
 type Row = FunctionReturnType<typeof api.messages.range>[number];
@@ -84,7 +85,8 @@ export function useMediaOutbox(group: Group, rows: readonly Row[]) {
   const me = group.members.find((person) => person.isYou);
   if (!me) throw new Error("Missing group member");
   const scope = `${me.id}:${group.groupId}`;
-  const lifetime = transportLifetime(useConvex());
+  const client = useConvex();
+  const lifetime = transportLifetime(client);
   const { fetchAccessToken } = useSession();
   const connection = useConvexConnectionState();
   const send = useMutation(api.messages.send);
@@ -187,11 +189,17 @@ export function useMediaOutbox(group: Group, rows: readonly Row[]) {
       signal.throwIfAborted();
     }
     signal.throwIfAborted();
-    return send({ groupId: group.groupId, clientKey: post.clientKey, body: "", attachments }).catch(
-      (cause: unknown) => {
-        throw new Error(journeyError(cause));
-      },
-    );
+    const replyToId = post.reply ? await replyId(client, group.groupId, post.reply) : undefined;
+    signal.throwIfAborted();
+    return send({
+      groupId: group.groupId,
+      clientKey: post.clientKey,
+      body: "",
+      attachments,
+      ...(replyToId ? { replyToId } : {}),
+    }).catch((cause: unknown) => {
+      throw new Error(journeyError(cause));
+    });
   }
   async function deliver(post: Pending) {
     const controller = availableController(
@@ -207,6 +215,7 @@ export function useMediaOutbox(group: Group, rows: readonly Row[]) {
     try {
       // Persist first on every retry too: quota failure cannot silently lose the bytes.
       await saveMedia(scope, {
+        reply: post.reply,
         clientKey: post.clientKey,
         createdAt: post.createdAt,
         files: post.files,
@@ -241,9 +250,10 @@ export function useMediaOutbox(group: Group, rows: readonly Row[]) {
     window.addEventListener("online", resume);
     return () => window.removeEventListener("online", resume);
   });
-  function enqueue(files: readonly Media[]) {
+  function enqueue(files: readonly Media[], reply?: QuotedReply) {
     if (!active()) return;
     const post: Pending = {
+      reply,
       clientKey: crypto.randomUUID(),
       createdAt: Date.now(),
       files,
@@ -267,13 +277,14 @@ export function useMediaOutbox(group: Group, rows: readonly Row[]) {
       kind: "post",
       id: post.receipt?.messageId ?? post.clientKey,
       renderKey: post.clientKey,
+      actionsDisabled: true,
       sequence: post.receipt?.sequence ?? group.lastSequence + index + 1,
       createdAt: post.createdAt,
       author: { ...me, avatar: { ...me.avatar, photoUrl: null } },
       body: "",
       mentions: [],
       attachments: post.previews,
-      replyTo: null,
+      replyTo: post.reply ?? null,
       reactions: [],
       editedAt: null,
       ...pendingState(post, connection.isWebSocketConnected),

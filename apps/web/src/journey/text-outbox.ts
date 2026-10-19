@@ -6,6 +6,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import type { PostView } from "../chat/types.js";
 import { transportLifetime } from "../lib/convex.js";
 import { journeyError } from "./group-errors.js";
+import { replyId, type QuotedReply } from "./quoted-reply.js";
 import { loadText, type Pending } from "./text-storage.js";
 
 interface TextState {
@@ -17,7 +18,7 @@ type Delivered = Omit<Pending, "status"> & {
   readonly afterSequence: number;
 } & FunctionReturnType<typeof api.messages.send>;
 function withStatus(post: Pending | Delivered, status: Pending["status"]): Pending {
-  return { clientKey: post.clientKey, body: post.body, createdAt: post.createdAt, status };
+  return { ...post, status };
 }
 type Group = Extract<FunctionReturnType<typeof api.groups.get>, { status: "member" }>;
 type Row = FunctionReturnType<typeof api.messages.range>[number];
@@ -25,6 +26,7 @@ export const normalizeText = (body: string) => body.replace(/\s+$/, "");
 const bodyLimitCopy = "Use 4,000 characters or fewer.";
 
 function textStore(key: string) {
+  let sendQueue: Promise<unknown> = Promise.resolve();
   const restored: { readonly text: TextState; readonly error: string } = loadText(key);
   let snapshot = { ...restored, saveError: "", failure: { id: 0, text: "" } };
   let delivery = {
@@ -56,6 +58,11 @@ function textStore(key: string) {
     for (const listener of listeners) listener();
   }
   return {
+    dispatch: (send: () => Promise<FunctionReturnType<typeof api.messages.send>>) => {
+      const next = sendQueue.then(send, send);
+      sendQueue = next.catch(() => {});
+      return next;
+    },
     inFlight,
     sentAfter,
     sequenceBeforeSend: (clientKey: string, lifetime: AbortSignal, latestSequence: number) => {
@@ -112,6 +119,16 @@ function textStore(key: string) {
   };
 }
 const stores = new Map<string, ReturnType<typeof textStore>>();
+export function clearProfileText(profileId: string) {
+  const prefix = `q9chat:text:${profileId}:`;
+  for (const [key, store] of stores) {
+    if (!key.startsWith(prefix)) continue;
+    store.update({ draft: "", pending: [] });
+    stores.delete(key);
+  }
+  for (const storage of [localStorage, sessionStorage])
+    for (const key of Object.keys(storage)) if (key.startsWith(prefix)) storage.removeItem(key);
+}
 function groupStore(key: string) {
   const existing = stores.get(key);
   if (existing) return existing;
@@ -144,7 +161,8 @@ export function useTextOutbox(group: Group, rows: readonly Row[]) {
     saveError,
     failure,
   } = useSyncExternalStore(store.subscribe, store.getDelivery, store.getDelivery);
-  const lifetime = transportLifetime(useConvex());
+  const client = useConvex();
+  const lifetime = transportLifetime(client);
   const [initialFailure] = useState(failure.id);
   const send = useMutation(api.messages.send);
   const { update, inFlight, error: setError } = store;
@@ -201,11 +219,17 @@ export function useTextOutbox(group: Group, rows: readonly Row[]) {
         ),
     });
     try {
-      const receipt = await send({
-        groupId: group.groupId,
-        clientKey: post.clientKey,
-        body: post.body,
-        attachments: [],
+      const receipt = await store.dispatch(async () => {
+        if (abandoned()) throw new Error("Send cancelled");
+        const replyToId = post.reply ? await replyId(client, group.groupId, post.reply) : undefined;
+        if (abandoned()) throw new Error("Send cancelled");
+        return send({
+          groupId: group.groupId,
+          clientKey: post.clientKey,
+          body: post.body,
+          ...(replyToId ? { replyToId } : {}),
+          attachments: [],
+        });
       });
       if (abandoned()) return;
       const delivered: Delivered = { ...post, ...receipt, afterSequence, status: "sent" };
@@ -219,7 +243,7 @@ export function useTextOutbox(group: Group, rows: readonly Row[]) {
     }
   }
 
-  function submit() {
+  function submit(reply?: QuotedReply) {
     const draft = store.get().text.draft;
     const body = normalizeText(draft);
     if (!body.trim()) return false;
@@ -228,6 +252,7 @@ export function useTextOutbox(group: Group, rows: readonly Row[]) {
       return false;
     }
     const post: Pending = {
+      reply,
       clientKey: crypto.randomUUID(),
       body,
       createdAt: Date.now(),
@@ -243,13 +268,14 @@ export function useTextOutbox(group: Group, rows: readonly Row[]) {
     kind: "post",
     id: post.status === "sent" ? post.messageId : post.clientKey,
     renderKey: post.clientKey,
+    actionsDisabled: true,
     sequence: post.status === "sent" ? post.sequence : group.lastSequence + index + 1,
     createdAt: post.createdAt,
     author: { ...me, avatar: { ...me.avatar, photoUrl: null } },
     body: post.body,
     mentions: [],
     attachments: [],
-    replyTo: null,
+    replyTo: post.reply ?? null,
     reactions: [],
     editedAt: null,
     ...(post.status === "sent" ? {} : { sendState: post.status }),
