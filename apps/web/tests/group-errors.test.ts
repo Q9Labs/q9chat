@@ -17,3 +17,14 @@ void test("account errors describe the actual picked-person count", () => {
     "Someone you picked is no longer available. Remove them to continue.",
   );
 });
+
+void test("attachment membership errors use safe group copy", () => {
+  assert.equal(
+    journeyError(new ConvexError({ code: "not_member" })),
+    "You no longer have access to this group.",
+  );
+  assert.equal(
+    journeyError(new Error("transport debug details")),
+    "Couldn't complete that. Try again.",
+  );
+});

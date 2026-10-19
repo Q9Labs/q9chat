@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { webOrigin } from "../../../tests/support/origin.js";
+
 const session = (id: string) => ({
   accessToken: `access-${id}`,
   expiresAt: Date.now() + 300_000,
@@ -181,7 +183,7 @@ test("an old terminal refresh failure cannot delete a newer sign-in cookie in an
     {
       name: "q9_session",
       value: old,
-      domain: "127.0.0.1",
+      domain: new URL(webOrigin).hostname,
       path: "/api/auth",
       httpOnly: true,
       secure: true,

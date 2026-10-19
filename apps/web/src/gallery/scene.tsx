@@ -28,7 +28,7 @@ const HANDLERS: MessageHandlers = {
   onReport: noop,
   onRetry: noop,
   onOpenQuote: noop,
-  onTogglePlay: noop,
+  onMediaError: noop,
   onMenuOpenChange: noop,
 };
 
@@ -44,7 +44,6 @@ export interface ChatScene {
   readonly offline?: boolean;
   readonly menuMessageId?: string | null;
   readonly highlightId?: string | null;
-  readonly playing?: { readonly messageId: string; readonly progress: number } | null;
   readonly draft?: string;
   readonly mode?: ComposerMode | null;
   readonly recording?: Recording | null;
@@ -88,7 +87,6 @@ function sceneTimeline(scene: ChatScene, options: Options): TimelineProps {
     typing = SHOAIB_TYPING,
     menuMessageId = null,
     highlightId = null,
-    playing = null,
   } = scene;
   return {
     messages,
@@ -98,7 +96,6 @@ function sceneTimeline(scene: ChatScene, options: Options): TimelineProps {
     onOpenAuthor: noop,
     menuMessageId,
     highlightId,
-    playing,
   };
 }
 

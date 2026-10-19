@@ -4,6 +4,7 @@ import type { ConvexHttpClient } from "convex/browser";
 import { expect } from "e2e";
 
 import { browserEngine, devClient, signInDevAccount } from "./support/browser.js";
+import { webOrigin } from "./support/origin.js";
 import { sendWire } from "./support/send-wire.js";
 import { removeTestUser } from "./support/workos.js";
 
@@ -84,7 +85,7 @@ test(
       await page.locator('[role=log][aria-busy="false"]').waitFor();
       await shot("empty");
       const peerPage = await peer.newPage();
-      await peerPage.goto(`http://localhost:3000/?group=${groupId}`);
+      await peerPage.goto(`${webOrigin}/?group=${groupId}`);
       await peerPage.getByRole("textbox", { name: "Message", exact: true }).waitFor();
       async function typingVisible() {
         await peerPage.getByText("Amira is typing", { exact: true }).waitFor();
@@ -288,7 +289,7 @@ test(
       // Actual tab close can drop the final WebSocket request; expiry remains the guarantee.
       const closing = await surface.context().newPage();
       const closingWire = await sendWire(closing);
-      await closing.goto(`http://localhost:3000/?group=${groupId}`);
+      await closing.goto(`${webOrigin}/?group=${groupId}`);
       await closing
         .getByRole("textbox", { name: "Message", exact: true })
         .fill("Closing this typing tab");
