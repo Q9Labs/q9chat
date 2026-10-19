@@ -94,7 +94,7 @@ function findMessage(items: readonly TimelineItem[], id: string): Message | null
 type HeaderProps = Pick<
   ChatScreenProps,
   "title" | "avatar" | "subtitle" | "muted" | "removed" | "onBack" | "onOpenInfo" | "onSearch"
->;
+> & { hideSearch?: boolean };
 
 /** The chat header: back, who it is with, and Search. */
 export function ChatHeader(props: HeaderProps) {
@@ -124,6 +124,7 @@ export function ChatHeader(props: HeaderProps) {
         scaleTo={1}
         style={{
           flexShrink: 1,
+          minHeight: 44,
           flexDirection: "row",
           alignItems: "center",
           gap: 10,
@@ -134,22 +135,10 @@ export function ChatHeader(props: HeaderProps) {
         }}
       >
         <Avatar avatar={props.avatar} size={32} />
-        <View style={{ flexShrink: 1 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-            <T size={16} weight={600} numberOfLines={1} style={{ flexShrink: 1 }}>
-              {props.title}
-            </T>
-            {props.muted && !removed ? <Icon name="bellOff" size={14} color="mu" /> : null}
-          </View>
-          {props.subtitle && !removed ? (
-            <T size={12} color="mu">
-              {props.subtitle}
-            </T>
-          ) : null}
-        </View>
+        <ChatTitle {...props} />
       </Press>
       <View style={{ flex: 1 }} />
-      {removed ? null : (
+      {removed || props.hideSearch ? null : (
         <IconButton
           icon="search"
           iconSize={22}
@@ -158,6 +147,25 @@ export function ChatHeader(props: HeaderProps) {
           onPress={props.onSearch}
         />
       )}
+    </View>
+  );
+}
+
+function ChatTitle(props: HeaderProps) {
+  const removed = props.removed !== null;
+  return (
+    <View style={{ flexShrink: 1 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+        <T size={16} weight={600} numberOfLines={1} style={{ flexShrink: 1 }}>
+          {props.title}
+        </T>
+        {props.muted && !removed ? <Icon name="bellOff" size={14} color="mu" /> : null}
+      </View>
+      {props.subtitle && !removed ? (
+        <T size={12} color="mu">
+          {props.subtitle}
+        </T>
+      ) : null}
     </View>
   );
 }

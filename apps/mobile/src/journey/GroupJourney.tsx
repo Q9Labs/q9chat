@@ -7,31 +7,20 @@ import { useEffect } from "react";
 import { useToast } from "../kit/useToast";
 import { GroupScreen } from "../screens/GroupScreen";
 import { config } from "../session/config";
-import { eventItems } from "./groupEvents";
 import { removedWhen } from "./groupRows";
 import { GroupUnavailable } from "./GroupUnavailable";
 import { leaveScreen } from "./leaveScreen";
+import { LiveHistory } from "./LiveHistory";
 import { liveAvatar } from "./livePeople";
 import { Loading } from "./Loading";
 import { useGuardedWrite } from "./useGuardedWrite";
 import { useOffline } from "./useOffline";
 
 const COMING_NEXT = "This is coming in the next journey.";
-/** Member events of the latest page of history; a group with more than this shows its newest. */
-const PAGE = 100;
 
 type Detail = NonNullable<FunctionReturnType<typeof api.groups.get>>;
-type Range = FunctionReturnType<typeof api.messages.range> | undefined;
 
-function GroupView({
-  groupId,
-  detail,
-  range,
-}: {
-  groupId: Id<"groups">;
-  detail: Detail;
-  range: Range;
-}) {
+function GroupView({ groupId, detail }: { groupId: Id<"groups">; detail: Detail }) {
   const router = useRouter();
   const [toast, showToast] = useToast();
   const offline = useOffline();
@@ -78,30 +67,23 @@ function GroupView({
         items={[]}
       />
     );
-  const events = (range ?? []).flatMap((row) =>
-    row.kind === "event" ? [{ id: row.id, event: row.event }] : [],
-  );
   return (
     <GroupScreen
       {...base}
-      subtitle={detail.kind === "group" ? `${detail.memberCount} members` : null}
+      subtitle={null}
       muted={detail.notify === "muted"}
       removed={null}
-      items={eventItems(detail.kind, detail.partner, events)}
+      items={[]}
+      history={<LiveHistory key={groupId} group={detail} />}
     />
   );
 }
 
-/** An opened group in journey 2: its header and member events. Reading posts is phone journey 3. */
+/** Open a live group, or replace its history immediately after removal. */
 export function GroupJourney({ groupId }: { groupId: Id<"groups"> }) {
   const offline = useOffline();
   const detail = useQuery(api.groups.get, { groupId });
-  const last = detail?.status === "member" ? detail.lastSequence : 0;
-  const range = useQuery(
-    api.messages.range,
-    last > 0 ? { groupId, fromSequence: Math.max(1, last - PAGE + 1), toSequence: last } : "skip",
-  );
   if (detail === undefined && !offline) return <Loading />;
   if (!detail) return <GroupUnavailable denied={detail === null} />;
-  return <GroupView groupId={groupId} detail={detail} range={range} />;
+  return <GroupView groupId={groupId} detail={detail} />;
 }

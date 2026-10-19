@@ -154,7 +154,9 @@ function Body({
   message,
   element,
   actions,
+  readOnly,
 }: {
+  readOnly: boolean;
   message: Message;
   element: MessageElement | null;
   actions: MessageActions;
@@ -165,6 +167,7 @@ function Body({
       <Surface message={message} element={element} onQuotePress={actions.onQuotePress} />
       <Media content={message.content} element={element} actions={actions} />
       <ReactionPills
+        readOnly={readOnly}
         reactions={message.reactions}
         onPress={actions.onReactionPress}
         onLongPress={actions.onReactionLongPress}
@@ -271,10 +274,11 @@ const elementOf = (
 export function MessageBubble({
   message,
   showTime,
+  readOnly = false,
   ...actions
-}: { message: Message; showTime: boolean } & MessageActions) {
+}: { message: Message; showTime: boolean; readOnly?: boolean } & MessageActions) {
   const { content, mine, state } = message;
-  const openable = canOpen(message);
+  const openable = !readOnly && canOpen(message);
   const element = elementOf(message, openable, actions.onOpenSheet);
   const split = hasControls(message);
   return (
@@ -289,7 +293,12 @@ export function MessageBubble({
       {content.kind === "deleted" ? (
         <DeletedLine mine={mine} />
       ) : (
-        <Body message={message} element={split ? element : null} actions={actions} />
+        <Body
+          message={message}
+          element={split ? element : null}
+          actions={actions}
+          readOnly={readOnly}
+        />
       )}
       <SendState state={state} onRetry={actions.onRetry} />
       <TimeLabel message={message} show={showTime} />

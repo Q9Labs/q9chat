@@ -83,11 +83,13 @@ export function QuoteBar({ quote, onPress }: { quote: Quote; onPress?: () => voi
 
 /** Borderless pills on a soft fill with a count; your own wears the accent wash. */
 export function ReactionPills({
+  readOnly = false,
   reactions,
   onPress,
   onLongPress,
   poppedEmoji,
 }: {
+  readOnly?: boolean;
   reactions: readonly Reaction[];
   onPress?: (emoji: Reaction["emoji"]) => void;
   onLongPress?: (emoji: Reaction["emoji"]) => void;
@@ -100,14 +102,10 @@ export function ReactionPills({
       {reactions.map((reaction) => (
         <PopIn key={reaction.emoji} active={poppedEmoji === reaction.emoji}>
           <Press
-            accessibilityRole="button"
-            accessibilityLabel={`${reaction.emoji} ${reaction.count}: ${reaction.who}`}
+            {...reactionInteraction(reaction, readOnly, onPress, onLongPress)}
             accessibilityState={{ selected: reaction.mine }}
             hitSlop={{ top: 9, bottom: 9, left: 2, right: 2 }}
-            onPress={() => onPress?.(reaction.emoji)}
-            onLongPress={() => onLongPress?.(reaction.emoji)}
             delayLongPress={480}
-            scaleTo={0.94}
             style={{
               minHeight: 26,
               paddingStart: 7,
@@ -130,6 +128,27 @@ export function ReactionPills({
       ))}
     </View>
   );
+}
+
+function reactionInteraction(
+  reaction: Reaction,
+  readOnly: boolean | undefined,
+  onPress: ((emoji: Reaction["emoji"]) => void) | undefined,
+  onLongPress: ((emoji: Reaction["emoji"]) => void) | undefined,
+) {
+  if (readOnly)
+    return {
+      accessibilityRole: "text" as const,
+      accessibilityLabel: `${reaction.emoji} ${reaction.count}`,
+      scaleTo: 1,
+    };
+  return {
+    accessibilityRole: "button" as const,
+    accessibilityLabel: `${reaction.emoji} ${reaction.count}: ${reaction.who}`,
+    onPress: () => onPress?.(reaction.emoji),
+    onLongPress: () => onLongPress?.(reaction.emoji),
+    scaleTo: 0.94,
+  };
 }
 
 export function FileCard({ name, size }: { name: string; size: string }) {

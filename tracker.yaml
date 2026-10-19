@@ -103,22 +103,6 @@ outcomes:
       - React with one of five fixed emoji and toggle your reaction off.
       - Show who is typing in a group, with no online indicator.
 
-  - id: chat.unread_and_read_state
-    title: See what is new since you last looked
-    area: messages
-    state: in_progress
-    summary: The web app opens at a fixed unread divider, pages older history, follows live messages and records privately what was viewed in a focused window. The phone app still needs these behaviors connected.
-    theory: theory.md#calm
-    code:
-      - apps/web/src/journey/history.tsx
-      - apps/web/src/chat/timeline-viewport.ts
-      - tests/j3-web.e2e.ts
-    priority: P0
-    size: M
-    size_reason: Connect the existing phone screens to shared read cursors and live history.
-    remaining:
-      - Connect unread counts, the opening divider and focused-view read state on phone.
-
   - id: chat.search
     title: Find an old message with search
     area: messages
@@ -179,15 +163,15 @@ outcomes:
     title: The phone app offers every journey
     area: mobile
     state: in_progress
-    summary: The Expo app has every version 1 phone screen. Sign in, profile setup, the live groups list, Account and sign out, New group, Group info with Add people and the invite link, and joining by link are wired to the dev backend; chat and search still run on gallery fixtures, and Group info's Leave, Remove, Mute and notification choices say they come in a later journey.
+    summary: The phone supports sign-in, profiles, Groups, group creation, joining and live reading. Sending, search, Leave, Remove, Mute and notifications still need their screens connected to the backend.
     theory: theory.md#fast-and-reliable
     code:
       - apps/mobile
     priority: P0
     size: L
-    size_reason: Most journeys still need their screens wired to Convex and a device run.
+    size_reason: Sending, search and group actions still need their screens wired and device checks.
     remaining:
-      - Wire chat and search to the backend.
+      - Wire sending and search to the backend.
       - Wire Group info's Leave, Remove, Mute and notification choices to the backend.
 
   - id: release.first_live
