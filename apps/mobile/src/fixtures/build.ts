@@ -317,7 +317,6 @@ export function infoOf(groupId: string, world: World): GroupInfo {
     title: groupTitle(group, world),
     avatar: groupAvatar(group),
     memberCount: group.members.length,
-    partnerEmail: group.kind === "pair" ? (PEOPLE[group.pair]?.email ?? null) : null,
     members: group.members.map((id) => personOf(id, world)),
     notify: world.muted.has(groupId) ? "muted" : "mentions",
     inviteLink: group.link ? `chat.q9labs.ai/join/${group.link}` : null,

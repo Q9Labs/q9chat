@@ -1,7 +1,7 @@
 import { Either, Schema } from "effect";
 
 /** The secrets the session keeps in the keychain, each under its own key. */
-export type StoreKey = "refreshToken" | "oauthAttempt" | "emailAttempt";
+export type StoreKey = "refreshToken" | "oauthAttempt" | "emailAttempt" | "pendingInvite";
 
 export type Store = {
   get: (key: StoreKey) => Promise<string | null>;
@@ -16,6 +16,8 @@ const Attempt = Schema.Struct({
   expiresAt: Schema.Number,
   /** The Worker's transaction cookie material, so a restarted app can finish the exchange. */
   cookies: Schema.Array(Schema.Tuple(Schema.String, Schema.String)),
+  /** The invite link whose route started this attempt: only this attempt's sign-in hands it on. */
+  invite: Schema.optional(Schema.String),
 });
 export type OAuthAttempt = typeof Attempt.Type;
 
@@ -24,8 +26,13 @@ const EmailAttemptShape = Schema.Struct({
   email: Schema.String,
   expiresAt: Schema.Number,
   cookies: Schema.Array(Schema.Tuple(Schema.String, Schema.String)),
+  /** The invite link whose route started this attempt: only this attempt's sign-in hands it on. */
+  invite: Schema.optional(Schema.String),
 });
 export type EmailAttempt = typeof EmailAttemptShape.Type;
+
+/** The invite link someone opened before they could use it (signed out, or still setting up). */
+const InviteRecord = Schema.Struct({ token: Schema.String, expiresAt: Schema.Number });
 
 /** How long a started sign-in may take to come back before it is dropped. */
 export const ATTEMPT_TTL_MS = 10 * 60 * 1000;
@@ -61,3 +68,23 @@ export async function readEmailAttempt(store: Store, now: number): Promise<Email
 
 export const writeEmailAttempt = (store: Store, attempt: EmailAttempt) =>
   store.set("emailAttempt", JSON.stringify(attempt));
+
+/** An invite token as the API accepts it: 16 to 32 base62 characters. */
+export const isInviteToken = (token: string) => /^[A-Za-z0-9]{16,32}$/u.test(token);
+
+/** The invite waiting for its person to sign in, or null. One that is unreadable, malformed or older than ten minutes is deleted. */
+export async function readPendingInvite(store: Store, now: number): Promise<string | null> {
+  const saved = await store.get("pendingInvite");
+  const decoded = Schema.decodeUnknownEither(InviteRecord)(parseJson(saved));
+  if (
+    Either.isRight(decoded) &&
+    decoded.right.expiresAt > now &&
+    isInviteToken(decoded.right.token)
+  )
+    return decoded.right.token;
+  if (saved !== null) await store.delete("pendingInvite");
+  return null;
+}
+
+export const writePendingInvite = (store: Store, token: string, now: number) =>
+  store.set("pendingInvite", JSON.stringify({ token, expiresAt: now + ATTEMPT_TTL_MS }));

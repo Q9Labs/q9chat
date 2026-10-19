@@ -1,6 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 
-import { createNameEditor, isDirty, type NameEditorInputs } from "./nameEditor";
+import { createNameEditor, isDirty, type NameEditorInputs } from "./nameEditor.ts";
 
 /** The name field on the account screen; the rules live in `createNameEditor`. */
 export function useNameEditing(inputs: NameEditorInputs) {

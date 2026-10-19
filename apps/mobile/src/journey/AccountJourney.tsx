@@ -11,6 +11,7 @@ import { config } from "../session/config";
 import type { SignInMethod } from "../session/contracts";
 import type { Me } from "../types";
 import { profileAvatar } from "./groupRows";
+import { leaveScreen } from "./leaveScreen";
 import { photoNoticeOf, pickPhoto, uploadPhoto } from "./photos";
 import { useSignOut } from "./SignOut";
 import { useNameEditing } from "./useNameEditing";
@@ -101,7 +102,7 @@ export function AccountJourney({
       onTogglePhoto={() => void changePhoto()}
       confirmDelete={false}
       toast={toast}
-      onBack={() => router.back()}
+      onBack={() => leaveScreen(router)}
       signingOut={signOut.signingOut}
       onSignOut={() => {
         // Sign out takes the same save-or-discard way out as the others; the draft is dropped so the redirect is not held back.

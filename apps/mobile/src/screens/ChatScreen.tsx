@@ -96,7 +96,8 @@ type HeaderProps = Pick<
   "title" | "avatar" | "subtitle" | "muted" | "removed" | "onBack" | "onOpenInfo" | "onSearch"
 >;
 
-function Header(props: HeaderProps) {
+/** The chat header: back, who it is with, and Search. */
+export function ChatHeader(props: HeaderProps) {
   const removed = props.removed !== null;
   return (
     <View
@@ -381,7 +382,7 @@ export function ChatScreen(props: ChatScreenProps) {
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <Header {...props} />
+        <ChatHeader {...props} />
         {props.removed ? (
           <RemovedBody removed={props.removed} props={props} />
         ) : (

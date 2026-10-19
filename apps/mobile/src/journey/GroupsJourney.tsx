@@ -16,7 +16,7 @@ import { useToday } from "./useToday";
 
 const COMING_NEXT = "This is coming in the next journey.";
 
-/** The live groups list. Opening a group, New group and Search belong to later journeys. */
+/** The live groups list. Search belongs to a later journey. */
 export function GroupsJourney({ profile }: { profile: ReadyProfile }) {
   const router = useRouter();
   const groups = useQuery(api.groups.list, {});
@@ -40,8 +40,8 @@ export function GroupsJourney({ profile }: { profile: ReadyProfile }) {
       offline={offline}
       showPermissionBanner={false}
       toast={toast}
-      onOpenGroup={() => showToast(COMING_NEXT)}
-      onNewGroup={() => showToast(COMING_NEXT)}
+      onOpenGroup={(groupId) => router.push({ pathname: "/g/[groupId]", params: { groupId } })}
+      onNewGroup={() => router.push("/new-group")}
       onAccount={() => router.push("/account")}
       onSearch={() => showToast(COMING_NEXT)}
       onNotNow={noop}
