@@ -4,15 +4,15 @@ import { ConvexError } from "convex/values";
 import { Schema } from "effect";
 import { useEffect, useReducer, useState } from "react";
 
-import { convexClient } from "../lib/convex.js";
+import { convexUrl } from "../lib/convex.js";
 import { useSession } from "../lib/session.js";
 
 const configuredSite: unknown = import.meta.env["VITE_CONVEX_SITE_URL"];
 function httpActionOrigin(): string {
   if (typeof configuredSite === "string" && configuredSite !== "")
     return new URL(configuredSite).origin;
-  if (new URL(convexClient.url).hostname.endsWith(".convex.cloud"))
-    return convexClient.url.replace(/\.cloud$/u, ".site");
+  if (new URL(convexUrl).hostname.endsWith(".convex.cloud"))
+    return convexUrl.replace(/\.cloud$/u, ".site");
   throw new Error(
     "Set VITE_CONVEX_SITE_URL to the local Convex HTTP-action origin (normally http://127.0.0.1:3211).",
   );

@@ -52,3 +52,17 @@
 - Final normal hook: all 20 lanes passed; required React Doctor passed, optional React Scan was unavailable. Feature commits 68f712f, f8bb93a and 32800b1 pushed. Requested Git-range gitleaks scan is clean. No PR opened; no feature-branch CI is triggered by this repository (CI runs on PRs and main).
 - Final five mock/live sheets plus before/after and compact audit refreshed and all opened. Interactive contact sheet preview loads all seven images with no errors. Desktop proof only: existing 390px navigation/layout remains unusable, documented in the compact sheet. Voice arrival wording is source-verified; physical screen-reader speech was not exercised.
 - Final cleanup/account audit and cloud teardown receipt are saved alongside the sheet artifacts. The cloud box is released after this proof-note commit completes its normal hook; PR B has not started.
+
+## PR 13 review corrections
+
+Read the full independent review and all three Codex comments. The account transport must be retired before HTTP identity transitions, not just remounted. Drafts are deliberately per-tab (sessionStorage), while retry keys remain account/group-scoped in localStorage. Malformed pending entries are recovered independently and quarantined by key.
+
+On the original ca49426 source, both cross-tab browser interleavings failed at the intended assertions: a duplicated sendable composition and a newer draft erased by the stale tab. Account replay and damaged-entry recovery are still awaiting a clean targeted reproduction; startup/navigation errors do not count as regression proof.
+
+### Baseline reproduction and chosen fixes
+
+- All three required regressions now fail at their intended assertions on the unchanged ca49426 app source: the socket-blocked A body was committed as B after HTTP account switching; two tabs committed the same restored composition twice; a stale tab erased the newer tab's draft; and malformed pending JSON discarded a valid retry plus the draft. Setup/navigation failures were excluded from this evidence.
+- Drafts now belong to a tab, account and group via sessionStorage. They survive reload/group switches in that tab, not tab closure, and do not synchronise across tabs. Pending sends remain durable account/group/clientKey localStorage entries. No backend/auth endpoint changes.
+- A successful receipt of an old deleted post was also reproduced outside the loaded window (first loaded sequence 201, deleted sequence 3): the old source retained one cached body. A fresh view restores the durable retry without releasing the first socket's intentionally held query frames.
+- The 300-row probe (298 posts, two system events) counts actual V8 function calls, not committed React renders or latency. Positive-control row edits prove the instrumented functions are observed. Before changes: drafting called historyMessages 200 times and Timeline/buildTimeline 112 times each; typing start/stop called them 8/6/6 times. StrictMode is enabled. The fix isolates typing query/expiry and draft subscriptions; no broad memoisation was introduced.
+- The single scoped CLI review completed and identified provider cleanup against an already-closed SDK client plus a socket-close handshake delaying HTTP logout. Both causal paths were fixed: detach the authenticated SDK subtree synchronously before disposal, start HTTP logout without waiting for the socket handshake, and do not let an old completion clear the next account. All 11 session unit tests, including the stalled-close regression, pass on Testbox; web and browser-test typechecks pass.

@@ -73,7 +73,7 @@ function SystemLine({ message }: { readonly message: EventView }) {
 }
 
 /** Who is typing, with the three-dot pulse. Three or more collapse to a count. */
-function TypingLine({ names: people }: { readonly names: readonly string[] }) {
+export function TypingLine({ names: people }: { readonly names: readonly string[] }) {
   const [first, second] = people;
   if (first === undefined) return null;
   const text =
@@ -116,6 +116,7 @@ const STATIC_READING: TimelineReading = {
   loading: false,
 };
 export interface TimelineProps {
+  readonly typingLine?: ReactNode;
   readonly readOnly?: boolean;
   readonly reading?: TimelineReading;
   readonly messages: readonly MessageView[];
@@ -227,6 +228,7 @@ export function Timeline({
   messages,
   newFromSequence,
   typing,
+  typingLine,
   handlers,
   onOpenAuthor,
   menuMessageId,
@@ -294,7 +296,7 @@ export function Timeline({
           {reading.announcement.text}
         </span>
       </div>
-      <TypingLine names={typing} />
+      {typingLine ?? <TypingLine names={typing} />}
       <button
         type="button"
         className={`jump${showJump ? " on" : ""}`}

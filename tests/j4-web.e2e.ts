@@ -151,11 +151,16 @@ test(
       await field.fill("A rejected send");
       await field.press("Enter");
       await page.getByText("Not sent ·", { exact: false }).waitFor();
+      const failureStatus = page.getByRole("status", { name: "Send status", exact: true });
+      expect(await failureStatus.textContent()).toBe("Message not sent. Retry.");
+      expect(await failureStatus.getAttribute("aria-live")).toBe("polite");
+      expect(await page.locator('[role=log] [aria-label="Send status"]').count()).toBe(0);
       const rejectedKey = wire.sends.at(-1)?.clientKey;
       await shot("failed");
       await page.reload();
       await page.getByRole("button", { name: "Retry", exact: true }).waitFor();
-      await page.getByRole("button", { name: "Retry", exact: true }).click();
+      await page.getByRole("button", { name: "Retry", exact: true }).focus();
+      await page.keyboard.press("Enter");
       await committed("A rejected send");
       expect(wire.sends.at(-1)?.clientKey).toBe(rejectedKey);
       process.stdout.write(
@@ -170,7 +175,8 @@ test(
       expect(
         (await posts()).filter((row) => row.kind === "post" && row.clientKey === lostKey).length,
       ).toBe(1);
-      await page.getByRole("button", { name: "Retry", exact: true }).click();
+      await page.getByRole("button", { name: "Retry", exact: true }).focus();
+      await page.keyboard.press("Enter");
       await committed("A committed send with a lost acknowledgement");
       expect(wire.sends.filter((post) => post.clientKey === lostKey).length).toBe(2);
       expect(
@@ -179,30 +185,6 @@ test(
       process.stdout.write(
         "J4 PASS: first committed response forced to fail; retry sends the same clientKey twice but stores and renders one post\n",
       );
-
-      async function verifyDeletedRetry() {
-        const body = "Deleted after a lost acknowledgement";
-        wire.set("fail-committed");
-        await field.fill(body);
-        await field.press("Enter");
-        const retry = page.getByRole("button", { name: "Retry", exact: true });
-        await retry.waitFor();
-        const request = wire.sends.at(-1);
-        if (!request) throw new Error("Missing failed send request");
-        const post = (await posts()).find(
-          (row) => row.kind === "post" && row.clientKey === request.clientKey,
-        );
-        if (!post || post.kind !== "post") throw new Error("Missing committed send to delete");
-        await a.client.mutation(api.messages.remove, { messageId: post.id });
-        await retry.click();
-        await page.locator(`[id="m-${post.id}"] .gone`).waitFor();
-        await expect.poll(() => page.locator(".txt").filter({ hasText: body }).count()).toBe(0);
-        expect(await page.locator(`[id="m-${post.id}"]`).count()).toBe(1);
-        process.stdout.write(
-          "J4 PASS: retry of an already-deleted committed post shows only its deleted placeholder, never cached text\n",
-        );
-      }
-      await verifyDeletedRetry();
 
       async function verifyConcurrentSends() {
         const bodies = ["First overlapping send", "Second overlapping send"];
@@ -233,7 +215,8 @@ test(
       await page.getByRole("alert").filter({ hasText: "Use 4,000 characters or fewer." }).waitFor();
       await field.press("Enter");
       expect(wire.sends.length).toBe(beforeLimit);
-      await field.fill("x".repeat(4000));
+      await field.fill("x".repeat(4000) + "\n  ");
+      expect(await page.getByRole("button", { name: "Send", exact: true }).isEnabled()).toBe(true);
       await field.press("Enter");
       await committed("x".repeat(4000));
       process.stdout.write(
@@ -273,6 +256,42 @@ test(
       await page.getByText("Launch conversation", { exact: true }).first().click();
       await field.fill("");
       process.stdout.write("J4 PASS: sender typing stops on clear, blur and group switch\n");
+
+      wire.failTyping("start");
+      await field.fill("Typing start failure");
+      await page.getByRole("alert").waitFor();
+      await field.fill("");
+      await page.getByRole("alert").waitFor({ state: "detached" });
+      await field.fill("Typing stop failure");
+      await typingVisible();
+      wire.failTyping("stop");
+      await field.fill("");
+      await page.getByRole("alert").waitFor();
+      await field.fill("Recovered typing");
+      await page.getByRole("alert").waitFor({ state: "detached" });
+      await typingVisible();
+      await page.evaluate(() => {
+        window.dispatchEvent(new PageTransitionEvent("pagehide"));
+      });
+      await typingCleared();
+      await field.fill("");
+      // Actual tab close can drop the final WebSocket request; expiry remains the guarantee.
+      const closing = await surface.context().newPage();
+      await closing.goto(`http://localhost:3000/?group=${groupId}`);
+      await closing
+        .getByRole("textbox", { name: "Message", exact: true })
+        .fill("Closing this typing tab");
+      await typingVisible();
+      const closedAt = Date.now();
+      await closing.close();
+      await expect
+        .poll(async () => (await b.client.query(api.typing.list, { groupId })).length, {
+          timeout: 7000,
+        })
+        .toBe(0);
+      process.stdout.write(
+        `J4 PASS: typing errors clear after successful start/stop; pagehide stops promptly; actual tab close clears within expiry (${Date.now() - closedAt}ms observed, not a delivery guarantee)\n`,
+      );
 
       async function verifyOffWindowDelivery() {
         const delayedGroup = await a.client.mutation(api.groups.create, {

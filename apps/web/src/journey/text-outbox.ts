@@ -1,10 +1,11 @@
 import { api } from "@q9chat/convex";
-import { useMutation } from "convex/react";
+import { useConvex, useMutation } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { Schema } from "effect";
+import { Either, Schema } from "effect";
 import { useEffect, useState, useSyncExternalStore } from "react";
 
 import type { PostView } from "../chat/types.js";
+import { transportLifetime } from "../lib/convex.js";
 import { journeyError } from "./group-errors.js";
 
 const PendingText = Schema.Struct({
@@ -26,22 +27,37 @@ function withStatus(post: Pending | Delivered, status: Pending["status"]): Pendi
 }
 type Group = Extract<FunctionReturnType<typeof api.groups.get>, { status: "member" }>;
 type Row = FunctionReturnType<typeof api.messages.range>[number];
+export const normalizeText = (body: string) => body.replace(/\s+$/, "");
 const bodyLimitCopy = "Use 4,000 characters or fewer.";
+
+function restorePending(key: string, name: string): Pending | null {
+  const raw = localStorage.getItem(name);
+  const decoded = Schema.decodeUnknownEither(Schema.parseJson(PendingText))(raw);
+  const prefix = `${key}:pending:`;
+  if (Either.isRight(decoded) && name === `${prefix}${decoded.right.clientKey}`)
+    return withStatus(decoded.right, "failed");
+  // Preserve the damaged value for recovery, but never let it poison another reload.
+  localStorage.setItem(`${key}:quarantine:${name.slice(prefix.length)}`, raw ?? "");
+  localStorage.removeItem(name);
+  return null;
+}
 
 function loadText(key: string): { readonly text: TextState; readonly error: string } {
   try {
-    const draft = localStorage.getItem(`${key}:draft`) ?? "";
+    const draft = sessionStorage.getItem(`${key}:draft`) ?? "";
     const prefix = `${key}:pending:`;
-    const pending = Object.keys(localStorage)
-      .filter((name) => name.startsWith(prefix))
-      .map((name) =>
-        Schema.decodeUnknownSync(Schema.parseJson(PendingText))(localStorage.getItem(name)),
-      )
-      .toSorted((a, b) => a.createdAt - b.createdAt);
-    const text = { draft, pending };
+    const pending: Pending[] = [];
+    let damaged = false;
+    for (const name of Object.keys(localStorage).filter((candidate) =>
+      candidate.startsWith(prefix),
+    )) {
+      const restored = restorePending(key, name);
+      if (restored) pending.push(restored);
+      else damaged = true;
+    }
     return {
-      text: { ...text, pending: text.pending.map((post) => withStatus(post, "failed")) },
-      error: "",
+      text: { draft, pending: pending.toSorted((a, b) => a.createdAt - b.createdAt) },
+      error: damaged ? "Couldn't restore one or more unsent messages on this device." : "",
     };
   } catch {
     return {
@@ -52,15 +68,43 @@ function loadText(key: string): { readonly text: TextState; readonly error: stri
 }
 
 function textStore(key: string) {
-  let snapshot = { ...loadText(key), saveError: "" };
+  let snapshot = { ...loadText(key), saveError: "", failure: { id: 0, text: "" } };
+  let delivery = {
+    pending: snapshot.text.pending,
+    error: snapshot.error,
+    saveError: snapshot.saveError,
+    failure: snapshot.failure,
+  };
   const listeners = new Set<() => void>();
   const inFlight = new Set<string>();
   function publish() {
+    if (
+      delivery.pending !== snapshot.text.pending ||
+      delivery.error !== snapshot.error ||
+      delivery.saveError !== snapshot.saveError ||
+      delivery.failure !== snapshot.failure
+    ) {
+      delivery = {
+        pending: snapshot.text.pending,
+        error: snapshot.error,
+        saveError: snapshot.saveError,
+        failure: snapshot.failure,
+      };
+    }
     for (const listener of listeners) listener();
   }
   return {
     inFlight,
     get: () => snapshot,
+    getDelivery: () => delivery,
+    getDraft: () => snapshot.text.draft,
+    failed: () => {
+      snapshot = {
+        ...snapshot,
+        failure: { id: snapshot.failure.id + 1, text: "Message not sent. Retry." },
+      };
+      publish();
+    },
     subscribe: (listener: () => void) => {
       listeners.add(listener);
       return () => {
@@ -80,7 +124,7 @@ function textStore(key: string) {
           if (post.status === "sent") localStorage.removeItem(postKey);
           else localStorage.setItem(postKey, JSON.stringify(post));
         }
-        if (previous.draft !== text.draft) localStorage.setItem(`${key}:draft`, text.draft);
+        if (previous.draft !== text.draft) sessionStorage.setItem(`${key}:draft`, text.draft);
         for (const post of previous.pending) {
           if (!text.pending.some((item) => item.clientKey === post.clientKey))
             localStorage.removeItem(`${key}:pending:${post.clientKey}`);
@@ -105,13 +149,38 @@ function groupStore(key: string) {
   return store;
 }
 
+function replacePost(
+  store: ReturnType<typeof textStore>,
+  clientKey: string,
+  replace: (post: Pending | Delivered) => Pending | Delivered,
+) {
+  const current = store.get().text;
+  store.update({
+    ...current,
+    pending: current.pending.map((post) => (post.clientKey === clientKey ? replace(post) : post)),
+  });
+}
+
+function receiptInWindow(post: Delivered, rows: readonly Row[], lastSequence: number) {
+  const first = rows[0]?.sequence ?? 0;
+  const last = rows.at(-1)?.sequence ?? lastSequence;
+  return post.sequence >= first && post.sequence <= last + 1;
+}
+
 /** A durable key is allocated before transport; failed/restarted sends keep that same key. */
 export function useTextOutbox(group: Group, rows: readonly Row[]) {
   const me = group.members.find((person) => person.isYou);
   if (!me) throw new Error("A member conversation requires its caller");
   const storageKey = `q9chat:text:${me.id}:${group.groupId}`;
   const [store] = useState(() => groupStore(storageKey));
-  const { text, error, saveError } = useSyncExternalStore(store.subscribe, store.get, store.get);
+  const {
+    pending: savedPending,
+    error,
+    saveError,
+    failure,
+  } = useSyncExternalStore(store.subscribe, store.getDelivery, store.getDelivery);
+  const lifetime = transportLifetime(useConvex());
+  const [initialFailure] = useState(failure.id);
   const send = useMutation(api.messages.send);
   const { update, inFlight, error: setError } = store;
 
@@ -121,22 +190,38 @@ export function useTextOutbox(group: Group, rows: readonly Row[]) {
   );
   const loadedIds = new Set(rows.map((row) => row.id));
   function notLoaded(post: Pending | Delivered) {
-    return (
-      !committed.has(post.clientKey) && (post.status !== "sent" || !loadedIds.has(post.messageId))
-    );
+    if (committed.has(post.clientKey)) return false;
+    if (post.status !== "sent") return true;
+    // Only bridge the live-query delay where a row is expected, never replay cached old text.
+    return !loadedIds.has(post.messageId) && receiptInWindow(post, rows, group.lastSequence);
   }
-  const pending = text.pending.filter(notLoaded);
+  const pending = savedPending.filter(notLoaded);
   useEffect(() => {
-    if (pending.length !== text.pending.length) {
+    if (pending.length !== savedPending.length) {
       const current = store.get().text;
       // react-doctor-disable-next-line react-doctor/no-pass-data-to-parent -- Synchronizes committed keys to the external localStorage outbox, not parent React state.
       update({ ...current, pending: current.pending.filter(notLoaded) });
     }
   });
 
+  const abandoned = () => lifetime.aborted;
+  function failedSend(post: Pending, cause: unknown) {
+    if (!store.get().text.pending.some((item) => item.clientKey === post.clientKey)) return;
+    replacePost(store, post.clientKey, (item) => withStatus(item, "failed"));
+    store.failed();
+    const copy = journeyError(cause);
+    setError(copy === "Couldn't complete that. Try again." ? "" : copy);
+  }
   async function deliver(post: Pending) {
-    if (inFlight.has(post.clientKey)) return;
+    if (abandoned() || inFlight.has(post.clientKey)) return;
     inFlight.add(post.clientKey);
+    const abandon = () => {
+      inFlight.delete(post.clientKey);
+      replacePost(store, post.clientKey, (item) =>
+        item.status === "sent" ? item : withStatus(item, "failed"),
+      );
+    };
+    lifetime.addEventListener("abort", abandon, { once: true });
     update({
       ...store.get().text,
       pending: store
@@ -152,35 +237,23 @@ export function useTextOutbox(group: Group, rows: readonly Row[]) {
         body: post.body,
         attachments: [],
       });
+      if (abandoned()) return;
       const delivered: Delivered = { ...post, ...receipt, status: "sent" };
-      update({
-        ...store.get().text,
-        pending: store
-          .get()
-          .text.pending.map((item) => (item.clientKey === post.clientKey ? delivered : item)),
-      });
+      replacePost(store, post.clientKey, () => delivered);
     } catch (cause) {
-      if (!store.get().text.pending.some((item) => item.clientKey === post.clientKey)) return;
-      update({
-        ...store.get().text,
-        pending: store
-          .get()
-          .text.pending.map((item) =>
-            item.clientKey === post.clientKey ? withStatus(item, "failed") : item,
-          ),
-      });
-      const copy = journeyError(cause);
-      setError(copy === "Couldn't complete that. Try again." ? "" : copy);
+      if (abandoned()) return;
+      failedSend(post, cause);
     } finally {
-      inFlight.delete(post.clientKey);
+      lifetime.removeEventListener("abort", abandon);
+      if (!abandoned()) inFlight.delete(post.clientKey);
     }
   }
 
   function submit() {
     const draft = store.get().text.draft;
-    const body = draft.replace(/\s+$/, "");
+    const body = normalizeText(draft);
     if (!body.trim()) return false;
-    if (draft.length > 4000) {
+    if (body.length > 4000) {
       setError(bodyLimitCopy);
       return false;
     }
@@ -212,13 +285,14 @@ export function useTextOutbox(group: Group, rows: readonly Row[]) {
     ...(post.status === "sent" ? {} : { sendState: post.status }),
   }));
   return {
-    draft: text.draft,
+    composer: { subscribe: store.subscribe, getDraft: store.getDraft },
+    failure: { ...failure, text: failure.id > initialFailure ? failure.text : "" },
     messages,
     error: saveError || error,
     submit,
     change: (draft: string) => {
       update({ ...store.get().text, draft });
-      setError(draft.length > 4000 ? bodyLimitCopy : "");
+      setError(normalizeText(draft).length > 4000 ? bodyLimitCopy : "");
     },
     retry: (id: string) => {
       const post = store.get().text.pending.find((item) => item.clientKey === id);

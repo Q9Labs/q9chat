@@ -13,9 +13,23 @@ export function useSenderTyping(groupId: FunctionArgs<typeof api.typing.start>["
   const clear = useCallback(() => {
     if (last.current === null) return;
     last.current = null;
-    void stop({ groupId }).catch((cause: unknown) => setError(journeyError(cause)));
+    void stop({ groupId }).then(
+      () => setError(""),
+      (cause: unknown) => setError(journeyError(cause)),
+    );
   }, [groupId, stop]);
-  useEffect(() => clear, [clear]);
+  useEffect(() => {
+    const hidden = () => {
+      if (document.hidden) clear();
+    };
+    window.addEventListener("pagehide", clear);
+    document.addEventListener("visibilitychange", hidden);
+    return () => {
+      window.removeEventListener("pagehide", clear);
+      document.removeEventListener("visibilitychange", hidden);
+      clear();
+    };
+  }, [clear]);
   return {
     error,
     clear,
@@ -24,7 +38,10 @@ export function useSenderTyping(groupId: FunctionArgs<typeof api.typing.start>["
       const now = Date.now();
       if (last.current !== null && now - last.current < 3000) return;
       last.current = now;
-      void start({ groupId }).catch((cause: unknown) => setError(journeyError(cause)));
+      void start({ groupId }).then(
+        () => setError(""),
+        (cause: unknown) => setError(journeyError(cause)),
+      );
     },
   };
 }

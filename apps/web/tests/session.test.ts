@@ -102,6 +102,42 @@ void test("refresh caches outside expiry buffer, single-flights inside it, witho
   }
 });
 
+void test("a stalled retired socket cannot delay HTTP logout or later clear a new account", async () => {
+  const original = globalThis.fetch;
+  const release = Promise.withResolvers<void>();
+  let holdNextClose = false;
+  let logout = false;
+  globalThis.fetch = async (url) => {
+    const path = typeof url === "string" ? url : url instanceof URL ? url.href : url.url;
+    if (path.endsWith("sign-out")) {
+      logout = true;
+      return Response.json({ ok: true });
+    }
+    return Response.json(session(path.endsWith("email/verify") ? "user_two" : "user_one"));
+  };
+  const client = createSessionClient(() => {
+    if (!holdNextClose) return Promise.resolve();
+    holdNextClose = false;
+    return release.promise;
+  });
+  const close = client.start();
+  try {
+    await until(() => client.getSnapshot().session?.user.id === "user_one");
+    holdNextClose = true;
+    const signingOut = client.signOut();
+    await until(() => logout && client.getSnapshot().session === null);
+    await client.verifyEmail("test@example.net", "123456");
+    assert.equal(client.getSnapshot().session?.user.id, "user_two");
+    release.resolve();
+    await signingOut;
+    assert.equal(client.getSnapshot().session?.user.id, "user_two");
+  } finally {
+    release.resolve();
+    close();
+    globalThis.fetch = original;
+  }
+});
+
 void test("BroadcastChannel clears another tab on logout and refreshes it on account change without storing tokens", async () => {
   const original = globalThis.fetch;
   let identity: string | null = "user_one";

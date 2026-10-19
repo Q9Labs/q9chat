@@ -1,20 +1,25 @@
+import { useSyncExternalStore } from "react";
+
 import { Composer } from "../chat/composer.js";
+import { normalizeText, type useTextOutbox } from "./text-outbox.js";
 
 const laterJourney = () => {};
 
 export function TextComposer({
   title,
-  value,
+  store,
   onChange,
   onSend,
   onBlur,
 }: {
   readonly title: string;
-  readonly value: string;
+  readonly store: ReturnType<typeof useTextOutbox>["composer"];
   readonly onChange: (value: string) => void;
   readonly onSend: () => void;
   readonly onBlur: () => void;
 }) {
+  const value = useSyncExternalStore(store.subscribe, store.getDraft, store.getDraft);
+  const body = normalizeText(value);
   return (
     <Composer
       title={title}
@@ -22,7 +27,7 @@ export function TextComposer({
       onChange={onChange}
       onSend={onSend}
       onBlur={onBlur}
-      sendDisabled={!value.trim() || value.length > 4000}
+      sendDisabled={!body.trim() || body.length > 4000}
       textOnly
       mode={null}
       onCancelMode={laterJourney}

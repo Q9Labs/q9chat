@@ -37,6 +37,7 @@ export async function sendWire(page: Page) {
   let requestId = -1;
   const starts: number[] = [];
   const sends: (typeof Send.Type)[] = [];
+  let typingFailure: "start" | "stop" | null = null;
   let release = noRelease;
   await page.routeWebSocket("wss://quixotic-crab-23.convex.cloud/**", (socket) => {
     const server = socket.connectToServer();
@@ -75,6 +76,11 @@ export async function sendWire(page: Page) {
     socket.onMessage((message) => {
       const parsed: unknown = JSON.parse(message.toString());
       if (Schema.is(Mutation)(parsed) && parsed.udfPath === "typing:start") starts.push(Date.now());
+      if (Schema.is(Mutation)(parsed) && parsed.udfPath === `typing:${typingFailure}`) {
+        typingFailure = null;
+        failure(parsed.requestId);
+        return;
+      }
       if (Schema.is(Mutation)(parsed) && parsed.udfPath === "messages:send")
         handleSend(parsed, message);
       else server.send(message);
@@ -105,6 +111,9 @@ export async function sendWire(page: Page) {
   return {
     sends,
     starts,
+    failTyping: (operation: "start" | "stop") => {
+      typingFailure = operation;
+    },
     set: (next: Mode) => {
       mode = next;
     },

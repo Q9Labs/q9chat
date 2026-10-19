@@ -1,7 +1,7 @@
 import { api } from "@q9chat/convex";
-import { useMutation, useQueries, useQuery } from "convex/react";
+import { useMutation, useQueries } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import type { MessageHandlers } from "../chat/message.js";
 import { Timeline } from "../chat/timeline-view.js";
@@ -14,6 +14,7 @@ import { usePhotos } from "./photos.js";
 import { useSenderTyping } from "./sender-typing.js";
 import { TextComposer } from "./text-composer.js";
 import { useTextOutbox } from "./text-outbox.js";
+import { LiveTypingLine } from "./typing-line.js";
 
 type Group = Extract<FunctionReturnType<typeof api.groups.get>, { status: "member" }>;
 type Row = FunctionReturnType<typeof api.messages.range>[number];
@@ -96,24 +97,6 @@ const handlers: MessageHandlers = {
   onTogglePlay: displayOnly,
   onMenuOpenChange: displayOnly,
 };
-
-function useTyping(group: Group) {
-  const rows = useQuery(api.typing.list, { groupId: group.groupId });
-  const [now, setNow] = useState(Date.now);
-  useEffect((): (() => void) | undefined => {
-    const next = rows?.filter((row) => row.expiresAt > now).map((row) => row.expiresAt);
-    if (!next?.length) return () => {};
-    const timer = window.setTimeout(
-      () => setNow(Date.now()),
-      Math.max(0, Math.min(...next) - Date.now()) + 1,
-    );
-    return () => window.clearTimeout(timer);
-  }, [rows, now]);
-  return (rows ?? [])
-    .filter((row) => row.expiresAt > now)
-    .map((row) => row.name)
-    .toSorted((a, b) => a.localeCompare(b));
-}
 
 const HISTORY_PAGE_SIZE = 100;
 const MAX_LIVE_HISTORY_PAGES = 3;
@@ -446,7 +429,6 @@ export function History({
   const { person: selectedPerson, select: setAuthor } = useAuthorSelection(rows, loading);
   const [error, setError] = useState("");
   const { photos } = usePhotos(historyPhotoPaths(rows), setError);
-  const typing = useTyping(group);
   const onVisible = useRead(group, opened.read, {
     setError,
     covered,
@@ -481,11 +463,20 @@ export function History({
   return (
     <>
       {issue ? <p role="alert">{issue}</p> : null}
+      <output
+        className="send-announcement"
+        aria-label="Send status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        <span key={outbox.failure.id}>{outbox.failure.text}</span>
+      </output>
       {rows.length || !loading ? (
         <Timeline
           messages={messages}
           newFromSequence={newFromSequence}
-          typing={typing}
+          typing={[]}
+          typingLine={<LiveTypingLine groupId={group.groupId} />}
           handlers={{
             ...handlers,
             onRetry: retry,
@@ -512,7 +503,7 @@ export function History({
       )}
       <TextComposer
         title={group.title}
-        value={outbox.draft}
+        store={outbox.composer}
         onChange={changeDraft}
         onSend={sendText}
         onBlur={senderTyping.clear}
