@@ -118,10 +118,10 @@ export function createSessionClient(edges: SessionEdges) {
   }
 
   /** One Worker request; a sign-out can cancel it while it is `cancelable`. */
-  async function request<T>(call: (options: authApi.RequestOptions) => Promise<T>, cancels = true) {
-    if (cancels && leaving > 0) throw new Error("signed_out");
+  async function request<T>(call: (options: authApi.RequestOptions) => Promise<T>) {
+    if (leaving > 0) throw new Error("signed_out");
     const controller = new AbortController();
-    if (cancels) cancelable = controller;
+    cancelable = controller;
     try {
       return await call({ signal: controller.signal, timeoutMs });
     } finally {
@@ -351,11 +351,15 @@ export function createSessionClient(edges: SessionEdges) {
   }
 
   /** Asks the server to revoke a signed-out token. Nothing is saved: if the app ends first, the server session runs out by itself. */
-  async function revokeQuietly(token: string, triesLeft = REVOKE_TRIES): Promise<void> {
-    try {
-      await request((options) => authApi.revokeSession(token, options), false);
-    } catch {
-      if (triesLeft > 1) await revokeQuietly(token, triesLeft - 1);
+  async function revokeQuietly(token: string) {
+    for (let attempt = 0; attempt < REVOKE_TRIES; attempt += 1) {
+      try {
+        // react-doctor-disable-next-line react-doctor/async-await-in-loop -- the tries are one after another by design
+        await authApi.revokeSession(token, { timeoutMs }); // oxlint-disable-line no-await-in-loop
+        return;
+      } catch {
+        // Try again, up to REVOKE_TRIES.
+      }
     }
   }
 

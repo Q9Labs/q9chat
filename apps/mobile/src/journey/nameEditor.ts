@@ -106,7 +106,6 @@ export function createNameEditor(initial: NameEditorInputs) {
   let inputs = initial;
   let state: NameEditorState = { draft: null, saving: false, unsaved: null };
   const listeners = new Set<() => void>();
-  let inFlight = false;
   /** Counts the answers given to the person; an exit started before the latest one is over. */
   let turn = 0;
 
@@ -121,7 +120,6 @@ export function createNameEditor(initial: NameEditorInputs) {
   async function saveThenLeave(name: string, leave: () => void) {
     turn += 1;
     const mine = turn;
-    inFlight = true;
     set({ saving: true });
     let outcome: "saved" | "edited" | "failed";
     try {
@@ -130,7 +128,6 @@ export function createNameEditor(initial: NameEditorInputs) {
     } catch {
       outcome = "failed";
     } finally {
-      inFlight = false;
       set({ saving: false });
     }
     if (mine !== turn) return;
@@ -141,7 +138,7 @@ export function createNameEditor(initial: NameEditorInputs) {
   }
 
   async function exit(leave: () => void) {
-    const plan = planExit(state.draft, inputs, inFlight);
+    const plan = planExit(state.draft, inputs, state.saving);
     if (plan.kind === "leave") leave();
     else if (plan.kind === "ask") ask(plan.ask, leave);
     else if (plan.kind === "save") await saveThenLeave(plan.name, leave);

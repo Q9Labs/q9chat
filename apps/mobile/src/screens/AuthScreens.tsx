@@ -61,27 +61,22 @@ function ProviderButton({
   label,
   glyph,
   onPress,
-  disabled,
 }: {
   label: string;
   glyph: React.ReactNode;
   onPress: () => void;
-  disabled: boolean;
 }) {
   const { c } = useTheme();
   return (
     <Press
       accessibilityRole="button"
       accessibilityLabel={label}
-      accessibilityState={{ disabled }}
-      disabled={disabled}
       onPress={onPress}
       style={{
         minHeight: 44,
         paddingHorizontal: 16,
         borderRadius: 999,
         backgroundColor: c.s1,
-        opacity: disabled ? 0.4 : 1,
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "center",
@@ -102,7 +97,6 @@ export function SignInScreen({
   onGoogle,
   onApple,
   onEmailCode,
-  disabled = false,
   notice,
 }: {
   email: string;
@@ -110,8 +104,6 @@ export function SignInScreen({
   onGoogle: () => void;
   onApple: () => void;
   onEmailCode: () => void;
-  /** Every way to sign in stays off. */
-  disabled?: boolean;
   notice?: ToastNotice | null;
 }) {
   const { c } = useTheme();
@@ -125,18 +117,8 @@ export function SignInScreen({
           Sign in, or create an account if you're new.
         </T>
       </Hero>
-      <ProviderButton
-        label="Continue with Google"
-        glyph={<GoogleGlyph />}
-        onPress={onGoogle}
-        disabled={disabled}
-      />
-      <ProviderButton
-        label="Continue with Apple"
-        glyph={<AppleGlyph />}
-        onPress={onApple}
-        disabled={disabled}
-      />
+      <ProviderButton label="Continue with Google" glyph={<GoogleGlyph />} onPress={onGoogle} />
+      <ProviderButton label="Continue with Apple" glyph={<AppleGlyph />} onPress={onApple} />
       <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginVertical: 8 }}>
         <View style={{ flex: 1, height: 1, backgroundColor: c.ln }} />
         <T size={12} color="mu">
@@ -156,17 +138,9 @@ export function SignInScreen({
         autoCorrect={false}
         autoComplete="email"
         returnKeyType="go"
-        editable={!disabled}
         onSubmitEditing={onEmailCode}
       />
-      <PillButton
-        label="Email me a code"
-        variant="solid"
-        size="big"
-        wide
-        disabled={disabled}
-        onPress={onEmailCode}
-      />
+      <PillButton label="Email me a code" variant="solid" size="big" wide onPress={onEmailCode} />
       <T size={12} color="mu" lineHeight={19.2} style={{ textAlign: "center", marginTop: 12 }}>
         No passwords. We email you a 6-digit code.
       </T>
