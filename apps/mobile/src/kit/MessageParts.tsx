@@ -233,6 +233,7 @@ export function VoiceNote({
   playing,
   progress = 0,
   onTogglePlay,
+  onLongPress,
   accessibilityActions,
   onAccessibilityAction,
 }: {
@@ -241,6 +242,7 @@ export function VoiceNote({
   playing?: boolean;
   progress?: number;
   onTogglePlay?: () => void;
+  onLongPress?: () => void;
   accessibilityActions?: AccessibilityActionInfo[];
   onAccessibilityAction?: (event: AccessibilityActionEvent) => void;
 }) {
@@ -266,6 +268,7 @@ export function VoiceNote({
         accessibilityActions={accessibilityActions}
         onAccessibilityAction={onAccessibilityAction}
         onPress={onTogglePlay}
+        onLongPress={onLongPress}
         style={{
           width: 32,
           height: 32,

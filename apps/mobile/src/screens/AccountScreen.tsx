@@ -27,6 +27,7 @@ export type AccountScreenProps = {
   hasPhoto: boolean;
   onTogglePhoto: () => void;
   confirmDelete: boolean;
+  deleting?: boolean;
   toast: string | null;
   onBack: () => void;
   onSignOut: () => void;
@@ -153,15 +154,7 @@ export function AccountScreen(props: AccountScreenProps) {
           />
         </View>
       </ScrollView>
-      {props.confirmDelete ? (
-        <ConfirmSheet
-          title="Delete your account?"
-          text="You leave every group. Your messages stay so conversations still make sense, and show “Deleted account” as the sender. This can't be undone."
-          confirmLabel="Delete account"
-          onConfirm={props.onConfirmDelete}
-          onCancel={props.onCancelDelete}
-        />
-      ) : null}
+      <DeleteAccountSheet {...props} />
       {props.unsaved ? (
         <ConfirmSheet
           title={props.unsaved.title}
@@ -174,5 +167,19 @@ export function AccountScreen(props: AccountScreenProps) {
       ) : null}
       {props.toast ? <Toast text={props.toast} /> : null}
     </Screen>
+  );
+}
+
+function DeleteAccountSheet(props: AccountScreenProps) {
+  if (!props.confirmDelete) return null;
+  return (
+    <ConfirmSheet
+      title="Delete your account?"
+      text="You leave every group. Your messages stay so conversations still make sense, and show “Deleted account” as the sender. This can't be undone."
+      confirmLabel={props.deleting ? "Deleting…" : "Delete account"}
+      confirmDisabled={props.deleting ?? false}
+      onConfirm={props.onConfirmDelete}
+      onCancel={props.onCancelDelete}
+    />
   );
 }

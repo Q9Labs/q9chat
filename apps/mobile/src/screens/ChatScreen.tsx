@@ -170,7 +170,11 @@ function ChatTitle(props: HeaderProps) {
   );
 }
 
-function MessageRows({ message, props }: { message: Message; props: ChatScreenProps }) {
+type MessageSheetActions = Pick<
+  ChatScreenProps,
+  "onReply" | "onEdit" | "onCopy" | "onAskDelete" | "onAskReport" | "onReact" | "onCloseSheet"
+>;
+function MessageRows({ message, props }: { message: Message; props: MessageSheetActions }) {
   const { content, mine } = message;
   return (
     <View>
@@ -195,14 +199,16 @@ function MessageRows({ message, props }: { message: Message; props: ChatScreenPr
   );
 }
 
-function MessageSheet({
+export function MessageSheet({
   message,
   author,
   props,
+  notice,
 }: {
   message: Message;
   author: string;
-  props: ChatScreenProps;
+  props: MessageSheetActions;
+  notice?: string;
 }) {
   return (
     <Sheet label="Message actions" onDismiss={props.onCloseSheet}>
@@ -226,6 +232,11 @@ function MessageSheet({
         ))}
       </View>
       <MessageRows message={message} props={props} />
+      {notice ? (
+        <T color="er" accessibilityLiveRegion="polite">
+          {notice}
+        </T>
+      ) : null}
     </Sheet>
   );
 }

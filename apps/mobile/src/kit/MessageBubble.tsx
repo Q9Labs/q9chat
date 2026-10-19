@@ -168,7 +168,8 @@ function Media({
   element: MessageElement | null;
   actions: MessageActions;
 }) {
-  if (content.kind === "attachments") return <LiveAttachments files={content.files} />;
+  if (content.kind === "attachments")
+    return <LiveAttachments files={content.files} onOpenSheet={actions.onOpenSheet} />;
   if (content.kind === "voice") {
     return (
       <VoiceNote
@@ -277,7 +278,11 @@ const LINK_ACTION = "link-";
 /** The http and https links in the message text, in reading order. */
 function linksOf({ content }: Message): string[] {
   const segments =
-    content.kind === "text" ? content.segments : content.kind === "image" ? content.caption : null;
+    content.kind === "text"
+      ? content.segments
+      : content.kind === "image" || content.kind === "attachments"
+        ? content.caption
+        : null;
   return (segments ?? []).flatMap((segment) =>
     segment.type === "link" && isWebUrl(segment.text) ? [segment.text] : [],
   );
