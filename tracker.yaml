@@ -62,18 +62,20 @@ outcomes:
     title: Send text, images, files and voice notes
     area: messages
     state: in_progress
-    summary: Web text, images, files and voice notes send with immediate feedback, safe retries and per-group drafts. Sending on the phone remains.
+    summary: Text sends appear immediately on web and phone, with retry-safe delivery, per-group drafts and typing. Web attachments are supported; phone attachments remain.
     theory: theory.md#messages
     code:
       - apps/web/src/journey/text-outbox.ts
       - apps/web/src/journey/text-composer.tsx
       - apps/web/src/journey/media-outbox.ts
       - apps/web/src/journey/voice-recorder.ts
+      - apps/mobile/src/journey/useTextOutbox.ts
+      - apps/mobile/src/journey/PhoneText.tsx
     priority: P0
     size: L
-    size_reason: Sending text and attachments on the phone remains.
+    size_reason: Sending images, files and voice notes on the phone remains.
     remaining:
-      - Send text, images, files and voice notes on the phone, with immediate delivery, safe retries and per-group drafts.
+      - Send images, files and voice notes on the phone, with previews and protected playback or download.
 
   - id: chat.quote_replies
     title: Reply by quoting and jump to the original
@@ -175,15 +177,15 @@ outcomes:
     title: The phone app offers every journey
     area: mobile
     state: in_progress
-    summary: The phone supports sign-in, profiles, Groups, group creation, joining and live reading. Sending, search, Leave, Remove, Mute and notifications still need their screens connected to the backend.
+    summary: The phone supports sign-in, profiles, Groups, group creation, joining and live reading and text sending. Attachments, search, Leave, Remove, Mute and notifications still need their screens connected to the backend.
     theory: theory.md#fast-and-reliable
     code:
       - apps/mobile
     priority: P0
     size: L
-    size_reason: Sending, search and group actions still need their screens wired and device checks.
+    size_reason: Attachments, search and group actions still need their screens wired and device checks.
     remaining:
-      - Wire sending and search to the backend.
+      - Wire attachments and search to the backend.
       - Wire Group info's Leave, Remove, Mute and notification choices to the backend.
 
   - id: release.first_live

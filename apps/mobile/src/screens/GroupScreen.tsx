@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { KeyboardAvoidingView, Platform } from "react-native";
 
 import { PillButton } from "../kit/Buttons";
 import { CenterState, OfflinePill, Screen } from "../kit/Chrome";
@@ -48,11 +49,16 @@ const NO_ACTIONS = {
 };
 
 /** The live group header and its reading surface, or the removal notice. */
-export function GroupScreen(props: GroupScreenProps) {
+export function GroupScreen({ avatar, ...props }: GroupScreenProps) {
   return (
-    <Screen safeBottom>
-      <ChatHeader {...props} hideSearch />
-      <GroupBody {...props} />
+    <Screen>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <ChatHeader {...props} avatar={avatar} hideSearch />
+        <GroupBody {...props} />
+      </KeyboardAvoidingView>
       {props.leavePrompt ? (
         <WriteExitSheet
           title="It isn't removed yet"
@@ -65,7 +71,7 @@ export function GroupScreen(props: GroupScreenProps) {
   );
 }
 
-function GroupBody(props: GroupScreenProps) {
+function GroupBody(props: Omit<GroupScreenProps, "avatar">) {
   return (
     <>
       {props.removed ? (
@@ -77,7 +83,9 @@ function GroupBody(props: GroupScreenProps) {
         />
       ) : (
         <>
-          {props.offline ? <OfflinePill /> : null}
+          {props.offline ? (
+            <OfflinePill text="You're offline. Retry unsent messages when you're back." />
+          ) : null}
           {props.history ?? (
             <Timeline
               items={props.items}

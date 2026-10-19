@@ -184,7 +184,11 @@ export function SearchBox({ onPress }: { onPress: () => void }) {
   );
 }
 
-export function OfflinePill() {
+export function OfflinePill({
+  text = "You're offline. Messages send when you're back.",
+}: {
+  text?: string;
+}) {
   const { c } = useTheme();
   return (
     <View
@@ -203,7 +207,7 @@ export function OfflinePill() {
     >
       <Icon name="wifiOff" size={15} color="mu" />
       <T size={12.5} weight={500} color="tx2">
-        You're offline. Messages send when you're back.
+        {text}
       </T>
     </View>
   );
