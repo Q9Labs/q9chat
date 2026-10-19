@@ -21,6 +21,7 @@
 - **Desktop notifications for mentions and replies**: Turn on desktop notifications after opening a group, choose which groups can interrupt, and open a notification at its message.
 - **Search and manage groups on phone**: Search your groups and open a matching message. Mute a group, leave it, or remove a member with confirmation.
 - **Send text from your phone**: Send text on iOS and Android, retry failed messages after a restart, keep a draft in each group and see who is typing.
+- **Send attachments from your phone**: Share photos, files and voice notes with upload retry and protected playback. Sign out returns to sign-in even when session cleanup fails.
 - **Use chat in a narrow browser**: Groups, conversations and Group info now use one full-width pane below 720 pixels. Back returns to Groups, and message and recording controls stay within reach.
 
 ### Fixed

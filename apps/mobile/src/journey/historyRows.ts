@@ -40,7 +40,13 @@ export function historyItem(
     content:
       row.kind === "deleted"
         ? { kind: "deleted" }
-        : { kind: "text", segments, edited: row.editedAt !== null },
+        : row.attachments.length
+          ? {
+              kind: "attachments",
+              caption: segments,
+              files: row.attachments.map((file) => ({ ...file, url: `${siteUrl}${file.url}` })),
+            }
+          : { kind: "text", segments, edited: row.editedAt !== null },
     quote: null,
     reactions:
       row.kind === "post" ? row.reactions.map((reaction) => ({ ...reaction, who: "" })) : [],
@@ -68,20 +74,13 @@ function postSegments(
   members: HistoryGroup["members"],
 ) {
   const mentions = new Set(row.kind === "post" ? row.mentions : []);
-  const labels =
-    row.kind === "post"
-      ? row.attachments.map((file) =>
-          file.kind === "file"
-            ? `${file.name} · ${file.contentType}`
-            : `${file.kind === "image" ? "Image" : "Voice note"} · ${file.contentType}`,
-        )
-      : [];
+
   const quote =
     row.kind === "post" && row.replyTo
       ? `Reply to ${row.replyTo.author.name}: ${"deleted" in row.replyTo ? "Message deleted" : row.replyTo.summary}`
       : "";
   return messageSegments(
-    [quote, row.kind === "post" ? row.body : "", ...labels].filter(Boolean).join("\n"),
+    [quote, row.kind === "post" ? row.body : ""].filter(Boolean).join("\n"),
     members.filter((member) => mentions.has(member.id)).map((member) => member.name),
   );
 }

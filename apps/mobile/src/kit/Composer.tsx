@@ -16,7 +16,12 @@ export type ComposerMode =
   | { kind: "compose" }
   | { kind: "reply"; author: string; summary: string }
   | { kind: "edit" }
-  | { kind: "recording"; seconds: number; levels: readonly number[] }
+  | {
+      kind: "recording";
+      phase: "starting" | "recording" | "finishing" | "failed";
+      seconds: number;
+      levels: readonly number[];
+    }
   | { kind: "readonly" };
 
 type Props = {
@@ -123,16 +128,26 @@ function ReadonlyPill() {
   );
 }
 
+const recordingLabels = {
+  starting: "Starting…",
+  recording: "Recording",
+  finishing: "Finishing…",
+  failed: "Not recording",
+};
+
 function RecordingPill({
   mode,
   onCancel,
   onSend,
+  onRetry,
 }: {
   mode: Extract<ComposerMode, { kind: "recording" }>;
   onCancel: () => void;
   onSend: () => void;
+  onRetry: () => void;
 }) {
   const { c } = useTheme();
+  const active = mode.phase === "recording" || mode.phase === "finishing";
   return (
     <View
       accessibilityLiveRegion="polite"
@@ -148,20 +163,39 @@ function RecordingPill({
         gap: 10,
       }}
     >
-      <Blink>
-        {(opacity) => (
-          <Animated.View
-            style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: c.er2, opacity }}
-          />
-        )}
-      </Blink>
-      <T>Recording</T>
-      <T size={12} color="mu" tabular style={{ minWidth: 30, textAlign: "right" }}>
-        {formatDuration(mode.seconds)}
-      </T>
-      <Waveform samples={mode.levels} progress={1} height={22} />
-      <PillButton label="Cancel" background="s0" onPress={onCancel} />
-      <SendButton label="Send voice note" onPress={onSend} />
+      {active ? (
+        <Blink>
+          {(opacity) => (
+            <Animated.View
+              style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: c.er2, opacity }}
+            />
+          )}
+        </Blink>
+      ) : null}
+      <T style={{ flexShrink: 1, ...(active ? {} : { flex: 1 }) }}>{recordingLabels[mode.phase]}</T>
+      {active ? (
+        <>
+          <T size={12} color="mu" tabular style={{ minWidth: 30, textAlign: "right" }}>
+            {formatDuration(mode.seconds)}
+          </T>
+          <Waveform samples={mode.levels} progress={1} height={22} />
+        </>
+      ) : null}
+      <PillButton
+        label="Cancel"
+        background="s0"
+        disabled={mode.phase === "finishing"}
+        onPress={onCancel}
+      />
+      {mode.phase === "failed" ? (
+        <PillButton label="Retry" onPress={onRetry} />
+      ) : (
+        <SendButton
+          label="Send voice note"
+          disabled={mode.phase !== "recording"}
+          onPress={onSend}
+        />
+      )}
     </View>
   );
 }
@@ -308,7 +342,12 @@ export function Composer(props: Props) {
   if (mode.kind === "recording") {
     return (
       <Shell>
-        <RecordingPill mode={mode} onCancel={props.onRecordCancel} onSend={props.onRecordSend} />
+        <RecordingPill
+          mode={mode}
+          onCancel={props.onRecordCancel}
+          onSend={props.onRecordSend}
+          onRetry={props.onRecord}
+        />
       </Shell>
     );
   }

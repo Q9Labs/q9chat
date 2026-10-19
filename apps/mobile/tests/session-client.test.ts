@@ -144,7 +144,7 @@ type AuthWindow = {
 
 function harness(
   initial: Partial<Record<StoreKey, string>>,
-  options: { requestTimeoutMs?: number } = {},
+  options: { requestTimeoutMs?: number; clearLocalText?: () => void } = {},
 ) {
   const worker = createWorker();
   const keychain = createKeychain(initial);
@@ -237,35 +237,33 @@ void test("signing out cancels the refresh in flight and revokes the token it wa
   assert.equal(keychain.value("refreshToken"), null);
 });
 
-void test("a launch refresh that never answers goes offline with the token kept, and a late answer changes nothing", async () => {
+void test("a stalled launch opens sign-in and ignores a late successful answer", async () => {
   const { worker, keychain, client } = harness(
     { refreshToken: "refresh-a" },
     { requestTimeoutMs: 30 },
   );
+  worker.auto("sign-out", () => json({}));
   const starting = client.bootstrap();
   const stalled = await worker.next("token");
   await starting;
-  assert.equal(statusOf(client), "offline");
-  assert.equal(keychain.value("refreshToken"), "refresh-a");
-
+  assert.equal(statusOf(client), "unauthenticated");
+  assert.equal(keychain.value("refreshToken"), null);
   stalled.reply(json(phoneSession("late")));
   await pause(10);
-  assert.equal(statusOf(client), "offline");
-  assert.equal(keychain.value("refreshToken"), "refresh-a");
-
-  const retrying = client.retry();
-  (await worker.next("token")).reply(json(phoneSession("a2")));
-  await retrying;
-  assert.equal(accessTokenOf(client), "access-a2");
+  await client.retry();
+  assert.equal(statusOf(client), "unauthenticated");
+  assert.equal(keychain.value("refreshToken"), null);
+  assert.equal(worker.count("token"), 1);
 });
 
 void test("the deadline covers the response body, not only the headers", async () => {
   const { worker, client } = harness({ refreshToken: "refresh-a" }, { requestTimeoutMs: 30 });
+  worker.auto("sign-out", () => json({}));
   const starting = client.bootstrap();
   const request = await worker.next("token");
   request.reply(stalledBody(request.signal));
   await starting;
-  assert.equal(statusOf(client), "offline");
+  assert.equal(statusOf(client), "unauthenticated");
 });
 
 void test("the refresh token is read from the keychain on every refresh, not kept in memory", async () => {
@@ -295,48 +293,42 @@ void test("two refreshes asked for together share one request", async () => {
   assert.equal(worker.count("token"), 1);
 });
 
-void test("a cold start without a connection keeps the token, says it is offline, and recovers on retry", async () => {
+void test("a cold start without a connection opens sign-in and forgets the saved token", async () => {
   const { worker, keychain, client } = harness({ refreshToken: "refresh-a" });
+  worker.auto("sign-out", () => json({}));
   const starting = client.bootstrap();
   (await worker.next("token")).reply(new TypeError("Network request failed"));
   await starting;
-  assert.equal(statusOf(client), "offline");
-  assert.equal(keychain.value("refreshToken"), "refresh-a");
-
-  const retrying = client.retry();
-  assert.equal(statusOf(client), "loading");
-  (await worker.next("token")).reply(json(phoneSession("a2")));
-  await retrying;
-  assert.equal(accessTokenOf(client), "access-a2");
-  assert.equal(keychain.value("refreshToken"), "refresh-a2");
+  assert.equal(statusOf(client), "unauthenticated");
+  assert.equal(keychain.value("refreshToken"), null);
+  await client.retry();
+  assert.equal(worker.count("token"), 1);
 });
 
-void test("a server error keeps the token too; only a confirmed 401 signs the person out", async () => {
+void test("an active session can retry a temporary server error, but a 401 ends it", async () => {
   const { worker, keychain, client } = harness({ refreshToken: "refresh-a" });
-  const starting = client.bootstrap();
-  (await worker.next("token")).reply(json({}, 503));
-  await starting;
+  worker.auto("token", () => json(phoneSession("a")));
+  await client.bootstrap();
+  worker.auto("token", () => json({}, 503));
+  await client.fetchAccessToken({ forceRefreshToken: true });
   assert.equal(statusOf(client), "offline");
   assert.equal(keychain.value("refreshToken"), "refresh-a");
-
-  const retrying = client.retry();
-  (await worker.next("token")).reply(json({ error: "session_expired" }, 401));
-  await retrying;
+  worker.auto("token", () => json({ error: "session_expired" }, 401));
+  await client.retry();
   assert.equal(statusOf(client), "unauthenticated");
   assert.equal(keychain.value("refreshToken"), null);
 });
 
-void test("a keychain read failure at launch is offline and retryable, not signed out", async () => {
+void test("a keychain read failure at launch opens sign-in rather than trapping the person", async () => {
   const { worker, keychain, client } = harness({ refreshToken: "refresh-a" });
   keychain.failReads(true);
   await client.bootstrap();
-  assert.equal(statusOf(client), "offline");
-
+  assert.equal(statusOf(client), "unauthenticated");
   keychain.failReads(false);
-  const retrying = client.retry();
-  (await worker.next("token")).reply(json(phoneSession("a2")));
-  await retrying;
-  assert.equal(accessTokenOf(client), "access-a2");
+  await client.retry();
+  assert.equal(statusOf(client), "unauthenticated");
+  assert.equal(keychain.value("refreshToken"), null);
+  assert.equal(worker.count("token"), 0);
 });
 
 void test("retry does nothing unless the session is offline", async () => {
@@ -727,17 +719,18 @@ void test("signing out deletes the active key: a new client starts signed out an
   assert.equal(worker.count("token"), 1);
 });
 
-void test("when the active key cannot be deleted, sign-out fails and the person stays signed in", async () => {
+void test("when the active key cannot be deleted, sign-out still reaches sign-in", async () => {
   const { worker, keychain, client } = harness({ refreshToken: "refresh-a" });
   worker.auto("token", () => json(phoneSession("a")));
   worker.auto("sign-out", () => json({}));
   await client.bootstrap();
 
   keychain.failWrites(["refreshToken"]);
-  await assert.rejects(client.signOut());
-  assert.equal(statusOf(client), "authenticated");
+  await client.signOut();
+  assert.equal(statusOf(client), "unauthenticated");
   assert.equal(keychain.value("refreshToken"), "refresh-a");
-  assert.equal(worker.count("sign-out"), 0);
+  await revokesAsked(worker, 1);
+  assert.equal(worker.count("sign-out"), 1);
 
   // Nothing is owed: when the keychain works again, signing out simply works.
   keychain.failWrites([]);
@@ -814,9 +807,11 @@ void test("a revoke never blocks a new sign-in, and the new sign-in's attempt su
 
 void test("from the offline restore screen, signing out works without the network", async () => {
   const { worker, keychain, restart, client } = harness({ refreshToken: "refresh-a" });
-  worker.auto("token", () => json({}, 503));
+  worker.auto("token", () => json(phoneSession("a")));
   worker.auto("sign-out", () => json({}, 503));
   await client.bootstrap();
+  worker.auto("token", () => json({}, 503));
+  await client.fetchAccessToken({ forceRefreshToken: true });
   assert.equal(statusOf(client), "offline");
 
   await client.signOut();
@@ -826,7 +821,7 @@ void test("from the offline restore screen, signing out works without the networ
   const restarted = restart();
   await restarted.bootstrap();
   assert.equal(statusOf(restarted), "unauthenticated");
-  assert.equal(worker.count("token"), 1);
+  assert.equal(worker.count("token"), 2);
 });
 
 const INVITE = "inviteFixtureToken";
@@ -919,7 +914,7 @@ void test("an invite that is not a token is not carried", async () => {
   assert.equal(await client.takeInvite(), null);
 });
 
-void test("a sign-out that cannot delete the saved invite fails and keeps the person signed in", async () => {
+void test("an unavailable invite key does not prevent sign-out or deletion of the active token", async () => {
   const { worker, keychain, client } = harness({
     refreshToken: "refresh-a",
     pendingInvite: inviteRecord(INVITE),
@@ -927,8 +922,57 @@ void test("a sign-out that cannot delete the saved invite fails and keeps the pe
   worker.auto("token", () => json(phoneSession("a")));
   await client.bootstrap();
   keychain.failWrites(["pendingInvite"]);
-  await assert.rejects(client.signOut());
-  assert.equal(statusOf(client), "authenticated");
-  assert.equal(keychain.value("refreshToken"), "refresh-a");
+  worker.auto("sign-out", () => json({}));
+  await client.signOut();
+  assert.equal(statusOf(client), "unauthenticated");
+  assert.equal(keychain.value("refreshToken"), null);
   assert.equal(keychain.value("pendingInvite") === null, false);
+});
+
+void test("sign-out reaches sign-in even when local cleanup fails", async () => {
+  const { worker, keychain, client } = harness({ refreshToken: "refresh-a" });
+  worker.auto("token", () => json(phoneSession("a")));
+  worker.auto("sign-out", () => json({}, 503));
+  await client.bootstrap();
+  keychain.failWrites(["pendingInvite", "refreshToken"]);
+  await assert.doesNotReject(client.signOut());
+  await revokesAsked(worker, 3);
+  assert.equal(statusOf(client), "unauthenticated");
+});
+
+void test("an expired saved session reaches sign-in even when its key cannot be deleted", async () => {
+  const { worker, keychain, client } = harness({ refreshToken: "revoked" });
+  worker.auto("token", () => json({ error: "session_expired" }, 401));
+  worker.auto("sign-out", () => json({}));
+  keychain.failWrites(["refreshToken"]);
+  await client.bootstrap();
+  assert.equal(statusOf(client), "unauthenticated");
+});
+
+void test("a saved session that cannot restore opens sign-in", async () => {
+  const { worker, client } = harness({ refreshToken: "refresh-a" });
+  worker.auto("token", () => json({}, 503));
+  worker.auto("sign-out", () => json({}));
+  await client.bootstrap();
+  assert.equal(statusOf(client), "unauthenticated");
+});
+
+void test("local text cleanup failure cannot prevent auth-key cleanup or sign-in", async () => {
+  let attempted = false;
+  const { worker, keychain, client } = harness(
+    { refreshToken: "refresh-a" },
+    {
+      clearLocalText: () => {
+        attempted = true;
+        throw new Error("files unavailable");
+      },
+    },
+  );
+  worker.auto("token", () => json(phoneSession("a")));
+  worker.auto("sign-out", () => json({}));
+  await client.bootstrap();
+  await client.signOut();
+  assert.equal(attempted, true);
+  assert.equal(statusOf(client), "unauthenticated");
+  assert.equal(keychain.value("refreshToken"), null);
 });

@@ -419,7 +419,14 @@ export const STATES: GalleryState[] = [
     title: "Composer, recording",
     group: "Chat",
     render: () =>
-      chat("launch", { composer: { kind: "recording", seconds: 0, levels: waveSamples(11, 30) } }),
+      chat("launch", {
+        composer: {
+          kind: "recording",
+          phase: "recording",
+          seconds: 0,
+          levels: waveSamples(11, 30),
+        },
+      }),
   },
   {
     id: "chat-offline",

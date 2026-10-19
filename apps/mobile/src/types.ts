@@ -1,3 +1,6 @@
+import type { api } from "@q9chat/convex";
+import type { FunctionReturnType } from "convex/server";
+
 // Display-ready shapes for the presentational screens. They follow the query results in
 // build/api.md (names, avatar colors, labels already resolved) so the wiring lane only maps.
 
@@ -60,6 +63,14 @@ export type MessageContent =
     }
   | { kind: "file"; name: string; size: string }
   | { kind: "voice"; durationSeconds: number; waveform: readonly number[] }
+  | {
+      kind: "attachments";
+      caption: Segment[];
+      files: readonly Extract<
+        FunctionReturnType<typeof api.messages.range>[number],
+        { kind: "post" }
+      >["attachments"][number][];
+    }
   | { kind: "deleted" };
 
 export type Message = {

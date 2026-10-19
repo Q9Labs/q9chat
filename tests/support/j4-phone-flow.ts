@@ -4,8 +4,13 @@ import { api } from "@q9chat/convex";
 import { ConvexClient } from "convex/browser";
 import { expect, type Locator, type Screen } from "e2e";
 
-import { createPhoneAccount, createPhoneGroup, signOutPhone } from "./phone-fixtures.js";
-import { deletePhoneProfile, magicCode, removeTestUser, type PhoneSession } from "./workos.js";
+import {
+  createPhoneAccount,
+  createPhoneGroup,
+  signInPhoneUi,
+  signOutPhone,
+} from "./phone-fixtures.js";
+import { deletePhoneProfile, removeTestUser, type PhoneSession } from "./workos.js";
 
 export async function runJ4Phone(p: {
   screen: Screen;
@@ -37,12 +42,7 @@ export async function runJ4Phone(p: {
     livePeer.onUpdate(api.messages.range, { groupId, fromSequence: 1, toSequence: 100 }, (rows) => {
       liveBodies = rows.flatMap((row) => (row.kind === "post" ? [row.body] : []));
     });
-    await p.enter(p.screen.getByLabel("Email"), email);
-    await p.screen.getByRole("button", "Email me a code").tap();
-    await expect(p.screen.getByText("Check your email")).toBeVisible();
-    await p.screen
-      .getByLabel("6-digit code")
-      .pressSequentially(await magicCode(email), { delay: 80 });
+    await signInPhoneUi(p, email);
     const group = p.screen.getByRole("button", new RegExp(title));
     await expect(group).toBeVisible({ timeout: 30_000 });
     await group.tap();
@@ -101,12 +101,7 @@ export async function runJ4Phone(p: {
     await p.shot("j4-before-signout");
     await fetch("http://localhost:8321/__fault", { method: "DELETE" });
     await signOutPhone(p.screen);
-    await p.enter(p.screen.getByLabel("Email"), email);
-    await p.screen.getByRole("button", "Email me a code").tap();
-    await expect(p.screen.getByText("Check your email")).toBeVisible();
-    await p.screen
-      .getByLabel("6-digit code")
-      .pressSequentially(await magicCode(email), { delay: 80 });
+    await signInPhoneUi(p, email);
     await expect(group).toBeVisible({ timeout: 30_000 });
     await group.tap();
     await expect(composer).toHaveValue("");

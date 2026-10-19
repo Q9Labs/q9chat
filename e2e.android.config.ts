@@ -13,6 +13,7 @@ export default {
     "tests/j3-android.e2e.ts",
     "tests/phone-groups-android.e2e.ts",
     "tests/j4-android.e2e.ts",
+    "tests/j4b-android.e2e.ts",
   ],
   assertionTimeout: 20_000,
   // One simulator or emulator serves the whole run, so two tests at once would restart each other's app.
@@ -20,7 +21,12 @@ export default {
   targets: [
     {
       name: "android",
-      engine: mobile({ platform: "android", device: serial }),
+      engine: mobile({
+        platform: "android",
+        device: serial,
+        session: "q9-phone-messages-android",
+        transition: 1500,
+      }),
       app: { bundleId: "ai.q9labs.chat" },
     },
   ],

@@ -1,7 +1,35 @@
 import { Schema } from "effect";
 
+const LocalAttachment = Schema.Union(
+  Schema.Struct({
+    kind: Schema.Literal("image"),
+    uri: Schema.String,
+    contentType: Schema.String,
+    size: Schema.Number,
+    width: Schema.Number,
+    height: Schema.Number,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("file"),
+    uri: Schema.String,
+    contentType: Schema.String,
+    size: Schema.Number,
+    name: Schema.String,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("voice"),
+    uri: Schema.String,
+    contentType: Schema.String,
+    size: Schema.Number,
+    durationMs: Schema.Number,
+    waveform: Schema.Array(Schema.Number),
+  }),
+);
+export type LocalAttachment = typeof LocalAttachment.Type;
+
 const PendingText = Schema.Struct({
   clientKey: Schema.String,
+  attachment: Schema.optional(LocalAttachment),
   body: Schema.String,
   createdAt: Schema.Number,
   status: Schema.Literal("sending", "failed"),
