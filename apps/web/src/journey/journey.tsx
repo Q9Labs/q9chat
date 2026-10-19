@@ -373,11 +373,12 @@ function Groups({
     },
   };
   const rows = (groups ?? []).map((row) => groupRow(row, photos));
+  const token = useContext(InviteToken);
   const workspace = useGroupJourney({
     covered: accountOpen || search.isOpen,
     onSearchGroup: search.openGroup,
     selectedGroup: useSelectedGroup(groups),
-    token: useContext(InviteToken),
+    token,
     onNotice: setNotice,
     renderEmpty: (onNewGroup) => <GroupsContent groups={groups} onNewGroup={onNewGroup} />,
   });
@@ -385,6 +386,7 @@ function Groups({
   return (
     <>
       <ChatShell
+        hasSelection={workspace.selected !== null || token !== undefined}
         sidebar={
           <Sidebar
             me={me}
