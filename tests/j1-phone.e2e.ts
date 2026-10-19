@@ -202,11 +202,20 @@ test(
       const box = await codeField.boundingBox();
       if (!box) throw new Error("The code field has no bounding box");
       // The first tap puts the cursor in front of the first digit, the second opens the edit menu on it.
+      // iOS sometimes reads the two taps as a single gesture and shows no menu, so the gesture is repeated
+      // until the menu is there; the pasted value is still checked afterwards.
       const pasteAtStart = async () => {
         const beforeDigit = { x: 2, y: box.height / 2 };
-        await codeField.tap({ position: beforeDigit });
-        await codeField.tap({ position: beforeDigit });
-        await screen.getByText("Paste", { exact: true }).tap();
+        const paste = screen.getByText("Paste", { exact: true });
+        for (let attempt = 0; attempt < 4; attempt += 1) {
+          await codeField.tap({ position: beforeDigit });
+          await codeField.tap({ position: beforeDigit });
+          if (await paste.isVisible()) {
+            await paste.tap();
+            return;
+          }
+        }
+        throw new Error("The edit menu with Paste never opened");
       };
       await codeField.pressSequentially(code.slice(4, 5), { delay: 80 });
       await device.setClipboard(code.slice(0, 4));
