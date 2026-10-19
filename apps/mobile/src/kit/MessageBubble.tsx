@@ -13,6 +13,7 @@ import type { Emoji, Message, MessageContent, SendState } from "../types";
 import { isWebUrl } from "./format";
 import { Icon } from "./Icon";
 import { openWebUrl } from "./links";
+import { LiveAttachments } from "./LiveAttachments";
 import {
   BodyText,
   FileCard,
@@ -58,11 +59,17 @@ const withElement = (element: MessageElement | null, node: ReactNode) =>
   element && node ? <View {...element}>{node}</View> : node;
 
 const hasControls = ({ content, quote, reactions, state }: Message) =>
-  content.kind === "voice" || quote !== null || reactions.length > 0 || state === "failed";
+  content.kind === "voice" ||
+  content.kind === "attachments" ||
+  quote !== null ||
+  reactions.length > 0 ||
+  state === "failed";
 
 function textOf(content: MessageContent): ReactNode {
   if (content.kind === "text")
     return <BodyText segments={content.segments} edited={content.edited} />;
+  if (content.kind === "attachments" && content.caption.length)
+    return <BodyText segments={content.caption} />;
   if (content.kind === "image" && content.caption) return <BodyText segments={content.caption} />;
   return null;
 }
@@ -161,6 +168,7 @@ function Media({
   element: MessageElement | null;
   actions: MessageActions;
 }) {
+  if (content.kind === "attachments") return <LiveAttachments files={content.files} />;
   if (content.kind === "voice") {
     return (
       <VoiceNote

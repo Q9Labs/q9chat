@@ -58,25 +58,6 @@ outcomes:
       - Open the phone app from an HTTPS invite link (iOS associated domains, an Android verified intent filter, and the Worker's apple-app-site-association and assetlinks.json), which needs the Apple team ID and the release certificate from the first EAS build.
       - Run the group journey on a physical phone.
 
-  - id: chat.send_messages
-    title: Send text, images, files and voice notes
-    area: messages
-    state: in_progress
-    summary: Text sends appear immediately on web and phone, with retry-safe delivery, per-group drafts and typing. Web attachments are supported; phone attachments remain.
-    theory: theory.md#messages
-    code:
-      - apps/web/src/journey/text-outbox.ts
-      - apps/web/src/journey/text-composer.tsx
-      - apps/web/src/journey/media-outbox.ts
-      - apps/web/src/journey/voice-recorder.ts
-      - apps/mobile/src/journey/useTextOutbox.ts
-      - apps/mobile/src/journey/PhoneText.tsx
-    priority: P0
-    size: L
-    size_reason: Sending images, files and voice notes on the phone remains.
-    remaining:
-      - Send images, files and voice notes on the phone, with previews and protected playback or download.
-
   - id: chat.quote_replies
     title: Reply by quoting and jump to the original
     area: messages
@@ -146,15 +127,15 @@ outcomes:
     title: The phone app offers every journey
     area: mobile
     state: in_progress
-    summary: The phone supports sign-in, profiles, Groups, group creation, joining, live reading, text sending, search and Group info controls. Attachments, message actions and phone notifications still need wiring.
+    summary: The phone supports sign-in, profiles, Groups, group creation, joining, live reading, text, photos, files, voice notes, search and Group info controls. Message actions and phone notifications still need wiring.
     theory: theory.md#fast-and-reliable
     code:
       - apps/mobile
     priority: P0
     size: L
-    size_reason: Attachments, message actions and phone notifications still need their screens wired and device checks.
+    size_reason: Message actions and phone notifications still need their screens wired and device checks.
     remaining:
-      - Wire attachments and remaining message actions to the backend.
+      - Wire remaining message actions to the backend.
       - Deliver phone notifications and open them at the message.
 
   - id: release.first_live

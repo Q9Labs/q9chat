@@ -44,7 +44,9 @@
         {
           "photosPermission": "Q9 Chat uses your photos so you can choose a profile picture."
         }
-      ]
+      ],
+      "expo-audio",
+      "expo-sharing"
     ],
     "extra": {
       "eas": {

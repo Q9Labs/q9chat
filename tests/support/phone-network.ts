@@ -1,28 +1,60 @@
-import { createServer, type IncomingMessage } from "node:http";
+import {
+  request as plainRequest,
+  createServer,
+  type IncomingMessage,
+  type ServerResponse,
+} from "node:http";
 import { request as secureRequest } from "node:https";
 import type { Duplex } from "node:stream";
 import { connect } from "node:tls";
 
 const upstream = "quixotic-crab-23.convex.cloud";
+const mediaUpstream = "quixotic-crab-23.convex.site";
 let offline = false;
+let uploadFailed = false;
 const sockets = new Set<Duplex>();
-function headers(req: IncomingMessage) {
-  return { ...req.headers, host: upstream };
+function headers(req: IncomingMessage, host = upstream) {
+  return { ...req.headers, host };
 }
-/** A real transport fault at the native app's network boundary, not a replacement backend. */
-const server = createServer((req, res) => {
+function fault(req: IncomingMessage, res: ServerResponse) {
+  if (req.url === "/__uploadFault") {
+    uploadFailed = req.method === "POST";
+    res.end("ok");
+    return true;
+  }
   if (req.url === "/__fault") {
     offline = req.method === "POST";
     if (offline) for (const socket of sockets) socket.destroy();
     res.end("ok");
-    return;
+    return true;
   }
-  if (offline) {
-    res.writeHead(503).end("Offline for native journey proof");
-    return;
+  return false;
+}
+function forwardAuth(req: IncomingMessage, res: ServerResponse) {
+  if (!req.url?.startsWith("/api/auth/")) return false;
+  {
+    const target = plainRequest(
+      {
+        hostname: "localhost",
+        port: 3174,
+        path: req.url,
+        method: req.method,
+        headers: req.headers,
+      },
+      (response) => {
+        res.writeHead(response.statusCode ?? 502, response.headers);
+        response.pipe(res);
+      },
+    );
+    target.on("error", () => res.writeHead(502).end());
+    req.pipe(target);
+    return true;
   }
+}
+function forwardChat(req: IncomingMessage, res: ServerResponse) {
+  const host = req.url === "/upload" || req.url?.startsWith("/files/") ? mediaUpstream : upstream;
   const target = secureRequest(
-    { hostname: upstream, path: req.url, method: req.method, headers: headers(req) },
+    { hostname: host, path: req.url, method: req.method, headers: headers(req, host) },
     (response) => {
       res.writeHead(response.statusCode ?? 502, response.headers);
       response.pipe(res);
@@ -30,6 +62,20 @@ const server = createServer((req, res) => {
   );
   target.on("error", () => res.writeHead(502).end());
   req.pipe(target);
+}
+/** A real transport fault at the native app's network boundary, not a replacement backend. */
+const server = createServer((req, res) => {
+  if (fault(req, res)) return;
+  if (offline) {
+    res.writeHead(503).end("Offline for native journey proof");
+    return;
+  }
+  if (uploadFailed && req.url === "/upload") {
+    res.writeHead(503).end("Upload failed for native journey proof");
+    return;
+  }
+  if (forwardAuth(req, res)) return;
+  forwardChat(req, res);
 });
 server.on("upgrade", (req, socket, head) => {
   if (offline) {

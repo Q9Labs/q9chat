@@ -72,11 +72,10 @@ const inviteOf = (invite: string | undefined) =>
 
 /**
  * The phone session. Every operation that touches the keychain or changes the session (restore,
- * refresh, sign-in, sign-out, the OAuth attempt) runs through one FIFO queue, start to finish:
- * keychain read, Worker request, keychain write, publish. So no write can land between another
- * operation's read and write, and a late answer can never undo a newer change. A sign-out cancels the
- * request in flight, and its keychain step, deleting the active token, is the next one in the queue. The
- * server revoke is not queued: it runs after that step, with the one token the sign-out held in memory.
+ * refresh, sign-in, sign-out, the OAuth attempt) runs through one FIFO queue. No write can land
+ * between another operation's read and write. Sign-out publishes immediately and cancels the request
+ * in flight; its queued cleanup prevents a late write from restoring the session. Server revocation
+ * runs separately after cleanup, with the token that sign-out read.
  * The refresh token is otherwise read from the keychain inside each operation and never kept here.
  */
 export function createSessionClient(edges: SessionEdges) {
@@ -157,13 +156,14 @@ export function createSessionClient(edges: SessionEdges) {
       const token = await store.get("refreshToken");
       if (!token) {
         publishUnlessLeaving({ status: "unauthenticated" });
+        clearLocalText();
         return null;
       }
       const next = await request((options) => authApi.refreshSession(token, options));
       if (!next) {
         // A confirmed 401: the session is gone for good.
-        await store.delete("refreshToken");
         publishUnlessLeaving({ status: "unauthenticated" });
+        await clearLocalSession();
         return null;
       }
       await adopt(next);
@@ -183,7 +183,7 @@ export function createSessionClient(edges: SessionEdges) {
     return promise;
   }
 
-  /** Restores the saved session at launch. */
+  /** Restores at launch; transient failures keep local data and wait for Retry. */
   async function bootstrap() {
     await enqueue(async () => {
       await sweepAttempts().catch(noop);
@@ -417,26 +417,41 @@ export function createSessionClient(edges: SessionEdges) {
     }
   }
 
-  /**
-   * Signs out of this phone. Its keychain step is next in the queue: the active token is read into
-   * memory (a failed read is skipped) and its key deleted. If the delete fails the person stays signed
-   * in and this rejects. Once it succeeds they are signed out for good, and the server revoke runs on
-   * its own, outside the queue.
-   */
+  function clearLocalText() {
+    try {
+      edges.clearLocalText?.();
+    } catch {
+      /* Continue clearing auth keys after local-file failure. */
+    }
+  }
+
+  /** Shared by explicit sign-out and a rejected saved session or refresh. */
+  async function clearLocalSession() {
+    liveWindow = null;
+    delivered = null;
+    jar.clear();
+    clearLocalText();
+    // One unavailable key must not prevent the other local session keys from being removed.
+    await Promise.all([
+      store.delete("pendingInvite").catch(noop),
+      store.delete("refreshToken").catch(noop),
+      store.delete("oauthAttempt").catch(noop),
+      store.delete("emailAttempt").catch(noop),
+    ]);
+  }
+
+  /** Ends the local session immediately; storage cleanup and server revocation cannot block sign-in. */
   async function signOut(): Promise<void> {
     leaving += 1;
     cancelable?.abort(new Error("signed_out"));
     liveWindow = null;
     delivered = null;
+    jar.clear();
+    publish({ status: "unauthenticated" });
     const token = await enqueue(async () => {
       try {
         const active = await store.get("refreshToken").catch(() => null);
-        // The invite goes first and a failure to delete it fails the sign-out too, so a later account never meets it.
-        edges.clearLocalText?.();
-        await store.delete("pendingInvite");
-        await store.delete("refreshToken");
-        await clearAttempts().catch(noop);
-        publish({ status: "unauthenticated" });
+        await clearLocalSession();
         return active;
       } finally {
         leaving -= 1;

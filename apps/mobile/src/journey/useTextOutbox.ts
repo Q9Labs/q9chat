@@ -3,11 +3,14 @@ import { ConvexHttpClient } from "convex/browser";
 import { useConvexConnectionState } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { randomUUID } from "expo-crypto";
+import { File } from "expo-file-system";
 import { useEffect, useState, useSyncExternalStore } from "react";
 
+import { privateMedia } from "../kit/privateMedia";
 import { sessionClient } from "../session/client";
 import { config } from "../session/config";
-import { normalizeText, type Pending } from "./textState";
+import { keepAttachment, uploadAttachment } from "./attachments";
+import { normalizeText, type LocalAttachment, type Pending } from "./textState";
 import { textStore } from "./textStore";
 
 type Group = Extract<FunctionReturnType<typeof api.groups.get>, { status: "member" }>;
@@ -17,27 +20,34 @@ export function useTextOutbox(group: Group, rows: readonly Row[]) {
   const me = group.members.find((person) => person.isYou);
   if (!me) throw new Error("Member query did not include the caller");
   const store = textStore(me.id, group.groupId);
+  const [media] = useState(() => privateMedia.open(me.id, group.groupId));
   const [openingSequence] = useState(group.lastSequence);
   const state = useSyncExternalStore(store.subscribe, store.get);
   const { isWebSocketConnected: connected } = useConvexConnectionState();
   const committed = new Set(
     rows.flatMap((row) => (row.kind === "post" && row.author.isYou ? [row.clientKey] : [])),
   );
-  const pending = state.pending.filter(
-    (post) =>
-      !committed.has(post.clientKey) && (post.status !== "sent" || post.sequence > openingSequence),
-  );
+  type StoredPost = (typeof state.pending)[number];
+  const retain = (post: StoredPost) =>
+    !committed.has(post.clientKey) && (post.status !== "sent" || post.sequence > openingSequence);
+  const pending = state.pending.filter(retain);
+  function discardAttachment(post: StoredPost) {
+    if (!post.attachment) return;
+    try {
+      const file = new File(post.attachment.uri);
+      if (file.exists) file.delete();
+    } catch {
+      store.error("Message sent, but the local attachment couldn't be cleared.");
+    }
+  }
   useEffect(() => {
-    if (pending.length !== state.pending.length) {
-      const current = store.get();
-      store.update({
-        ...current,
-        pending: current.pending.filter(
-          (post) =>
-            !committed.has(post.clientKey) &&
-            (post.status !== "sent" || post.sequence > openingSequence),
-        ),
-      });
+    if (pending.length === state.pending.length) return;
+    const current = store.get();
+    const retained = current.pending.filter(retain);
+    if (!store.update({ ...current, pending: retained })) return;
+    const keys = new Set(retained.map((post) => post.clientKey));
+    for (const post of current.pending) {
+      if (!keys.has(post.clientKey)) discardAttachment(post);
     }
   });
   async function deliver(post: Pending) {
@@ -53,7 +63,7 @@ export function useTextOutbox(group: Group, rows: readonly Row[]) {
       return;
     }
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15_000);
+    const timeout = setTimeout(() => controller.abort(), 60_000);
     const unsubscribe = sessionClient.subscribe(() => {
       if (sessionClient.epoch() !== epoch) controller.abort();
     });
@@ -77,7 +87,9 @@ export function useTextOutbox(group: Group, rows: readonly Row[]) {
         groupId: group.groupId,
         clientKey: post.clientKey,
         body: post.body,
-        attachments: [],
+        attachments: post.attachment
+          ? [await uploadAttachment(post.attachment, token, controller.signal)]
+          : [],
       });
       replace({ ...post, ...receipt, status: "sent" });
     } catch {
@@ -88,6 +100,7 @@ export function useTextOutbox(group: Group, rows: readonly Row[]) {
     }
   }
   return {
+    media,
     ...state,
     me,
     pending,
@@ -112,6 +125,28 @@ export function useTextOutbox(group: Group, rows: readonly Row[]) {
       if (!store.update({ draft: "", pending: [...current.pending, post] })) return false;
       void deliver(post);
       return true;
+    },
+    attach(attachment: LocalAttachment) {
+      const key = randomUUID();
+      try {
+        const saved = keepAttachment(attachment, `${me.id}-${group.groupId}-${key}`);
+        const post: Pending = {
+          clientKey: key,
+          body: "",
+          attachment: saved,
+          createdAt: Date.now(),
+          status: "sending",
+        };
+        const current = store.get();
+        if (!store.update({ ...current, pending: [...current.pending, post] })) return false;
+        void deliver(post);
+        return true;
+      } catch (error) {
+        store.error(
+          error instanceof Error ? error.message : "Couldn't attach this file. Try again.",
+        );
+        return false;
+      }
     },
     retry(this: void, id: string) {
       const post = store.get().pending.find((item) => item.clientKey === id);

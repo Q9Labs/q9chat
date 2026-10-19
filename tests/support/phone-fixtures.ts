@@ -45,3 +45,28 @@ export async function signOutPhone(screen: Screen) {
   await screen.getByRole("button", "Sign out", { exact: true }).tap();
   await expect(screen.getByRole("button", "Continue with Google")).toBeVisible();
 }
+
+export function phoneEmails(lane: string) {
+  const stamp = randomUUID().slice(0, 8);
+  const email = `q9-${lane}-phone-${stamp}@example.net`;
+  const peerEmail = `q9-${lane}-peer-${stamp}@example.net`;
+  return { stamp, email, peerEmail, emails: [email, peerEmail] };
+}
+export async function signInPhoneUi(
+  p: {
+    screen: Screen;
+    enter: (field: Locator, value: string) => Promise<void>;
+    submitEmail?: () => Promise<void>;
+    enterCode?: (code: string) => Promise<void>;
+  },
+  email: string,
+) {
+  await p.enter(p.screen.getByLabel("Email"), email);
+  const submit = p.submitEmail ?? (() => p.screen.getByRole("button", "Email me a code").tap());
+  await submit();
+  await expect(p.screen.getByText("Check your email")).toBeVisible();
+  const enterCode =
+    p.enterCode ??
+    ((code: string) => p.screen.getByLabel("6-digit code").pressSequentially(code, { delay: 80 }));
+  await enterCode(await magicCode(email));
+}

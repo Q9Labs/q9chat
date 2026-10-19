@@ -14,7 +14,12 @@ export default {
   targets: [
     {
       name: "ios",
-      engine: mobile({ platform: "ios", settle: false, ...(udid ? { device: udid } : {}) }),
+      engine: mobile({
+        platform: "ios",
+        session: process.env["J1_PHONE_SESSION"],
+        settle: false,
+        ...(udid ? { device: udid } : {}),
+      }),
       app: {
         bundleId: "ai.q9labs.chat",
         launchArguments: [

@@ -4,13 +4,19 @@ import { api, type Id } from "@q9chat/convex";
 import type { ConvexHttpClient } from "convex/browser";
 import { expect, type Locator, type Screen } from "e2e";
 
-import { createPhoneAccount, createPhoneGroup, signOutPhone } from "./phone-fixtures.js";
-import { deletePhoneProfile, magicCode, removeTestUser, type PhoneSession } from "./workos.js";
+import {
+  createPhoneAccount,
+  createPhoneGroup,
+  signInPhoneUi,
+  signOutPhone,
+} from "./phone-fixtures.js";
+import { deletePhoneProfile, removeTestUser, type PhoneSession } from "./workos.js";
 
 /** One real member reads another's posts; both native platforms run this same journey. */
 export async function runJ3(p: {
   screen: Screen;
   enter: (field: Locator, value: string) => Promise<void>;
+  enterCode?: (code: string) => Promise<void>;
   shot: (name: string) => Promise<void> | void;
 }) {
   const stamp = randomUUID().replaceAll("-", "").slice(0, 16);
@@ -33,12 +39,7 @@ export async function runJ3(p: {
       });
     }
     await seedHistory(send, reader.client, groupId);
-    await p.enter(p.screen.getByLabel("Email"), readerEmail);
-    await p.screen.getByRole("button", "Email me a code").tap();
-    await expect(p.screen.getByText("Check your email")).toBeVisible();
-    await p.screen
-      .getByLabel("6-digit code")
-      .pressSequentially(await magicCode(readerEmail), { delay: 80 });
+    await signInPhoneUi(p, readerEmail);
     await expect(
       p.screen.getByRole("button", `${title}, Bilal: Reading backlog 104, 100 unread`),
     ).toBeVisible({ timeout: 30_000 });
