@@ -287,18 +287,19 @@ test(
       await field.fill("");
       // Actual tab close can drop the final WebSocket request; expiry remains the guarantee.
       const closing = await surface.context().newPage();
+      const closingWire = await sendWire(closing);
       await closing.goto(`http://localhost:3000/?group=${groupId}`);
       await closing
         .getByRole("textbox", { name: "Message", exact: true })
         .fill("Closing this typing tab");
       await typingVisible();
+      closingWire.failTyping("stop");
       const closedAt = Date.now();
       await closing.close();
-      await expect
-        .poll(async () => (await b.client.query(api.typing.list, { groupId })).length, {
-          timeout: 7000,
-        })
-        .toBe(0);
+      await peerPage.locator(".typing").waitFor({ state: "detached", timeout: 7000 });
+      // Time alone does not invalidate a cached Convex query; expiry is rendered locally.
+      const remainingTyping = await b.client.query(api.typing.list, { groupId });
+      expect(remainingTyping.every((row) => row.expiresAt <= Date.now())).toBe(true);
       process.stdout.write(
         `J4 PASS: typing errors clear after successful start/stop; pagehide stops promptly; actual tab close clears within expiry (${Date.now() - closedAt}ms observed, not a delivery guarantee)\n`,
       );
