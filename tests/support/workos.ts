@@ -6,6 +6,7 @@ import { webOrigin } from "./origin.js";
 
 const key = process.env["WORKOS_API_KEY"];
 if (!key || !key.startsWith("sk_test_")) throw new Error("A staging WorkOS key is required");
+const authOrigin = process.env["J1_AUTH_ORIGIN"] ?? webOrigin;
 const headers = { Authorization: `Bearer ${key}` };
 const events = Schema.Struct({
   data: Schema.Array(
@@ -47,11 +48,11 @@ export async function magicCode(email: string) {
 }
 
 async function authPost(path: string, body: object) {
-  const response = await fetch(`${webOrigin}/api/auth/${path}`, {
+  const response = await fetch(`${authOrigin}/api/auth/${path}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Origin: webOrigin,
+      Origin: authOrigin,
       Cookie: [...cookies].map(([name, value]) => `${name}=${value}`).join("; "),
     },
     body: JSON.stringify(body),

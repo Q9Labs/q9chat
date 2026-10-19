@@ -4,6 +4,7 @@ import {
   ScrollView,
   View,
   type LayoutChangeEvent,
+  type ViewInstance,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   type ScrollViewInstance,
@@ -30,7 +31,7 @@ function DateSeparator({ label, first }: { label: string; first: boolean }) {
 }
 
 /** "New since you last looked": accent text between two faint rules. */
-function UnreadDivider({ onLayout }: { onLayout?: (event: LayoutChangeEvent) => void }) {
+export function UnreadDivider({ onLayout }: { onLayout?: (event: LayoutChangeEvent) => void }) {
   const { c } = useTheme();
   const rule = { flex: 1, height: 1, backgroundColor: c.ac, opacity: 0.22 };
   return (
@@ -115,7 +116,9 @@ function TypingLine({ text }: { text: string }) {
   );
 }
 
-type GroupActions = {
+export type GroupActions = {
+  readOnly?: boolean;
+  onContentLayout?: (messageId: string, node: ViewInstance) => void;
   tappedId: string | null;
   playingId: string | null;
   playProgress: number;
@@ -138,6 +141,10 @@ function BubbleOf({ message, actions }: { message: Message; actions: GroupAction
   return (
     <MessageBubble
       message={message}
+      onContentLayout={
+        actions.onContentLayout ? (node) => actions.onContentLayout?.(message.id, node) : undefined
+      }
+      readOnly={actions.readOnly === true}
       showTime={actions.tappedId === message.id}
       onToggleTime={() => actions.onToggleTime(message.id)}
       onOpenSheet={() => actions.onOpenSheet(message.id)}
@@ -157,9 +164,11 @@ function BubbleOf({ message, actions }: { message: Message; actions: GroupAction
 function GroupHeader({
   item,
   onAuthorPress,
+  readOnly,
 }: {
   item: GroupItem;
   onAuthorPress: (author: Person) => void;
+  readOnly: boolean;
 }) {
   const { scheme } = useTheme();
   const { author } = item;
@@ -176,7 +185,11 @@ function GroupHeader({
         maxWidth: "100%",
       }}
     >
-      {item.messages[0]?.mine ? null : (
+      {item.messages[0]?.mine ? null : readOnly ? (
+        <T size={13} weight={600} color={nameColor} numberOfLines={1}>
+          {author.name}
+        </T>
+      ) : (
         <Press
           accessibilityRole="button"
           onPress={() => onAuthorPress(author)}
@@ -197,11 +210,44 @@ function GroupHeader({
 
 /** One name, one avatar and one time per run of messages from one person. */
 function MessageGroup({ item, actions }: { item: GroupItem; actions: GroupActions }) {
-  const mine = item.messages[0]?.mine ?? false;
+  const mine = item.messages[0]?.mine === true;
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "flex-start",
+        gap: 8,
+        marginTop: item.continuation ? 2 : 16,
+      }}
+    >
+      {mine ? null : <MessageAuthor item={item} actions={actions} />}
+      <View style={{ flex: 1, minWidth: 0, gap: 2, alignItems: mine ? "flex-end" : "flex-start" }}>
+        {item.continuation ? null : (
+          <GroupHeader
+            item={item}
+            onAuthorPress={actions.onAuthorPress}
+            readOnly={actions.readOnly === true}
+          />
+        )}
+        {item.messages.map((message) => (
+          <BubbleOf key={message.id} message={message} actions={actions} />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function MessageAuthor({ item, actions }: { item: GroupItem; actions: GroupActions }) {
   const { author } = item;
   return (
-    <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8, marginTop: 16 }}>
-      {mine ? null : (
+    <>
+      {item.continuation ? (
+        <View style={{ width: 28 }} />
+      ) : actions.readOnly ? (
+        <View style={{ marginTop: 21 }}>
+          <Avatar avatar={author.avatar} size={28} />
+        </View>
+      ) : (
         <Press
           accessibilityRole="button"
           accessibilityLabel={`Open your group with ${author.name}`}
@@ -212,17 +258,11 @@ function MessageGroup({ item, actions }: { item: GroupItem; actions: GroupAction
           <Avatar avatar={author.avatar} size={28} />
         </Press>
       )}
-      <View style={{ flex: 1, minWidth: 0, gap: 2, alignItems: mine ? "flex-end" : "flex-start" }}>
-        <GroupHeader item={item} onAuthorPress={actions.onAuthorPress} />
-        {item.messages.map((message) => (
-          <BubbleOf key={message.id} message={message} actions={actions} />
-        ))}
-      </View>
-    </View>
+    </>
   );
 }
 
-function TimelineRow({
+export function TimelineRow({
   item,
   first,
   actions,
@@ -355,7 +395,7 @@ export function Timeline({ items, typingText, latestKey, ...actions }: TimelineP
   );
 }
 
-function JumpToLatest({ onPress }: { onPress: () => void }) {
+export function JumpToLatest({ onPress }: { onPress: () => void }) {
   const { c } = useTheme();
   return (
     <Press
@@ -363,7 +403,7 @@ function JumpToLatest({ onPress }: { onPress: () => void }) {
       accessibilityLabel="Jump to latest"
       onPress={onPress}
       style={{
-        minHeight: 36,
+        minHeight: 44,
         paddingStart: 12,
         paddingEnd: 14,
         borderRadius: 999,

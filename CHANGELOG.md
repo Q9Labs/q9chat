@@ -12,6 +12,7 @@
 - **Web conversation history and unread position**: Open a group at its unread divider, load older history, follow live messages and see expiring typing indicators.
 - **Groups on the phone**: On the phone you can create a group or a pair, add people from Group info, copy the invite link, and join a group by opening its link, including when you were signed out. A group you were removed from can be taken off your list.
 - **Send text on the web**: Messages appear immediately, failed sends can be retried without duplicates, and each group keeps its own draft across reloads.
+- **Read live groups on your phone**: Open a group at its first unread message, read live posts, browse older history and see who is typing on iOS and Android. Your read state stays private.
 - **Send photos, files and voice notes on the web**: Send attachments without losing a text draft. Keep unsent bytes on this device for retry, and open, download or play protected attachments.
 - **Web message actions**: Reply with a quote, jump to the original, edit or delete your messages, react and report messages on the web. Delete your account from Account, then return to sign-in.
 - **Find old messages on the web**: Search your groups as you type, then open a result at its highlighted message.

@@ -81,7 +81,14 @@ export type TimelineItem =
   | { type: "day"; id: string; label: string }
   | { type: "unread"; id: string }
   | { type: "system"; id: string; segments: { text: string; strong: boolean }[] }
-  | { type: "group"; id: string; author: Person; timeLabel: string; messages: Message[] };
+  | {
+      type: "group";
+      id: string;
+      author: Person;
+      timeLabel: string;
+      messages: Message[];
+      continuation?: boolean;
+    };
 
 export type GroupRow =
   | {
