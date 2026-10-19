@@ -9,6 +9,8 @@ const metro = process.env["J1_PHONE_METRO"] ?? "http://localhost:8081";
 export default {
   tests: ["tests/*-phone.e2e.ts"],
   assertionTimeout: 20_000,
+  // One simulator or emulator serves the whole run, so two tests at once would restart each other's app.
+  workers: 1,
   targets: [
     {
       name: "ios",

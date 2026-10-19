@@ -8,6 +8,7 @@ import { api } from "@q9chat/convex";
 import { ConvexHttpClient } from "convex/browser";
 import { expect, type Locator, type Screen } from "e2e";
 
+import { PHOTO_JPEG } from "./support/photo.js";
 import { expectButtonHeights } from "./support/targets.js";
 import {
   deletePhoneProfile,
@@ -29,9 +30,6 @@ const udid = (() => {
     throw new Error("J1_PHONE_UDID must name the simulator the dev client is installed on");
   return value;
 })();
-
-const PHOTO_JPEG =
-  "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAA0JCgsKCA0LCgsODg0PEyAVExISEyccHhcgLikxMC4pLSwzOko+MzZGNywtQFdBRkxOUlNSMj5aYVpQYEpRUk//2wBDAQ4ODhMREyYVFSZPNS01T09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0//wAARCABAAEADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAAQG/8QAFRABAQAAAAAAAAAAAAAAAAAAABP/xAAXAQEBAQEAAAAAAAAAAAAAAAAABgQD/8QAFhEBAQEAAAAAAAAAAAAAAAAAABIU/9oADAMBAAIRAxEAPwDDzJq5k11pcISTJq5kzSQkmTVzJmkhJMmrmTNJCyZNXMmntLZCSZNXMmaSEkyauZM0kJJk1cyZpIVzJq5k09pbISTJq5kzSQkmTVzJmkhJMmrmTNJCyZNXMmntLXCSZNXMmaSEkyauZM0kJJk1cyZpIf/Z";
 
 function simctl(...args: string[]) {
   execFileSync("xcrun", ["simctl", ...args], { stdio: "ignore" });
@@ -293,10 +291,12 @@ test(
       ).toBeVisible();
       await expect(screen.getByTestId("avatar-photo")).toBeVisible();
       await app.screenshot("05-live-groups");
-      // Screens that still run on sample data are not reachable by a link: it lands on Groups.
+      // A link to a group that is not an id, or not yours, says so and Back returns to Groups.
       await device.openLink("q9chat:///g/anything");
       const openPrompt = screen.getByRole("button", "Open", { exact: true });
       if (await openPrompt.isVisible()) await openPrompt.tap();
+      await expect(screen.getByText("You no longer have access to this group")).toBeVisible();
+      await screen.getByRole("button", "Back").tap();
       await expect(
         screen.getByRole("button", "Journey live group, Sara: Welcome to the live group, 1 unread"),
       ).toBeVisible();
