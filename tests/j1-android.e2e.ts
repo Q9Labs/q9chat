@@ -238,6 +238,9 @@ test(
       shot("05-live-groups");
       // A link to a group that is not an id, or not yours, says so and Back returns to Groups.
       await device.openLink("q9chat:///g/anything");
+      // The dev client puts React Native's error overlay over the render error that the route's error boundary then catches; a release build has no overlay.
+      await expect(screen.getByText("Render Error")).toBeVisible();
+      await screen.getByText("Dismiss").tap();
       await expect(screen.getByText("You no longer have access to this group")).toBeVisible();
       await screen.getByRole("button", "Back").tap();
       await expect(

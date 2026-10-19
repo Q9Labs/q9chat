@@ -295,6 +295,9 @@ test(
       await device.openLink("q9chat:///g/anything");
       const openPrompt = screen.getByRole("button", "Open", { exact: true });
       if (await openPrompt.isVisible()) await openPrompt.tap();
+      // The dev client puts React Native's error overlay over the render error that the route's error boundary then catches; a release build has no overlay.
+      await expect(screen.getByText("Render Error")).toBeVisible();
+      await screen.getByText("Dismiss").tap();
       await expect(screen.getByText("You no longer have access to this group")).toBeVisible();
       await screen.getByRole("button", "Back").tap();
       await expect(

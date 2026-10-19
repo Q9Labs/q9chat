@@ -20,7 +20,11 @@ test(
     await runJ2({
       screen,
       target: Math.floor(44 * screenDensity()) - 1,
-      shot,
+      // The emulator's screen capture can still show the screen that a navigation just left.
+      shot: async (name) => {
+        await new Promise((resolve) => setTimeout(resolve, 800));
+        shot(name);
+      },
       enter: (field, text) => field.fill(text),
       enterCode: (digits) => screen.getByLabel("6-digit code").pressSequentially(digits),
       restart: () => openDevClient(device),
