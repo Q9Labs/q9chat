@@ -43,3 +43,12 @@
 
 - After the clean server restart the deleted-retry regression reproduced the bug exactly: the server's deleted placeholder appeared, but one cached text bubble remained (expected zero). Reconciliation now also matches the successful receipt's message id against loaded rows, including deleted rows. Re-running the identical regression, full J3 fixture and normal hook on that fix.
 - Reconciliation filters the current external-store snapshot, preserving concurrent acknowledgements and newer drafts rather than writing a render-time copy back. Added overlapping-send proof for distinct keys, one committed post each and preservation of a draft typed while both are pending. Final J3/J4 now run independently on the same immutable preview source.
+
+## Final product proof
+
+- Final J3 browser suite passed: `tests/j3-web.e2e.ts (1 test) 430.70s`, including all carry-overs, event-line anchor preservation, deleted-first-unread divider, own-send silence and author-dialog eviction. Finalizer submitted all 8 remaining fresh profiles for deletion, removed WorkOS accounts and closed peer contexts.
+- Final J4 browser suite passed: `tests/j4-web.e2e.ts (1 test) 127.39s`, with all 11 exact PASS lines, including response-failure deduplication, restart retry, already-deleted retry, overlapping sends/newer draft preservation, body cap, keyboard behavior, drafts and typing lifecycle. Its profile/account/context cleanup passed.
+- Alongside the earlier passing J1/J2 lines, all four requested suites are green on Testbox. The single skipped J1 case is optional approved-reference capture, not product behavior.
+- Final normal hook: all 20 lanes passed; required React Doctor passed, optional React Scan was unavailable. Feature commits 68f712f, f8bb93a and 32800b1 pushed. Requested Git-range gitleaks scan is clean. No PR opened; no feature-branch CI is triggered by this repository (CI runs on PRs and main).
+- Final five mock/live sheets plus before/after and compact audit refreshed and all opened. Interactive contact sheet preview loads all seven images with no errors. Desktop proof only: existing 390px navigation/layout remains unusable, documented in the compact sheet. Voice arrival wording is source-verified; physical screen-reader speech was not exercised.
+- Final cleanup/account audit and cloud teardown receipt are saved alongside the sheet artifacts. The cloud box is released after this proof-note commit completes its normal hook; PR B has not started.
