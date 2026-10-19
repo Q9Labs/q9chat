@@ -829,15 +829,19 @@ void test("from the offline restore screen, signing out works without the networ
   assert.equal(worker.count("token"), 1);
 });
 
-void test("signing out forgets a saved invite, and a sign-in keeps it", async () => {
-  const record = JSON.stringify({ token: "inviteFixtureToken", expiresAt: Date.now() + 600_000 });
+const INVITE = "inviteFixtureToken";
+const NEWER_INVITE = "newerFixtureToken9";
+const inviteRecord = (token: string) => JSON.stringify({ token, expiresAt: Date.now() + 600_000 });
+
+void test("signing out deletes a saved invite, and so does a sign-in that is not the one it was started for", async () => {
+  const record = inviteRecord(INVITE);
   const { worker, keychain, client } = harness({
     refreshToken: "refresh-a",
     pendingInvite: record,
   });
   worker.auto("token", () => json(phoneSession("a")));
   worker.auto("sign-out", () => json({}));
-  worker.auto("email/verify", () => json(phoneSession("b")));
+  startsEmailWithCookie(worker);
   await client.bootstrap();
   assert.equal(keychain.value("pendingInvite"), record);
 
@@ -845,39 +849,74 @@ void test("signing out forgets a saved invite, and a sign-in keeps it", async ()
   assert.equal(keychain.value("pendingInvite"), null);
 
   await keychain.store.set("pendingInvite", record);
+  await client.startEmail("b@example.net");
   await client.verifyEmail("b@example.net", "123456");
-  assert.equal(keychain.value("pendingInvite"), record);
-});
-
-const INVITE = "inviteFixtureToken";
-const NEWER_INVITE = "newerFixtureToken9";
-const inviteRecord = (token: string) => JSON.stringify({ token, expiresAt: Date.now() + 600_000 });
-
-void test("a saved invite is read once: the first sign-in after it takes it, the next gets nothing", async () => {
-  const { keychain, client } = harness({});
-  await client.rememberInvite(INVITE);
-  assert.equal(await client.takeInvite(), INVITE);
-  assert.equal(keychain.value("pendingInvite"), null);
   assert.equal(await client.takeInvite(), null);
 });
 
-void test("a remember that was held in the keychain cannot land after the forget asked for later", async () => {
-  const { keychain, client } = harness({});
-  const release = keychain.holdWrites();
-  const remembering = client.rememberInvite(INVITE);
-  const forgetting = client.forgetInvite(INVITE);
-  release();
-  await Promise.all([remembering, forgetting]);
+void test("an invite goes with the email sign-in it was started for, across a killed app, and is read once", async () => {
+  const { worker, keychain, restart, client } = harness({});
+  startsEmailWithCookie(worker);
+  await client.startEmail("b@example.net", INVITE);
+  const restarted = restart();
+  assert.equal(await restarted.resumeEmail(), "b@example.net");
+  await restarted.verifyEmail("b@example.net", "123456");
+  assert.equal(await restarted.takeInvite(), INVITE);
+  assert.equal(keychain.value("pendingInvite"), null);
+  assert.equal(await restarted.takeInvite(), null);
+});
+
+void test("an invite goes with the OAuth sign-in it was started for", async () => {
+  const { keychain, restart, client, authWindow } = harness({});
+  void client.startOAuth("google", INVITE).catch(() => {});
+  const opened = await authWindow(0);
+  const state = opened.url.searchParams.get("state") ?? "";
+  const restarted = restart();
+  await restarted.finishOAuth({ code: "real", state });
+  assert.equal(await restarted.takeInvite(), INVITE);
   assert.equal(keychain.value("pendingInvite"), null);
 });
 
-void test("an old route's forget never deletes a newer invite", async () => {
-  const { keychain, client } = harness({});
-  await client.rememberInvite(INVITE);
-  await client.rememberInvite(NEWER_INVITE);
+void test("a route that went away takes its invite off the sign-in it started", async () => {
+  const { worker, client } = harness({});
+  startsEmailWithCookie(worker);
+  await client.startEmail("b@example.net", INVITE);
   await client.forgetInvite(INVITE);
+  await client.verifyEmail("b@example.net", "123456");
+  assert.equal(await client.takeInvite(), null);
+});
+
+void test("an old route going away never takes the invite of a newer sign-in", async () => {
+  const { worker, client } = harness({});
+  startsEmailWithCookie(worker);
+  await client.startEmail("b@example.net", INVITE);
+  await client.startEmail("b@example.net", NEWER_INVITE);
+  await client.forgetInvite(INVITE);
+  await client.verifyEmail("b@example.net", "123456");
   assert.equal(await client.takeInvite(), NEWER_INVITE);
-  assert.equal(keychain.value("pendingInvite"), null);
+});
+
+void test("an abandoned route whose cleanup fails still cannot give its invite to an unrelated sign-in", async () => {
+  const { worker, keychain, restart, client } = harness({});
+  startsEmailWithCookie(worker);
+  await client.startEmail("b@example.net", INVITE);
+  keychain.failWrites(["emailAttempt", "pendingInvite"]);
+  await assert.rejects(client.forgetInvite(INVITE));
+  keychain.failWrites([]);
+
+  // Someone else, or the same person for another reason, signs in on the same phone.
+  const restarted = restart();
+  await restarted.startEmail("c@example.net");
+  await restarted.verifyEmail("c@example.net", "123456");
+  assert.equal(await restarted.takeInvite(), null);
+});
+
+void test("an invite that is not a token is not carried", async () => {
+  const { worker, client } = harness({});
+  startsEmailWithCookie(worker);
+  await client.startEmail("b@example.net", "short");
+  await client.verifyEmail("b@example.net", "123456");
+  assert.equal(await client.takeInvite(), null);
 });
 
 void test("a sign-out that cannot delete the saved invite fails and keeps the person signed in", async () => {

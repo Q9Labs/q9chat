@@ -5,7 +5,7 @@ import { createElement } from "react";
 import { act, create } from "react-test-renderer";
 
 import type { Phase } from "../src/journey/groupRules.ts";
-import { createWriteRun, standOf } from "../src/journey/pendingWrite.ts";
+import { createWriteRun, moveOnSuccess, standOf } from "../src/journey/pendingWrite.ts";
 import { type Removal, useGuardedWrite } from "../src/journey/useGuardedWrite.ts";
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
@@ -184,4 +184,60 @@ void test("the connection coming back closes the question", () => {
   assert.notEqual(screen.form().prompt, null);
   screen.setConnected(true);
   assert.equal(screen.form().prompt, null);
+});
+
+/** Message on a member: a held openPair, the control around it, and what the screen was told. */
+function pairControl(connected = true) {
+  const writes = createWriteRun();
+  const told: string[] = [];
+  const held: { settle: (outcome: "ok" | Error) => void }[] = [];
+  const press = () =>
+    moveOnSuccess(
+      writes,
+      connected,
+      () =>
+        new Promise<string>((resolve, reject) => {
+          held.push({
+            settle: (outcome) => (outcome === "ok" ? resolve("pair1") : reject(outcome)),
+          });
+        }),
+      {
+        offline: () => told.push("offline"),
+        moved: (value) => told.push(`moved ${value}`),
+        failed: () => told.push("failed"),
+      },
+    );
+  return { writes, told, held, press };
+}
+
+void test("a pair that opens while the screen is still there moves to it", async () => {
+  const control = pairControl();
+  const pressed = control.press();
+  control.held[0]?.settle("ok");
+  await pressed;
+  assert.deepEqual(control.told, ["moved pair1"]);
+});
+
+void test("a held pair that completes after Group info was left moves nothing", async () => {
+  const control = pairControl();
+  const pressed = control.press();
+  control.writes.supersede();
+  control.held[0]?.settle("ok");
+  await pressed;
+  assert.deepEqual(control.told, []);
+});
+
+void test("a pair asked for while offline sends nothing and says so", async () => {
+  const control = pairControl(false);
+  await control.press();
+  assert.equal(control.held.length, 0);
+  assert.deepEqual(control.told, ["offline"]);
+});
+
+void test("a pair that fails says so", async () => {
+  const control = pairControl();
+  const pressed = control.press();
+  control.held[0]?.settle(new Error("no"));
+  await pressed;
+  assert.deepEqual(control.told, ["failed"]);
 });

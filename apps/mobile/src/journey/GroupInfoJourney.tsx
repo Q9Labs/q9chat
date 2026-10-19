@@ -13,7 +13,7 @@ import { leaveScreen } from "./leaveScreen";
 import { liveAvatar, livePerson } from "./livePeople";
 import { Loading } from "./Loading";
 import { takeNotice } from "./notice";
-import { createWriteRun, OFFLINE_NOTICE, standOf } from "./pendingWrite";
+import { createWriteRun, moveOnSuccess, OFFLINE_NOTICE } from "./pendingWrite";
 import { useCopied } from "./useCopied";
 import { useOffline } from "./useOffline";
 
@@ -52,14 +52,11 @@ function GroupInfoView({ groupId, detail }: { groupId: Id<"groups">; detail: Det
     const person = detail.members.find((member) => member.id === personId);
     if (!person || !canMessage(person)) return;
     setSheet(null);
-    if (standOf(isWebSocketConnected, false) === "offline") {
-      showToast(OFFLINE_NOTICE);
-      return;
-    }
-    const end = await pairs.run(() => openPair({ profileId: person.id }));
-    if (end.stale) return;
-    if (end.ok) router.replace({ pathname: "/g/[groupId]", params: { groupId: end.value } });
-    else showToast(groupError(end.error));
+    await moveOnSuccess(pairs, isWebSocketConnected, () => openPair({ profileId: person.id }), {
+      offline: () => showToast(OFFLINE_NOTICE),
+      moved: (pair) => router.replace({ pathname: "/g/[groupId]", params: { groupId: pair } }),
+      failed: (error) => showToast(groupError(error)),
+    });
   }
 
   return (

@@ -7,7 +7,7 @@ import { useState } from "react";
 import { NewGroupScreen } from "../screens/NewGroupScreen";
 import { config } from "../session/config";
 import { groupError, newInviteToken, pairCandidate } from "./groupRules";
-import { leaveScreen } from "./leaveScreen";
+import { leaveAfterAdd, leaveScreen } from "./leaveScreen";
 import { livePerson } from "./livePeople";
 import { postNotice } from "./notice";
 import { useCopied } from "./useCopied";
@@ -75,12 +75,7 @@ function useSubmit({
     if (add) {
       guarded.submit(
         () => addMembers({ groupId: add.groupId, profileIds: ids }),
-        () => {
-          release();
-          // The API does not say who was added (someone may have been added meanwhile), so the line does not name anyone.
-          postNotice("Group updated");
-          leaveScreen(router);
-        },
+        () => leaveAfterAdd(router, release, postNotice),
         describe,
       );
       return;

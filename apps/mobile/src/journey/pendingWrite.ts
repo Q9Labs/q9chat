@@ -46,3 +46,26 @@ export function createWriteRun() {
     },
   };
 }
+
+type WriteRun = ReturnType<typeof createWriteRun>;
+
+/**
+ * A write behind a control that is not a form (Message on a member), whose success moves the
+ * screen. Nothing is sent while offline, and a write that ends after the screen was left or covered
+ * (`writes.supersede()`) moves nothing: it may not pull the person in from another screen.
+ */
+export async function moveOnSuccess<T>(
+  writes: WriteRun,
+  connected: boolean,
+  write: () => Promise<T>,
+  then: { offline: () => void; moved: (value: T) => void; failed: (error: unknown) => void },
+) {
+  if (standOf(connected, false) === "offline") {
+    then.offline();
+    return;
+  }
+  const end = await writes.run(write);
+  if (end.stale) return;
+  if (end.ok) then.moved(end.value);
+  else then.failed(end.error);
+}

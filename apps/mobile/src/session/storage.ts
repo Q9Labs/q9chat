@@ -16,6 +16,8 @@ const Attempt = Schema.Struct({
   expiresAt: Schema.Number,
   /** The Worker's transaction cookie material, so a restarted app can finish the exchange. */
   cookies: Schema.Array(Schema.Tuple(Schema.String, Schema.String)),
+  /** The invite link whose route started this attempt: only this attempt's sign-in hands it on. */
+  invite: Schema.optional(Schema.String),
 });
 export type OAuthAttempt = typeof Attempt.Type;
 
@@ -24,6 +26,8 @@ const EmailAttemptShape = Schema.Struct({
   email: Schema.String,
   expiresAt: Schema.Number,
   cookies: Schema.Array(Schema.Tuple(Schema.String, Schema.String)),
+  /** The invite link whose route started this attempt: only this attempt's sign-in hands it on. */
+  invite: Schema.optional(Schema.String),
 });
 export type EmailAttempt = typeof EmailAttemptShape.Type;
 

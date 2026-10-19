@@ -53,7 +53,6 @@ function Disconnected() {
 /** What shows while there is no profile to look at yet. */
 const WITHOUT_PROFILE = {
   loading: Loading,
-  signedOut: SignInJourney,
   disconnected: Disconnected,
   offline: CantConnect,
   unavailable: AccountUnavailable,
@@ -86,6 +85,7 @@ export function Journey({ invite }: { invite?: string }) {
   // Setup stays on screen while that account's profile saves, even after the profile exists; another account, or the same one after a sign-out, never inherits it.
   const [saving, setSaving] = useState<SetupSaving>(null);
   const epoch = useSyncExternalStore(sessionClient.subscribe, sessionClient.epoch);
+  if (stage.kind === "signedOut") return <SignInJourney invite={invite} />;
   if (stage.kind !== "needsSetup" && stage.kind !== "ready") {
     const View = WITHOUT_PROFILE[stage.kind];
     return <View />;
