@@ -14,6 +14,7 @@ export default {
     "tests/phone-groups-android.e2e.ts",
     "tests/j4-android.e2e.ts",
     "tests/j4b-android.e2e.ts",
+    "tests/j5-j6-android.e2e.ts",
   ],
   assertionTimeout: 20_000,
   // One simulator or emulator serves the whole run, so two tests at once would restart each other's app.

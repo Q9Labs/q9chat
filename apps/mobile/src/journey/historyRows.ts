@@ -37,21 +37,12 @@ export function historyItem(
     timeLabel: timeLabel(row.createdAt, row.createdAt),
     mine: row.author.isYou,
     state: "sent",
-    content:
-      row.kind === "deleted"
-        ? { kind: "deleted" }
-        : row.attachments.length
-          ? {
-              kind: "attachments",
-              caption: segments,
-              files: row.attachments.map((file) => ({ ...file, url: `${siteUrl}${file.url}` })),
-            }
-          : { kind: "text", segments, edited: row.editedAt !== null },
-    quote: null,
+    content: postContent(row, segments, siteUrl),
+    quote: postQuote(row),
     reactions:
       row.kind === "post" ? row.reactions.map((reaction) => ({ ...reaction, who: "" })) : [],
     summary: `${row.author.name}: ${summary}`,
-    copyText: null,
+    copyText: row.kind === "post" && row.body ? row.body : null,
   };
   return {
     type: "group",
@@ -69,18 +60,37 @@ export function historyItem(
   };
 }
 
+function postContent(
+  row: Exclude<HistoryRow, { kind: "event" }>,
+  segments: Segment[],
+  siteUrl: string,
+): Message["content"] {
+  if (row.kind === "deleted") return { kind: "deleted" };
+  if (!row.attachments.length) return { kind: "text", segments, edited: row.editedAt !== null };
+  return {
+    kind: "attachments",
+    caption: segments,
+    files: row.attachments.map((file) => ({ ...file, url: `${siteUrl}${file.url}` })),
+  };
+}
+
+function postQuote(row: Exclude<HistoryRow, { kind: "event" }>): Message["quote"] {
+  if (row.kind !== "post" || !row.replyTo) return null;
+  return {
+    messageId: row.replyTo.id,
+    author: row.replyTo.author.name,
+    summary: "deleted" in row.replyTo ? "Message deleted" : row.replyTo.summary,
+  };
+}
+
 function postSegments(
   row: Exclude<HistoryRow, { kind: "event" }>,
   members: HistoryGroup["members"],
 ) {
   const mentions = new Set(row.kind === "post" ? row.mentions : []);
 
-  const quote =
-    row.kind === "post" && row.replyTo
-      ? `Reply to ${row.replyTo.author.name}: ${"deleted" in row.replyTo ? "Message deleted" : row.replyTo.summary}`
-      : "";
   return messageSegments(
-    [quote, row.kind === "post" ? row.body : ""].filter(Boolean).join("\n"),
+    row.kind === "post" ? row.body : "",
     members.filter((member) => mentions.has(member.id)).map((member) => member.name),
   );
 }

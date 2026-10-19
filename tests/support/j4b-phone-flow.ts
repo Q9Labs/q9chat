@@ -7,6 +7,8 @@ import { expect, type Locator, type Screen } from "e2e";
 import { Schema } from "effect";
 
 import {
+  cleanPhoneAccounts,
+  removePhoneReader,
   createPhoneAccount,
   createPhoneGroup,
   phoneEmails,
@@ -14,7 +16,7 @@ import {
   signOutPhone,
 } from "./phone-fixtures.js";
 import type { phoneOutboxSnapshot } from "./phone-outbox.js";
-import { deletePhoneProfile, removeTestUser, type PhoneSession } from "./workos.js";
+import { type PhoneSession } from "./workos.js";
 
 export async function runJ4bPhone(p: {
   screen: Screen;
@@ -163,9 +165,12 @@ export async function runJ4bPhone(p: {
     const cached = p.cachedMedia(reader.id, groupId);
     expect(cached.some((path) => path.endsWith("/voice.m4a"))).toBe(true);
     expect(cached.some((path) => path.endsWith("/q9-attachment.txt"))).toBe(true);
-    await peer.client.mutation(api.groups.removeMember, { groupId, profileId: reader.id });
-    await expect(p.screen.getByText("You were removed from this group")).toBeVisible();
-    await expect(p.screen.getByRole("textbox", /^Message(?: |$)/)).not.toBeVisible();
+    await removePhoneReader({
+      client: peer.client,
+      groupId,
+      readerId: reader.id,
+      screen: p.screen,
+    });
     await expect(p.screen.getByLabel("Photo attachment")).not.toBeVisible();
     await expect.poll(() => p.cachedMedia(reader.id, groupId)).toEqual([]);
     await p.shot("j4b-removed");
@@ -177,7 +182,6 @@ export async function runJ4bPhone(p: {
     await fetch("http://localhost:8321/__uploadFault", { method: "DELETE" });
     await fetch("http://localhost:8321/__fault", { method: "DELETE" });
     await livePeer?.close();
-    await Promise.all(sessions.map((session) => deletePhoneProfile(session)));
-    await Promise.all(emails.map((address) => removeTestUser(address)));
+    await cleanPhoneAccounts(sessions, emails);
   }
 }

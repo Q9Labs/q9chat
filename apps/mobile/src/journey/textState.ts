@@ -1,3 +1,4 @@
+import type { Id } from "@q9chat/convex";
 import { Schema } from "effect";
 
 const LocalAttachment = Schema.Union(
@@ -27,9 +28,19 @@ const LocalAttachment = Schema.Union(
 );
 export type LocalAttachment = typeof LocalAttachment.Type;
 
+const Reply = Schema.Struct({
+  messageId: Schema.String.pipe(
+    Schema.filter((id): id is Id<"messages"> => /^[a-z0-9]{32}$/u.test(id)),
+  ),
+  sequence: Schema.Number,
+  author: Schema.String,
+  summary: Schema.String,
+});
+export type Reply = typeof Reply.Type;
 const PendingText = Schema.Struct({
   clientKey: Schema.String,
   attachment: Schema.optional(LocalAttachment),
+  reply: Schema.optional(Reply),
   body: Schema.String,
   createdAt: Schema.Number,
   status: Schema.Literal("sending", "failed"),

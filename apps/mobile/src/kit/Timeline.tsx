@@ -130,7 +130,7 @@ export type GroupActions = {
   onReactionPress: (messageId: string, emoji: Emoji) => void;
   onReactionLongPress: (messageId: string, emoji: Emoji) => void;
   onTogglePlay: (messageId: string) => void;
-  onAuthorPress: (author: Person) => void;
+  onAuthorPress?: (author: Person) => void;
 };
 
 type GroupItem = Extract<TimelineItem, { type: "group" }>;
@@ -167,7 +167,7 @@ function GroupHeader({
   readOnly,
 }: {
   item: GroupItem;
-  onAuthorPress: (author: Person) => void;
+  onAuthorPress: ((author: Person) => void) | undefined;
   readOnly: boolean;
 }) {
   const { scheme } = useTheme();
@@ -192,7 +192,7 @@ function GroupHeader({
       ) : (
         <Press
           accessibilityRole="button"
-          onPress={() => onAuthorPress(author)}
+          onPress={() => onAuthorPress?.(author)}
           scaleTo={1}
           style={{ flexShrink: 1 }}
         >
@@ -226,7 +226,7 @@ function MessageGroup({ item, actions }: { item: GroupItem; actions: GroupAction
           <GroupHeader
             item={item}
             onAuthorPress={actions.onAuthorPress}
-            readOnly={actions.readOnly === true}
+            readOnly={!canOpenAuthor(item, actions)}
           />
         )}
         {item.messages.map((message) => (
@@ -237,13 +237,17 @@ function MessageGroup({ item, actions }: { item: GroupItem; actions: GroupAction
   );
 }
 
+function canOpenAuthor(item: GroupItem, actions: GroupActions) {
+  return !actions.readOnly && actions.onAuthorPress !== undefined && !item.author.deleted;
+}
+
 function MessageAuthor({ item, actions }: { item: GroupItem; actions: GroupActions }) {
   const { author } = item;
   return (
     <>
       {item.continuation ? (
         <View style={{ width: 28 }} />
-      ) : actions.readOnly ? (
+      ) : !canOpenAuthor(item, actions) ? (
         <View style={{ marginTop: 21 }}>
           <Avatar avatar={author.avatar} size={28} />
         </View>
@@ -251,7 +255,7 @@ function MessageAuthor({ item, actions }: { item: GroupItem; actions: GroupActio
         <Press
           accessibilityRole="button"
           accessibilityLabel={`Open your group with ${author.name}`}
-          onPress={() => actions.onAuthorPress(author)}
+          onPress={() => actions.onAuthorPress?.(author)}
           scaleTo={1}
           style={{ marginTop: 21 }}
         >

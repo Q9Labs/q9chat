@@ -10,7 +10,7 @@ import { privateMedia } from "../kit/privateMedia";
 import { sessionClient } from "../session/client";
 import { config } from "../session/config";
 import { keepAttachment, uploadAttachment } from "./attachments";
-import { normalizeText, type LocalAttachment, type Pending } from "./textState";
+import { normalizeText, type LocalAttachment, type Reply, type Pending } from "./textState";
 import { textStore } from "./textStore";
 
 type Group = Extract<FunctionReturnType<typeof api.groups.get>, { status: "member" }>;
@@ -76,8 +76,7 @@ export function useTextOutbox(group: Group, rows: readonly Row[]) {
     }
     try {
       const token = await sessionClient.fetchAccessToken({ forceRefreshToken: false });
-      if (!token || sessionClient.epoch() !== epoch || controller.signal.aborted)
-        throw new Error("Send interrupted");
+      if (!token || controller.signal.aborted) throw new Error("Send interrupted");
       const client = new ConvexHttpClient(config.convexUrl, {
         auth: token,
         logger: false,
@@ -87,6 +86,7 @@ export function useTextOutbox(group: Group, rows: readonly Row[]) {
         groupId: group.groupId,
         clientKey: post.clientKey,
         body: post.body,
+        ...(post.reply ? { replyToId: post.reply.messageId } : {}),
         attachments: post.attachment
           ? [await uploadAttachment(post.attachment, token, controller.signal)]
           : [],
@@ -108,7 +108,7 @@ export function useTextOutbox(group: Group, rows: readonly Row[]) {
     change(draft: string) {
       store.update({ ...store.get(), draft });
     },
-    submit() {
+    submit(reply?: Reply) {
       const current = store.get();
       const body = normalizeText(current.draft);
       if (!body.trim()) return false;
@@ -119,6 +119,7 @@ export function useTextOutbox(group: Group, rows: readonly Row[]) {
       const post: Pending = {
         clientKey: randomUUID(),
         body,
+        ...(reply ? { reply } : {}),
         createdAt: Date.now(),
         status: "sending",
       };
@@ -126,7 +127,7 @@ export function useTextOutbox(group: Group, rows: readonly Row[]) {
       void deliver(post);
       return true;
     },
-    attach(attachment: LocalAttachment) {
+    attach(attachment: LocalAttachment, reply?: Reply) {
       const key = randomUUID();
       try {
         const saved = keepAttachment(attachment, `${me.id}-${group.groupId}-${key}`);
@@ -134,6 +135,7 @@ export function useTextOutbox(group: Group, rows: readonly Row[]) {
           clientKey: key,
           body: "",
           attachment: saved,
+          ...(reply ? { reply } : {}),
           createdAt: Date.now(),
           status: "sending",
         };

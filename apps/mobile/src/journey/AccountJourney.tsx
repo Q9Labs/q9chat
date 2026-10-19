@@ -12,13 +12,12 @@ import type { SignInMethod } from "../session/contracts";
 import type { Me } from "../types";
 import { profileAvatar } from "./groupRows";
 import { leaveScreen } from "./leaveScreen";
+import { phoneWrite } from "./phoneWrite";
 import { photoNoticeOf, pickPhoto, uploadPhoto } from "./photos";
 import { useSignOut } from "./SignOut";
 import { useNameEditing } from "./useNameEditing";
 import type { ReadyProfile } from "./useStage";
 
-const noop = () => {};
-const COMING_NEXT = "This is coming in the next journey.";
 const providerLabel = (method: SignInMethod): Me["signedInWith"] =>
   method === "google" ? "Google" : method === "apple" ? "Apple" : "Email code";
 
@@ -36,6 +35,9 @@ export function AccountJourney({
   const { isWebSocketConnected } = useConvexConnectionState();
   // A photo change in progress is held back like a name change: leaving would drop it.
   const [photoBusy, setPhotoBusy] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const deleteBusy = useRef(false);
   const busy = useRef(false);
   const editing = useNameEditing({
     saved: profile.displayName,
@@ -65,6 +67,26 @@ export function AccountJourney({
       busy.current = false;
       setPhotoBusy(false);
     }
+  }
+
+  async function deleteAccount() {
+    if (deleteBusy.current) return;
+    if (!isWebSocketConnected) {
+      showToast("You're offline. Try again when you're back.");
+      return;
+    }
+    deleteBusy.current = true;
+    setDeleting(true);
+    editing.clear();
+    try {
+      await phoneWrite((client) => client.mutation(api.profiles.deleteAccount, {}));
+    } catch {
+      deleteBusy.current = false;
+      setDeleting(false);
+      showToast("Couldn't delete your account. Try again.");
+      return;
+    }
+    signOut.leave();
   }
 
   // Every way out (the header arrow, the iOS swipe, the Android Back) is held here until the name is saved and the photo change is done.
@@ -100,7 +122,8 @@ export function AccountJourney({
       }
       hasPhoto={profile.photo !== null}
       onTogglePhoto={() => void changePhoto()}
-      confirmDelete={false}
+      confirmDelete={confirmDelete}
+      deleting={deleting}
       toast={toast}
       onBack={() => leaveScreen(router)}
       signingOut={signOut.signingOut}
@@ -111,9 +134,14 @@ export function AccountJourney({
           signOut.leave();
         });
       }}
-      onAskDelete={() => showToast(COMING_NEXT)}
-      onConfirmDelete={noop}
-      onCancelDelete={noop}
+      onAskDelete={() => {
+        if (photoBusy) showToast("Wait for your photo to finish saving.");
+        else setConfirmDelete(true);
+      }}
+      onConfirmDelete={() => void deleteAccount()}
+      onCancelDelete={() => {
+        if (!deleteBusy.current) setConfirmDelete(false);
+      }}
     />
   );
 }

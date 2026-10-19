@@ -32,8 +32,10 @@ import {
   messageBounds,
 } from "./historyRows";
 import { highlightHistoryItem, historyOpening } from "./historyTarget";
+import { PhoneMessageSheets } from "./PhoneMessageSheets";
 import { PendingPosts, TextComposer } from "./PhoneText";
 import { useHistoryPages } from "./useHistoryPages";
+import { useMessageActions } from "./useMessageActions";
 import { useReadMessages } from "./useReadMessages";
 import { useTextOutbox } from "./useTextOutbox";
 import { useToday } from "./useToday";
@@ -52,7 +54,6 @@ const READ_ONLY: GroupActions = {
   onReactionPress: noop,
   onReactionLongPress: noop,
   onTogglePlay: noop,
-  onAuthorPress: noop,
 };
 
 function IncomingTyping({ groupId }: { groupId: Group["groupId"] }) {
@@ -86,6 +87,7 @@ type ViewportState = {
   following: boolean;
   anchor: { id: string; offset: number } | null;
   jump: boolean;
+  quote: { id: string } | null;
   published: { away: boolean; visible: number };
 };
 
@@ -95,10 +97,10 @@ export function LiveHistory({ group, target = null }: { group: Group; target?: n
   const [opening] = useState(() => historyOpening(group, target));
   const { window, setWindow, rows, loading, failed } = useHistoryPages(group, opening.unread);
   const text = useTextOutbox(group, rows);
+  const messageActions = useMessageActions(rows, text);
   const latest = pageOf(group.lastSequence);
   const scroll = useRef<ScrollViewInstance>(null);
-  const boxes = useRowBoxes(rows);
-  const contentBoxes = useRowBoxes(rows);
+  const { boxes, contentBoxes } = useRowBoxes(rows);
   const viewport = useRef<ViewportState>({
     metrics: { offset: 0, height: 0, content: 0 },
     lastScrollOffset: 0,
@@ -106,6 +108,7 @@ export function LiveHistory({ group, target = null }: { group: Group; target?: n
     following: opening.unread === null,
     anchor: null,
     jump: false,
+    quote: null,
     published: { away: false, visible: 0 },
   });
   const [tappedId, setTappedId] = useState<string | null>(null);
@@ -136,25 +139,35 @@ export function LiveHistory({ group, target = null }: { group: Group; target?: n
     const box = boxes.current.get(end.id);
     return box !== undefined && box.y + box.height <= viewport.current.metrics.content + 1;
   }
+  function position() {
+    const m = viewport.current.metrics;
+    const quote = viewport.current.quote;
+    const quotedBox = quote ? boxes.current.get(quote.id) : null;
+    if (quote && !quotedBox) return null;
+    return quotedBox
+      ? quotedBox.y - 12
+      : targetOffset({
+          jump: viewport.current.jump,
+          placed: viewport.current.placed,
+          following: viewport.current.following,
+          unread: opening.unread,
+          anchor: viewport.current.anchor,
+          rows,
+          boxes: boxes.current,
+          bottom: Math.max(0, m.content - m.height),
+        });
+  }
   function place() {
     const m = viewport.current.metrics;
     if (loading || !m.height || !m.content || !endMeasured()) return;
-    const y = targetOffset({
-      jump: viewport.current.jump,
-      placed: viewport.current.placed,
-      following: viewport.current.following,
-      unread: opening.unread,
-      anchor: viewport.current.anchor,
-      rows,
-      boxes: boxes.current,
-      bottom: Math.max(0, m.content - m.height),
-    });
+    const y = position();
     if (y !== null) {
       m.offset = Math.max(0, Math.min(y, m.content - m.height));
       scroll.current?.scrollTo({ y: m.offset, animated: false });
       viewport.current.placed = true;
       viewport.current.jump = false;
       viewport.current.anchor = null;
+      viewport.current.quote = null;
       viewport.current.following = window.last >= latest && m.content - m.offset - m.height <= 2;
       updateAway();
       measureVisible();
@@ -176,6 +189,7 @@ export function LiveHistory({ group, target = null }: { group: Group; target?: n
     setWindow(slideWindow(window.first, window.last, direction));
   }
   function toLatest() {
+    viewport.current.quote = null;
     resetAnnouncements(group.lastSequence);
     viewport.current.jump = true;
     viewport.current.following = true;
@@ -203,12 +217,27 @@ export function LiveHistory({ group, target = null }: { group: Group; target?: n
     saveAnchor();
     measureVisible();
   }
+  function jumpToQuote(id: string) {
+    const original = rows.find((row) => row.id === id);
+    const reply = rows.find((row) => row.kind === "post" && row.replyTo?.id === id);
+    const sequence =
+      original?.sequence ?? (reply?.kind === "post" ? reply.replyTo?.sequence : undefined);
+    if (sequence === undefined) return;
+    const page = pageOf(sequence);
+    viewport.current.following = false;
+    viewport.current.anchor = null;
+    viewport.current.jump = false;
+    viewport.current.quote = { id };
+    setWindow({ first: Math.max(0, page - 1), last: Math.min(latest, page + 1) });
+    setTappedId(id);
+    requestAnimationFrame(place);
+  }
   function toggleTime(id: string) {
     setTappedId((value) => (value === id ? null : id));
   }
   function onRowLayout(id: string, box: LayoutRectangle) {
     boxes.current.set(id, box);
-    if (id === rows.at(-1)?.id) place();
+    if (id === rows.at(-1)?.id || id === viewport.current.quote?.id) place();
   }
   return (
     <MediaScopeContext.Provider value={text.media}>
@@ -239,7 +268,16 @@ export function LiveHistory({ group, target = null }: { group: Group; target?: n
               unread={opening.boundary}
               target={opening.target}
               today={today}
-              actions={{ ...READ_ONLY, tappedId, onToggleTime: toggleTime }}
+              actions={{
+                ...READ_ONLY,
+                readOnly: false,
+                tappedId,
+                onToggleTime: toggleTime,
+                onOpenSheet: (id) => messageActions.open(id),
+                onQuotePress: jumpToQuote,
+                onReactionPress: messageActions.react,
+                onReactionLongPress: (id) => messageActions.open(id, "reactions"),
+              }}
               onRowLayout={onRowLayout}
               onContentLayout={(id, box) => {
                 contentBoxes.current.set(id, box);
@@ -251,7 +289,8 @@ export function LiveHistory({ group, target = null }: { group: Group; target?: n
           <JumpControl shown={away || window.last < latest} onPress={toLatest} />
         </View>
         <IncomingTyping groupId={group.groupId} />
-        <TextComposer text={text} group={group} onSent={toLatest} />
+        <TextComposer text={text} group={group} onSent={toLatest} actions={messageActions} />
+        <PhoneMessageSheets actions={messageActions} group={group} />
       </View>
     </MediaScopeContext.Provider>
   );
@@ -314,14 +353,6 @@ function HistoryPost({
   page: HistoryPageProps;
 }) {
   const { rows, group, today, unread, actions, onRowLayout, onContentLayout } = page;
-  const item = highlightHistoryItem(
-    historyItem(row, config.siteUrl, {
-      members: group.members,
-      previous: rows[index - 1],
-      unread,
-    }),
-    row.sequence === page.target,
-  );
   const root = useRef<ViewInstance>(null);
   const measured = useRef<{ row: LayoutRectangle | null; content: ViewInstance | null }>({
     row: null,
@@ -356,7 +387,14 @@ function HistoryPost({
       ) : null}
       {row.sequence === unread ? <UnreadDivider /> : null}
       <TimelineRow
-        item={item}
+        item={highlightHistoryItem(
+          historyItem(row, config.siteUrl, {
+            members: group.members,
+            previous: rows[index - 1],
+            unread,
+          }),
+          row.sequence === page.target,
+        )}
         first={index === 0}
         actions={{ ...actions, onContentLayout: (_, node) => measure(node) }}
       />
@@ -405,11 +443,14 @@ function useLiveAnnouncements(
 
 function useRowBoxes(rows: HistoryPageProps["rows"]) {
   const boxes = useRef(new Map<string, { y: number; height: number }>());
+  const contentBoxes = useRef(new Map<string, { y: number; height: number }>());
   useEffect(() => {
     const ids = new Set<string>(rows.map((row) => row.id));
-    for (const id of boxes.current.keys()) if (!ids.has(id)) boxes.current.delete(id);
+    for (const map of [boxes.current, contentBoxes.current]) {
+      for (const id of map.keys()) if (!ids.has(id)) map.delete(id);
+    }
   }, [rows]);
-  return boxes;
+  return { boxes, contentBoxes };
 }
 
 function targetOffset(input: {

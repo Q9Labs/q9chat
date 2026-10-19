@@ -43,7 +43,13 @@ async function privateFile(
   });
 }
 
-function Photo({ file }: { file: Extract<Attachment, { kind: "image" }> }) {
+function Photo({
+  file,
+  onOpenSheet,
+}: {
+  file: Extract<Attachment, { kind: "image" }>;
+  onOpenSheet: () => void;
+}) {
   const source = useSource(file.url);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -52,6 +58,10 @@ function Photo({ file }: { file: Extract<Attachment, { kind: "image" }> }) {
       <Image
         key={attempt}
         accessibilityLabel="Photo attachment"
+        accessibilityActions={[{ name: "longpress", label: "Message actions" }]}
+        onAccessibilityAction={(event) => {
+          if (event.nativeEvent.actionName === "longpress") onOpenSheet();
+        }}
         source={source}
         onError={() => setFailed(true)}
         onLoad={() => setFailed(false)}
@@ -77,7 +87,13 @@ function Photo({ file }: { file: Extract<Attachment, { kind: "image" }> }) {
     </View>
   );
 }
-function Voice({ file }: { file: Extract<Attachment, { kind: "voice" }> }) {
+function Voice({
+  file,
+  onOpenSheet,
+}: {
+  file: Extract<Attachment, { kind: "voice" }>;
+  onOpenSheet: () => void;
+}) {
   const scope = useContext(MediaScopeContext);
   const source = useSource(file.url);
   const player = useAudioPlayer(null);
@@ -131,7 +147,12 @@ function Voice({ file }: { file: Extract<Attachment, { kind: "voice" }> }) {
         waveform={file.waveform}
         playing={status.playing}
         progress={status.duration > 0 ? status.currentTime / status.duration : 0}
+        accessibilityActions={[{ name: "longpress", label: "Message actions" }]}
+        onAccessibilityAction={(event) => {
+          if (event.nativeEvent.actionName === "longpress") onOpenSheet();
+        }}
         onTogglePlay={() => void toggle()}
+        onLongPress={onOpenSheet}
       />
       {error || status.error ? (
         <T color="er">Couldn't play voice note · Tap Play to retry.</T>
@@ -140,7 +161,13 @@ function Voice({ file }: { file: Extract<Attachment, { kind: "voice" }> }) {
     </View>
   );
 }
-function Download({ file }: { file: Extract<Attachment, { kind: "file" }> }) {
+function Download({
+  file,
+  onOpenSheet,
+}: {
+  file: Extract<Attachment, { kind: "file" }>;
+  onOpenSheet: () => void;
+}) {
   const scope = useContext(MediaScopeContext);
   const source = useSource(file.url);
   const [state, setState] = useState<"idle" | "loading" | "failed">("idle");
@@ -164,6 +191,12 @@ function Download({ file }: { file: Extract<Attachment, { kind: "file" }> }) {
     <Press
       accessibilityRole="button"
       accessibilityLabel={`Open ${file.name}`}
+      onLongPress={onOpenSheet}
+      delayLongPress={480}
+      accessibilityActions={[{ name: "longpress", label: "Message actions" }]}
+      onAccessibilityAction={(event) => {
+        if (event.nativeEvent.actionName === "longpress") onOpenSheet();
+      }}
       onPress={() => void open()}
     >
       <FileCard name={file.name} size={fileSize(file.size)} />
@@ -177,18 +210,20 @@ function Download({ file }: { file: Extract<Attachment, { kind: "file" }> }) {
 }
 export function LiveAttachments({
   files,
+  onOpenSheet,
 }: {
+  onOpenSheet: () => void;
   files: Extract<MessageContent, { kind: "attachments" }>["files"];
 }) {
   return (
     <View style={{ maxWidth: "100%", gap: 4 }}>
       {files.map((file) =>
         file.kind === "image" ? (
-          <Photo key={file.url} file={file} />
+          <Photo key={file.url} file={file} onOpenSheet={onOpenSheet} />
         ) : file.kind === "voice" ? (
-          <Voice key={file.url} file={file} />
+          <Voice key={file.url} file={file} onOpenSheet={onOpenSheet} />
         ) : (
-          <Download key={file.url} file={file} />
+          <Download key={file.url} file={file} onOpenSheet={onOpenSheet} />
         ),
       )}
     </View>

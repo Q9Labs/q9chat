@@ -4,7 +4,32 @@ import { api, type Id } from "@q9chat/convex";
 import { ConvexHttpClient } from "convex/browser";
 import { expect, type Locator, type Screen } from "e2e";
 
-import { magicCode, signInPhone, type PhoneSession } from "./workos.js";
+import {
+  deletePhoneProfile,
+  magicCode,
+  removeTestUser,
+  signInPhone,
+  type PhoneSession,
+} from "./workos.js";
+
+export async function cleanPhoneAccounts(sessions: PhoneSession[], emails: string[]) {
+  await Promise.all(sessions.map((session) => deletePhoneProfile(session)));
+  await Promise.all(emails.map((address) => removeTestUser(address)));
+}
+
+export async function removePhoneReader(input: {
+  client: ConvexHttpClient;
+  groupId: Id<"groups">;
+  readerId: Id<"profiles">;
+  screen: Screen;
+}) {
+  await input.client.mutation(api.groups.removeMember, {
+    groupId: input.groupId,
+    profileId: input.readerId,
+  });
+  await expect(input.screen.getByText("You were removed from this group")).toBeVisible();
+  await expect(input.screen.getByRole("textbox", /^Message(?: |$)/)).not.toBeVisible();
+}
 
 export async function createPhoneAccount(email: string, name: string, sessions: PhoneSession[]) {
   const session = await signInPhone(email);
@@ -14,7 +39,7 @@ export async function createPhoneAccount(email: string, name: string, sessions: 
   await client.action(api.profiles.setUp, { displayName: name });
   const me = await client.query(api.profiles.me, {});
   if (me?.status !== "ready") throw new Error("Missing seeded profile");
-  return { client, id: me.profile.id };
+  return { client, id: me.profile.id, accessToken: session.accessToken };
 }
 
 export async function enterPhoneEmailCode(
