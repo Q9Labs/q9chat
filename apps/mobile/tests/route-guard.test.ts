@@ -59,3 +59,10 @@ void test("the join link and the sign-in return stay open", () => {
   for (const route of ["join/[token]", "auth/callback"])
     assert.equal(isRouteGuarded(route, guards), false, `${route} must stay open`);
 });
+
+void test("the root layout starts no router until the stage has answered, so a cold link meets an open guard", () => {
+  const holds = layout.indexOf("if (!answered) return null;");
+  assert.notEqual(holds, -1);
+  assert.equal(holds < layout.indexOf("<Stack "), true);
+  assert.match(layout, /useStageAnswered\(stage\.kind\)/u);
+});

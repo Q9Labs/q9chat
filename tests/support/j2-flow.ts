@@ -280,6 +280,8 @@ async function removedFromGroup(p: J2Platform, trio: Awaited<ReturnType<typeof t
   await expect(screen.getByText("You were removed from this group")).toBeVisible({
     timeout: 30_000,
   });
+  // The sentence says "today at 10:44", as the gallery does, not the bare time a list row shows.
+  await expect(screen.getByText("removed you today at", { exact: false })).toBeVisible();
   await p.shot("12-removed");
   await screen.getByRole("button", "Remove from my list").tap();
   await expect(screen.getByText("Trio", { exact: false })).toBeHidden({ timeout: 30_000 });

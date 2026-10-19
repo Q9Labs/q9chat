@@ -54,6 +54,17 @@ export function rowStamp(at: number, now: Date): string {
   return `${date.getDate()} ${MONTHS[date.getMonth()] ?? ""}`;
 }
 
+/** When a removal happened, for a sentence: "today at 10:44", "yesterday at 10:44", "on Thu at 08:00", or "on 11 Oct at 08:00". */
+export function removedWhen(at: number, now: Date): string {
+  const date = new Date(at);
+  const days = dayNumber(now) - dayNumber(date);
+  const time = `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  if (days <= 0) return `today at ${time}`;
+  if (days === 1) return `yesterday at ${time}`;
+  if (days < 7) return `on ${WEEKDAYS[date.getDay()] ?? ""} at ${time}`;
+  return `on ${date.getDate()} ${MONTHS[date.getMonth()] ?? ""} at ${time}`;
+}
+
 /** How long until the phone's next local midnight, when "Yesterday" and the weekday labels move on. */
 export const msUntilMidnight = (now: Date) =>
   new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime() - now.getTime();

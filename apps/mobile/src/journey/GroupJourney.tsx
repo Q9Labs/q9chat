@@ -8,7 +8,7 @@ import { useToast } from "../kit/useToast";
 import { GroupScreen } from "../screens/GroupScreen";
 import { config } from "../session/config";
 import { eventItems } from "./groupEvents";
-import { rowStamp } from "./groupRows";
+import { removedWhen } from "./groupRows";
 import { GroupUnavailable } from "./GroupUnavailable";
 import { leaveScreen } from "./leaveScreen";
 import { liveAvatar } from "./livePeople";
@@ -74,7 +74,7 @@ function GroupView({
         {...base}
         subtitle={null}
         muted={false}
-        removed={{ by: detail.removedBy.name, when: rowStamp(detail.removedAt, new Date()) }}
+        removed={{ by: detail.removedBy.name, when: removedWhen(detail.removedAt, new Date()) }}
         items={[]}
       />
     );

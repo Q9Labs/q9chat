@@ -15,6 +15,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { SignOutProvider } from "../src/journey/SignOut";
 import { useStage } from "../src/journey/useStage";
+import { useStageAnswered } from "../src/journey/useStageAnswered";
 import { reducedMotionLoaded } from "../src/kit/motion";
 import { ImageAuthContext } from "../src/kit/photoAuth";
 import { useSessionState } from "../src/session/client";
@@ -27,11 +28,19 @@ void SplashScreen.preventAutoHideAsync();
 function Navigator() {
   const { c, scheme } = useTheme();
   const router = useRouter();
-  const ready = useStage().kind === "ready";
+  const stage = useStage();
+  const answered = useStageAnswered(stage.kind);
+  const ready = stage.kind === "ready";
+  useEffect(() => {
+    if (answered) void SplashScreen.hideAsync();
+  }, [answered]);
   // Screenshot harness: a dev build started with EXPO_PUBLIC_GALLERY_AUTO=1 walks the gallery by itself.
   useEffect(() => {
-    if (__DEV__ && process.env.EXPO_PUBLIC_GALLERY_AUTO === "1") router.replace("/gallery/auto");
-  }, [router]);
+    if (answered && __DEV__ && process.env.EXPO_PUBLIC_GALLERY_AUTO === "1")
+      router.replace("/gallery/auto");
+  }, [answered, router]);
+  // The router starts only once it is known whether someone is signed in, with the splash up until then.
+  if (!answered) return null;
   return (
     <>
       <StatusBar style={scheme === "dark" ? "light" : "dark"} />
@@ -87,9 +96,6 @@ export default function RootLayout() {
   }, []);
   // A font that fails to load leaves the system font in place; the app still opens.
   const ready = (loaded || fontError !== null) && motionKnown;
-  useEffect(() => {
-    if (ready) void SplashScreen.hideAsync();
-  }, [ready]);
   if (!ready) return null;
   return (
     <SafeAreaProvider>
