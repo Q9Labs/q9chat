@@ -73,7 +73,7 @@ function SystemLine({ message }: { readonly message: EventView }) {
 }
 
 /** Who is typing, with the three-dot pulse. Three or more collapse to a count. */
-function TypingLine({ names: people }: { readonly names: readonly string[] }) {
+export function TypingLine({ names: people }: { readonly names: readonly string[] }) {
   const [first, second] = people;
   if (first === undefined) return null;
   const text =
@@ -103,6 +103,7 @@ interface TimelineReading {
   readonly onAnchor: ((sequence: number) => void) | undefined;
   readonly announcement: { readonly id: string; readonly text: string };
   readonly loading: boolean;
+  readonly latestRequest?: number;
 }
 const STATIC_READING: TimelineReading = {
   onVisible: undefined,
@@ -115,6 +116,7 @@ const STATIC_READING: TimelineReading = {
   loading: false,
 };
 export interface TimelineProps {
+  readonly typingLine?: ReactNode;
   readonly readOnly?: boolean;
   readonly reading?: TimelineReading;
   readonly messages: readonly MessageView[];
@@ -161,7 +163,7 @@ function TimelineEntry({
     <MessageRun author={item.author} time={item.time} onOpenAuthor={onOpenAuthor}>
       {item.messages.map((message) => (
         <Message
-          key={message.id}
+          key={message.renderKey ?? message.id}
           message={message}
           timeZone={timeZone}
           compact={compact}
@@ -226,6 +228,7 @@ export function Timeline({
   messages,
   newFromSequence,
   typing,
+  typingLine,
   handlers,
   onOpenAuthor,
   menuMessageId,
@@ -245,6 +248,7 @@ export function Timeline({
     reading.loading,
     reading.onAtBottom,
     reading.onAnchor,
+    reading.latestRequest,
   );
 
   const compact = useCompactTimeline(log);
@@ -292,7 +296,7 @@ export function Timeline({
           {reading.announcement.text}
         </span>
       </div>
-      <TypingLine names={typing} />
+      {typingLine ?? <TypingLine names={typing} />}
       <button
         type="button"
         className={`jump${showJump ? " on" : ""}`}

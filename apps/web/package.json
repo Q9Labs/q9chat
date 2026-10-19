@@ -35,7 +35,7 @@
     "preview": "vite preview",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
-    "test": "node --test --test-concurrency=1 tests/auth-policy.test.ts tests/session.test.ts tests/rate-limit.test.ts tests/picker-limit.test.ts tests/group-errors.test.ts",
+    "test": "node --test --test-concurrency=1 tests/auth-policy.test.ts tests/session.test.ts tests/rate-limit.test.ts tests/picker-limit.test.ts tests/group-errors.test.ts tests/text-outbox.test.ts",
     "e2e": "playwright test",
     "test:staging": "node --test tests/auth.test.ts"
   },

@@ -106,70 +106,87 @@ async function checkSignOutGenerations({ browser, screen }: WebJourney, email: s
   const page = surface.page();
   const first = Promise.withResolvers<void>();
   const second = Promise.withResolvers<void>();
+  const firstStarted = Promise.withResolvers<void>();
+  const secondStarted = Promise.withResolvers<void>();
   let requests = 0;
+  let emailStarts = 0;
+  const observeEmailStart = (request: { url(): string }) => {
+    if (request.url().endsWith("/api/auth/email/start")) emailStarts += 1;
+  };
+  page.on("request", observeEmailStart);
   await page.route("**/api/auth/sign-out", async (route) => {
-    requests += 1;
-    await (requests === 1 ? first.promise : second.promise);
-    await route.fulfill({ status: 503, json: { error: "unavailable" } });
+    const attempt = requests++;
+    if (attempt === 0) firstStarted.resolve();
+    else secondStarted.resolve();
+    await (attempt === 0 ? first.promise : second.promise);
+    if (attempt === 0) await route.fulfill({ status: 503, json: { error: "unavailable" } });
+    else {
+      const response = await route.fetch();
+      await route.fulfill({ response });
+    }
   });
   const context = surface.context();
   let peer: Awaited<ReturnType<typeof context.newPage>> | undefined;
   try {
     await screen.getByRole("button", "Account", { exact: true }).tap();
     await screen.getByRole("button", "Sign out", { exact: true }).tap();
+    await firstStarted.promise;
+    await expect(screen.getByRole("button", "Email me a code")).toHaveCount(0);
+    await expect(screen.getByLabel("Email", { exact: true })).toHaveCount(0);
+    expect(emailStarts).toBe(0);
+    first.resolve();
     await expect(screen.getByRole("button", "Email me a code")).toBeVisible();
-    expect(requests).toBe(1);
-    // A fresh WorkOS session for the SAME user: user id cannot distinguish this adoption.
-    const request = surface.context().request;
-    const headers = { Origin: "http://localhost:3000" };
-    expect(
-      (
-        await request.post("http://localhost:3000/api/auth/email/start", {
-          headers,
-          data: { email },
-        })
-      ).status(),
-    ).toBe(200);
-    expect(
-      (
-        await request.post("http://localhost:3000/api/auth/email/verify", {
-          headers,
-          data: { email, code: await magicCode(email), client: "web" },
-        })
-      ).status(),
-    ).toBe(200);
+    await expect(browser.locator(".toast span")).toHaveText("Couldn't sign out. Try again.");
+    await expect(screen.getByRole("button", "Try again", { exact: true })).toBeVisible();
+
+    // Sign in through the UI only after the held logout has fully settled.
+    await screen.getByLabel("Email", { exact: true }).fill(email);
+    await screen.getByRole("button", "Email me a code").tap();
+    await expect(screen.getByRole("heading", "Check your email")).toBeVisible();
+    expect(emailStarts).toBe(1);
+    await screen.getByLabel("Digit 1").fill(await magicCode(email));
+    await expect(screen.getByRole("button", "Account", { exact: true })).toBeVisible();
+    await browser.reload();
+    await expect(screen.getByRole("button", "Account", { exact: true })).toBeVisible();
     peer = await surface.context().newPage();
     await peer.goto("http://localhost:3000/");
     await peer.getByRole("button", { name: "Account", exact: true }).waitFor();
-    await expect(screen.getByRole("button", "Account", { exact: true })).toBeVisible();
+
+    // The successful held response also deletes the cookie before another sign-in is offered.
     await screen.getByRole("button", "Account", { exact: true }).tap();
     await screen.getByRole("button", "Sign out", { exact: true }).tap();
-    // The old pending request must not block this new session's sign-out.
-    const response = page.waitForResponse((reply) => reply.url().endsWith("/api/auth/sign-out"));
-    first.resolve();
-    await response;
-    expect(requests).toBe(2);
-    await expect(screen.getByRole("button", "Account", { exact: true })).toBeVisible();
-    await expect(browser.locator(".toast")).toHaveCount(0);
-    const failed = page.waitForResponse((reply) => reply.url().endsWith("/api/auth/sign-out"));
+    await secondStarted.promise;
+    await expect(screen.getByRole("button", "Email me a code")).toHaveCount(0);
+    await expect(screen.getByLabel("Email", { exact: true })).toHaveCount(0);
+    expect(emailStarts).toBe(1);
     second.resolve();
-    await failed;
-    // The peer has re-announced the still-valid SAME session; its failure stays visible.
-    await expect(browser.locator(".toast span")).toHaveText("Couldn't sign out. Try again.");
-    await expect(screen.getByRole("button", "Try again", { exact: true })).toBeVisible();
+    await expect(screen.getByRole("button", "Email me a code")).toBeVisible();
+    await expect(browser.locator(".toast")).toHaveText("Signed out");
+    await screen.getByLabel("Email", { exact: true }).fill(email);
+    await screen.getByRole("button", "Email me a code").tap();
+    await expect(screen.getByRole("heading", "Check your email")).toBeVisible();
+    expect(emailStarts).toBe(2);
+    await screen.getByLabel("Digit 1").fill(await magicCode(email));
     await expect(screen.getByRole("button", "Account", { exact: true })).toBeVisible();
     await peer.reload();
     await peer.getByRole("button", { name: "Account", exact: true }).waitFor();
-    await expect(browser.locator(".toast span")).toHaveText("Couldn't sign out. Try again.");
-    await expect(screen.getByRole("button", "Try again", { exact: true })).toBeVisible();
+    await browser.reload();
+    await expect(screen.getByRole("button", "Account", { exact: true })).toBeVisible();
+    expect(requests).toBe(2);
+    process.stdout.write(
+      "J1 PASS: held logout blocks email sign-in; failure is visible; post-settlement sessions survive reload\n",
+    );
+
     await page.unrouteAll({ behavior: "wait" });
-    await screen.getByRole("button", "Try again", { exact: true }).tap();
+    await screen.getByRole("button", "Account", { exact: true }).tap();
+    await screen.getByRole("button", "Sign out", { exact: true }).tap();
     await expect(screen.getByRole("button", "Email me a code")).toBeVisible();
     await peer.getByRole("button", { name: "Email me a code", exact: true }).waitFor();
   } finally {
     first.resolve();
     second.resolve();
     await page.unrouteAll({ behavior: "wait" });
+    page.off("request", observeEmailStart);
     await peer?.close();
   }
 }

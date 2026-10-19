@@ -5,7 +5,8 @@ import { useState } from "react";
 type Row = FunctionReturnType<typeof api.messages.range>[number];
 function arrivalText(row: Extract<Row, { kind: "post" }>) {
   const file = row.attachments[0];
-  if (file) return `${row.author.name} sent a ${file.kind === "image" ? "photo" : "file"}`;
+  if (file)
+    return `${row.author.name} sent a ${file.kind === "image" ? "photo" : file.kind === "voice" ? "voice note" : "file"}`;
   return `${row.author.name}: ${Array.from(row.body).slice(0, 100).join("")}`;
 }
 

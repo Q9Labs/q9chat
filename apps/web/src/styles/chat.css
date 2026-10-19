@@ -2441,7 +2441,8 @@ a.file {
   text-decoration: none;
 }
 
-.arrival-announcement {
+.arrival-announcement,
+.send-announcement {
   position: absolute;
   inline-size: 1px;
   block-size: 1px;

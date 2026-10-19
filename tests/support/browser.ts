@@ -1,11 +1,38 @@
 import { surfaceOf, web } from "@e2e-dev/web";
+import { api } from "@q9chat/convex";
 import { ConvexHttpClient } from "convex/browser";
 import { expect } from "e2e";
 import { Schema } from "effect";
 
 import { Session } from "../../apps/web/src/lib/auth/contracts.js";
+import { magicCode } from "./workos.js";
 
 export const browserEngine = web();
+
+export async function signInDevAccount(
+  context: ReturnType<NonNullable<ReturnType<typeof surfaceOf>>["context"]>,
+  email: string,
+  displayName: string,
+) {
+  const origin = "http://localhost:3000";
+  const headers = { Origin: origin };
+  expect(
+    (
+      await context.request.post(`${origin}/api/auth/email/start`, { headers, data: { email } })
+    ).status(),
+  ).toBe(200);
+  expect(
+    (
+      await context.request.post(`${origin}/api/auth/email/verify`, {
+        headers,
+        data: { email, code: await magicCode(email), client: "web" },
+      })
+    ).status(),
+  ).toBe(200);
+  const client = await devClient(context);
+  const id = await client.action(api.profiles.setUp, { displayName });
+  return { client, id };
+}
 
 export async function expectMainFullWidth() {
   const surface = surfaceOf(browserEngine);
