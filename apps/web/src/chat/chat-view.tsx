@@ -96,24 +96,11 @@ export function ChatView({
   onSearchGroup,
   onForget,
 }: ChatViewProps) {
-  const { clock } = useRoot();
   if (group.status === "removed") {
     return (
       <>
         <ChatHeader group={group} onOpenInfo={onOpenInfo} onSearchGroup={onSearchGroup} />
-        <div className="center">
-          <span className="empty-badge">
-            <Icon name="ban" />
-          </span>
-          <h2>You were removed from this group</h2>
-          <p>
-            {group.removedBy} removed you {whenLabel(group.removedAt, clock)}. Only members can read
-            a group, so its messages are hidden.
-          </p>
-          <div className="acts2">
-            <Button onClick={onForget}>Remove from my list</Button>
-          </div>
-        </div>
+        <RemovedGroupNotice group={group} onForget={onForget} />
         <ReadOnlyComposer />
       </>
     );
@@ -125,5 +112,37 @@ export function ChatView({
       <Timeline {...timeline} />
       <Composer {...composer} />
     </>
+  );
+}
+
+export function RemovedGroupNotice({
+  group,
+  onForget,
+  pending,
+  error,
+}: {
+  readonly group: RemovedGroup;
+  readonly onForget: () => void;
+  readonly pending?: boolean;
+  readonly error?: string;
+}) {
+  const { clock } = useRoot();
+  return (
+    <div className="center">
+      <span className="empty-badge">
+        <Icon name="ban" />
+      </span>
+      <h2>You were removed from this group</h2>
+      <p>
+        {group.removedBy} removed you {whenLabel(group.removedAt, clock)}. Only members can read a
+        group, so its messages are hidden.
+      </p>
+      <div className="acts2">
+        <Button disabled={pending} onClick={onForget}>
+          Remove from my list
+        </Button>
+      </div>
+      {error ? <p role="alert">{error}</p> : null}
+    </div>
   );
 }
