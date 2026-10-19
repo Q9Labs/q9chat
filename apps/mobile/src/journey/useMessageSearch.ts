@@ -38,7 +38,6 @@ export function useMessageSearch(input: {
   const membershipKey = (input.groups ?? [])
     .filter((group) => group.status === "member")
     .map((group) => group.groupId)
-    .toSorted()
     .join(",");
   const members = useMemo(() => new Set(membershipKey.split(",")), [membershipKey]);
   const [cache, setCache] = useState<{ membershipKey: string; result: Result | null }>({
