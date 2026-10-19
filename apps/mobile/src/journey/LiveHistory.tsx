@@ -7,6 +7,7 @@ import {
   ScrollView,
   View,
   type LayoutRectangle,
+  type ViewInstance,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   type ScrollViewInstance,
@@ -27,6 +28,7 @@ import {
   historyDay,
   typingLabel,
   followAfterScroll,
+  messageBounds,
 } from "./historyRows";
 import { useHistoryPages } from "./useHistoryPages";
 import { useReadMessages } from "./useReadMessages";
@@ -94,6 +96,7 @@ export function LiveHistory({ group }: { group: Group }) {
   const latest = pageOf(group.lastSequence);
   const scroll = useRef<ScrollViewInstance>(null);
   const boxes = useRowBoxes(rows);
+  const contentBoxes = useRowBoxes(rows);
   const viewport = useRef<ViewportState>({
     metrics: { offset: 0, height: 0, content: 0 },
     lastScrollOffset: 0,
@@ -111,7 +114,7 @@ export function LiveHistory({ group }: { group: Group }) {
   function measureVisible() {
     if (!viewport.current.placed || loading) return;
     const m = viewport.current.metrics;
-    const next = visibleSequence(rows, boxes.current, m.offset, m.height);
+    const next = visibleSequence(rows, contentBoxes.current, m.offset, m.height);
     if (next === viewport.current.published.visible) return;
     viewport.current.published.visible = next;
     setVisible(next);
@@ -232,6 +235,10 @@ export function LiveHistory({ group }: { group: Group }) {
             today={today}
             actions={{ ...READ_ONLY, tappedId, onToggleTime: toggleTime }}
             onRowLayout={onRowLayout}
+            onContentLayout={(id, box) => {
+              contentBoxes.current.set(id, box);
+              measureVisible();
+            }}
           />
         </ScrollView>
         <JumpControl shown={away || window.last < latest} onPress={toLatest} />
@@ -254,6 +261,7 @@ type HistoryPageProps = {
   today: ReturnType<typeof useToday>;
   actions: GroupActions;
   onRowLayout: (id: string, box: LayoutRectangle) => void;
+  onContentLayout: (id: string, box: { y: number; height: number }) => void;
 };
 
 function HistoryPage(props: HistoryPageProps) {
@@ -275,32 +283,70 @@ function HistoryPage(props: HistoryPageProps) {
   );
 }
 
-function HistoryPosts({ rows, group, today, unread, actions, onRowLayout }: HistoryPageProps) {
+function HistoryPosts(props: HistoryPageProps) {
   return (
     <>
       {/* react-doctor-disable-next-line react-doctor/rn-no-scrollview-mapped-list -- at most 300 sequences; measured row identity keeps the reading anchor stable while paging */}
-      {rows.map((row, index) => (
-        <View key={row.id} onLayout={(event) => onRowLayout(row.id, event.nativeEvent.layout)}>
-          {index === 0 ||
-          new Date(rows[index - 1]?.createdAt ?? 0).toDateString() !==
-            new Date(row.createdAt).toDateString() ? (
-            <T size={12} color="mu" style={{ alignSelf: "center", marginTop: 16 }}>
-              {historyDay(row.createdAt, today)}
-            </T>
-          ) : null}
-          {row.sequence === unread ? <UnreadDivider /> : null}
-          <TimelineRow
-            item={historyItem(row, config.siteUrl, {
-              members: group.members,
-              previous: rows[index - 1],
-              unread,
-            })}
-            first={index === 0}
-            actions={actions}
-          />
-        </View>
+      {props.rows.map((row, index) => (
+        <HistoryPost key={row.id} row={row} index={index} page={props} />
       ))}
     </>
+  );
+}
+
+function HistoryPost({
+  row,
+  index,
+  page,
+}: {
+  row: HistoryPageProps["rows"][number];
+  index: number;
+  page: HistoryPageProps;
+}) {
+  const { rows, group, today, unread, actions, onRowLayout, onContentLayout } = page;
+  const root = useRef<ViewInstance>(null);
+  const measured = useRef<{ row: LayoutRectangle | null; content: ViewInstance | null }>({
+    row: null,
+    content: null,
+  });
+  function measure(node: ViewInstance) {
+    measured.current.content = node;
+    const parent = root.current;
+    if (!parent) return;
+    node.measureLayout(parent, (_, y, _width, height) => {
+      const box = measured.current.row;
+      if (box && measured.current.content === node)
+        onContentLayout(row.id, messageBounds(box, { y, height }));
+    });
+  }
+  return (
+    <View
+      ref={root}
+      collapsable={false}
+      onLayout={(event) => {
+        measured.current.row = event.nativeEvent.layout;
+        onRowLayout(row.id, event.nativeEvent.layout);
+        if (measured.current.content) measure(measured.current.content);
+      }}
+    >
+      {index === 0 ||
+      new Date(rows[index - 1]?.createdAt ?? 0).toDateString() !==
+        new Date(row.createdAt).toDateString() ? (
+        <T size={12} color="mu" style={{ alignSelf: "center", marginTop: 16 }}>
+          {historyDay(row.createdAt, today)}
+        </T>
+      ) : null}
+      {row.sequence === unread ? <UnreadDivider /> : null}
+      <TimelineRow
+        item={historyItem(row, config.siteUrl, {
+          members: group.members,
+          previous: rows[index - 1],
+          unread,
+        })}
+        first={index === 0}
+        actions={{ ...actions, onContentLayout: (_, node) => measure(node) }}
+      />
+    </View>
   );
 }
 

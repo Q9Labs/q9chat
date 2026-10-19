@@ -11,6 +11,7 @@ import {
   openingOffset,
   typingLabel,
   followAfterScroll,
+  messageBounds,
 } from "../src/journey/historyRows.ts";
 
 void test("sequence pages include both edges, empty and huge groups", () => {
@@ -145,4 +146,16 @@ void test("bottom following survives layout shrink but stops when the reader scr
     true,
     "a bounded-window jump can reduce the offset at the bottom",
   );
+});
+
+void test("only message or deleted-placeholder content advances read progress", () => {
+  const rows = [{ id: "post", sequence: 99 }];
+  for (const leading of [16, 36, 60, 100]) {
+    const content = messageBounds({ y: 590 }, { y: leading, height: 48 });
+    const layouts = new Map([["post", content]]);
+    assert.equal(visibleSequence(rows, layouts, 0, 600), 0, "margin, date, divider or author only");
+    assert.equal(visibleSequence(rows, layouts, 0, content.y), 0);
+    assert.equal(visibleSequence(rows, layouts, 0, content.y + 1), 99);
+    assert.equal(visibleSequence(rows, layouts, content.y + content.height, 100), 0);
+  }
 });

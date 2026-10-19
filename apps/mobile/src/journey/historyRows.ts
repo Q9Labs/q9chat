@@ -86,6 +86,10 @@ function postSegments(
   );
 }
 
+export function messageBounds(row: { y: number }, content: { y: number; height: number }) {
+  return { y: row.y + content.y, height: content.height };
+}
+
 export function visibleSequence(
   rows: readonly { id: string; sequence: number; kind?: string }[],
   layouts: ReadonlyMap<string, { y: number; height: number }>,

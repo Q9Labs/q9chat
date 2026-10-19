@@ -1,5 +1,10 @@
-import type { ReactNode } from "react";
-import { View, type AccessibilityActionEvent, type AccessibilityActionInfo } from "react-native";
+import { useRef, type ReactNode } from "react";
+import {
+  View,
+  type AccessibilityActionEvent,
+  type AccessibilityActionInfo,
+  type ViewInstance,
+} from "react-native";
 
 import { useTheme } from "../theme";
 import { T } from "../theme/Text";
@@ -22,6 +27,7 @@ const LONG_PRESS_MS = 480;
 
 export type MessageActions = {
   onToggleTime: () => void;
+  onContentLayout?: ((node: ViewInstance) => void) | undefined;
   onOpenSheet: () => void;
   onRetry: () => void;
   onQuotePress: (messageId: string) => void;
@@ -59,6 +65,31 @@ function textOf(content: MessageContent): ReactNode {
     return <BodyText segments={content.segments} edited={content.edited} />;
   if (content.kind === "image" && content.caption) return <BodyText segments={content.caption} />;
   return null;
+}
+
+function ContentBounds({
+  mine,
+  onMeasure,
+  children,
+}: {
+  mine: boolean;
+  onMeasure: ((node: ViewInstance) => void) | undefined;
+  children: ReactNode;
+}) {
+  const node = useRef<ViewInstance>(null);
+  if (!onMeasure) return children;
+  return (
+    <View
+      ref={node}
+      collapsable={false}
+      onLayout={() => {
+        if (node.current) onMeasure(node.current);
+      }}
+      style={{ maxWidth: "100%", gap: 4, alignItems: mine ? "flex-end" : "flex-start" }}
+    >
+      {children}
+    </View>
+  );
 }
 
 function DeletedLine({ mine }: { mine: boolean }) {
@@ -164,8 +195,10 @@ function Body({
   const { poppedEmoji } = actions;
   return (
     <>
-      <Surface message={message} element={element} onQuotePress={actions.onQuotePress} />
-      <Media content={message.content} element={element} actions={actions} />
+      <ContentBounds mine={message.mine} onMeasure={actions.onContentLayout}>
+        <Surface message={message} element={element} onQuotePress={actions.onQuotePress} />
+        <Media content={message.content} element={element} actions={actions} />
+      </ContentBounds>
       <ReactionPills
         readOnly={readOnly}
         reactions={message.reactions}
@@ -291,7 +324,9 @@ export function MessageBubble({
       style={layoutOf(mine)}
     >
       {content.kind === "deleted" ? (
-        <DeletedLine mine={mine} />
+        <ContentBounds mine={mine} onMeasure={actions.onContentLayout}>
+          <DeletedLine mine={mine} />
+        </ContentBounds>
       ) : (
         <Body
           message={message}

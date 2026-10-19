@@ -1,14 +1,19 @@
 import { api, type Id } from "@q9chat/convex";
-import { useNavigate } from "@tanstack/react-router";
+import { useLocation, useNavigate, useSearch } from "@tanstack/react-router";
 import { useConvex, useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { Component, useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 
 import { ChatHeader } from "../chat/chat-view.js";
-import type { Avatar as AvatarView, GroupDetail, PersonMatch } from "../chat/types.js";
+import type {
+  Avatar as AvatarView,
+  GroupDetail,
+  PersonMatch,
+  RemovedGroup,
+} from "../chat/types.js";
 import { NewGroupDialog } from "../screens/dialogs.js";
-import { GroupInfo } from "../screens/group-info.js";
 import { Button } from "../ui/controls.js";
+import { LiveGroupInfo, RemovedWorkspace } from "./group-controls.js";
 import { invalidInviteCopy, journeyError, removedInviteCopy } from "./group-errors.js";
 import { History } from "./history.js";
 import { clearSavedJoin } from "./oauth.js";
@@ -392,55 +397,29 @@ function useInviteCopy(detail: Detail | undefined, onNotice: (text: string) => v
   }
   return { copied, copy, reset: () => setCopied(false) };
 }
-function LiveGroupInfo({
-  group,
-  detail,
-  onClose,
-  onAdd,
-  onCopy,
-  copied,
-  onMessage,
-  unavailable,
-}: {
-  readonly group: GroupDetail | null;
-  readonly detail: Detail | undefined;
-  readonly onClose: () => void;
-  readonly onAdd: (group: ActiveGroup) => void;
-  readonly onCopy: () => void;
-  readonly copied: boolean;
-  readonly onMessage: (id: Id<"profiles">) => void;
-  readonly unavailable: () => void;
-}) {
-  if (!group || detail?.status !== "member") return null;
-  return (
-    <GroupInfo
-      group={group}
-      onClose={onClose}
-      onAddPeople={() => onAdd(detail)}
-      inviteUrl={inviteUrl(detail.inviteToken ?? "")}
-      onCopyLink={onCopy}
-      linkCopied={copied}
-      onSearch={unavailable}
-      notificationsOpen={false}
-      onNotificationsOpenChange={unavailable}
-      onNotifyChange={unavailable}
-      onMessageMember={(member) => {
-        const person = detail.members.find((p) => p.id === member.id);
-        if (person) onMessage(person.id);
-      }}
-      onRemoveMember={unavailable}
-      onLeave={unavailable}
-    />
-  );
-}
 
 function useInfoState(detail: Detail | undefined) {
   const [open, setOpen] = useState(false);
-  if (detail?.status === "removed" && open) setOpen(false);
-  return { infoOpen: open && detail?.status === "member", setInfoOpen: setOpen };
+  return { infoOpen: open && detail !== null && detail !== undefined, setInfoOpen: setOpen };
 }
 
-function activeDisplay(detail: Detail | undefined, photos: ReadonlyMap<string, string>) {
+function removedDisplay(
+  detail: Extract<Detail, { status: "removed" }>,
+  photos: ReadonlyMap<string, string>,
+): RemovedGroup {
+  return {
+    ...detail,
+    removedBy: detail.removedBy.name,
+    avatar: {
+      ...detail.avatar,
+      color: null,
+      photoUrl: detail.avatar.photo ? (photos.get(detail.avatar.photo) ?? null) : null,
+    },
+  };
+}
+
+function infoDisplay(detail: Detail | undefined, photos: ReadonlyMap<string, string>) {
+  if (detail?.status === "removed") return removedDisplay(detail, photos);
   return detail?.status === "member" ? displayGroup(detail, photos) : null;
 }
 
@@ -449,12 +428,14 @@ export function useGroupJourney({
   token,
   selectedGroup,
   renderEmpty,
+  onSearchGroup,
   onNotice,
 }: {
   readonly covered: boolean;
   readonly token: string | undefined;
   readonly selectedGroup: Id<"groups"> | null;
   readonly renderEmpty: (onNewGroup: () => void) => ReactNode;
+  readonly onSearchGroup: (id: Id<"groups">) => void;
   readonly onNotice: (text: string) => void;
 }) {
   const navigate = useNavigate();
@@ -468,7 +449,7 @@ export function useGroupJourney({
   const { copied, copy, reset } = useInviteCopy(detail, onNotice);
   const unavailable = () => onNotice("This is coming in the next journey.");
   function open(id: Id<"groups">) {
-    void navigate({ to: "/", search: { group: id, authError: undefined } });
+    void navigate({ to: "/", search: { group: id, authError: undefined, message: undefined } });
     setInfoOpen(false);
     reset();
   }
@@ -479,7 +460,7 @@ export function useGroupJourney({
       onNotice(journeyError(error, 1));
     }
   }
-  const group = activeDisplay(detail, photos);
+  const group = infoDisplay(detail, photos);
   return {
     selected,
     open,
@@ -496,11 +477,12 @@ export function useGroupJourney({
         onInfo={() => setInfoOpen(true)}
         onMessage={(id) => void message(id)}
         photos={photos}
-        onUnavailable={unavailable}
+        onSearchGroup={onSearchGroup}
       />
     ),
     info: infoOpen ? (
       <LiveGroupInfo
+        key={selected}
         group={group}
         detail={detail}
         onClose={() => setInfoOpen(false)}
@@ -509,6 +491,7 @@ export function useGroupJourney({
         copied={copied}
         onMessage={(id) => void message(id)}
         unavailable={unavailable}
+        onNotice={onNotice}
       />
     ) : undefined,
     dialog: picker ? (
@@ -533,7 +516,7 @@ function GroupWorkspace({
   onInfo,
   onMessage,
   photos,
-  onUnavailable,
+  onSearchGroup,
 }: {
   readonly covered: boolean;
   readonly empty: ReactNode;
@@ -545,50 +528,66 @@ function GroupWorkspace({
   readonly onInfo: () => void;
   readonly onMessage: (id: Id<"profiles">) => void;
   readonly photos: ReadonlyMap<string, string>;
-  readonly onUnavailable: () => void;
+  readonly onSearchGroup: (id: Id<"groups">) => void;
 }) {
+  const routeSearch = useSearch({ strict: false });
   if (selected === null)
     return token ? <Join token={token} info={invite} onOpen={onOpen} /> : empty;
   if (detail === undefined) return <output className="center">Loading…</output>;
   return (
     <LoadedGroup
+      targetSequence={routeSearch.message}
       covered={covered}
       detail={detail}
+      groupId={selected}
       photos={photos}
       onInfo={onInfo}
       onMessage={onMessage}
-      onUnavailable={onUnavailable}
+      onSearchGroup={onSearchGroup}
     />
   );
 }
 function LoadedGroup({
+  targetSequence,
+  groupId,
   covered,
   detail,
   photos,
   onInfo,
   onMessage,
-  onUnavailable,
+  onSearchGroup,
 }: {
+  readonly targetSequence: number | undefined;
   readonly covered: boolean;
   readonly detail: Detail;
+  readonly groupId: Id<"groups">;
   readonly photos: ReadonlyMap<string, string>;
   readonly onInfo: () => void;
   readonly onMessage: (id: Id<"profiles">) => void;
-  readonly onUnavailable: () => void;
+  readonly onSearchGroup: (id: Id<"groups">) => void;
 }) {
-  if (detail?.status !== "member")
+  const searchJump = useLocation({ select: (location) => location.state.searchJump });
+  if (detail?.status === "removed")
     return (
-      <p className="center">
-        {detail?.status === "removed"
-          ? removedInviteCopy
-          : "You no longer have access to this group."}
-      </p>
+      <RemovedWorkspace group={removedDisplay(detail, photos)} groupId={groupId} onInfo={onInfo} />
     );
+  if (detail?.status !== "member")
+    return <p className="center">You no longer have access to this group.</p>;
   const group = displayGroup(detail, photos);
   return (
     <>
-      <ChatHeader group={group} onOpenInfo={onInfo} onSearchGroup={onUnavailable} />
-      <History key={detail.groupId} group={detail} covered={covered} onMessage={onMessage} />
+      <ChatHeader
+        group={group}
+        onOpenInfo={onInfo}
+        onSearchGroup={() => onSearchGroup(detail.groupId)}
+      />
+      <History
+        key={`${detail.groupId}-${targetSequence ?? "latest"}-${searchJump ?? ""}`}
+        targetSequence={targetSequence}
+        group={detail}
+        covered={covered}
+        onMessage={onMessage}
+      />
     </>
   );
 }

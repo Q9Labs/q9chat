@@ -4,6 +4,7 @@ import {
   ScrollView,
   View,
   type LayoutChangeEvent,
+  type ViewInstance,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   type ScrollViewInstance,
@@ -117,6 +118,7 @@ function TypingLine({ text }: { text: string }) {
 
 export type GroupActions = {
   readOnly?: boolean;
+  onContentLayout?: (messageId: string, node: ViewInstance) => void;
   tappedId: string | null;
   playingId: string | null;
   playProgress: number;
@@ -139,6 +141,9 @@ function BubbleOf({ message, actions }: { message: Message; actions: GroupAction
   return (
     <MessageBubble
       message={message}
+      onContentLayout={
+        actions.onContentLayout ? (node) => actions.onContentLayout?.(message.id, node) : undefined
+      }
       readOnly={actions.readOnly === true}
       showTime={actions.tappedId === message.id}
       onToggleTime={() => actions.onToggleTime(message.id)}

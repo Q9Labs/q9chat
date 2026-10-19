@@ -38,15 +38,27 @@ function scrollToLatest(el: HTMLDivElement) {
     behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
   });
 }
+function openPosition(el: HTMLDivElement, initialSequence: number | undefined) {
+  const target =
+    initialSequence === undefined
+      ? null
+      : el.querySelector<HTMLElement>(`[data-sequence="${initialSequence}"]`);
+  const divider = el.querySelector<HTMLElement>("[data-new]");
+  if (target) {
+    const rect = target.getBoundingClientRect();
+    el.scrollTop += rect.top - el.getBoundingClientRect().top - (el.clientHeight - rect.height) / 2;
+  } else el.scrollTop = divider ? Math.max(0, divider.offsetTop - 90) : el.scrollHeight;
+}
+
 function restorePosition(
   el: HTMLDivElement,
   previous: Position | null,
   first: string | undefined,
   paging: boolean,
+  initialSequence: number | undefined,
 ) {
   if (!previous) {
-    const divider = el.querySelector<HTMLElement>("[data-new]");
-    el.scrollTop = divider ? Math.max(0, divider.offsetTop - 90) : el.scrollHeight;
+    openPosition(el, initialSequence);
   } else if (paging || (first !== previous.first && !previous.bottom)) {
     restoreAnchor(el, previous.anchor);
   } else if (previous.bottom) {
@@ -78,6 +90,7 @@ export function useTimelineViewport(
   onAtBottom: ((bottom: boolean) => void) | undefined,
   onAnchor: ((sequence: number) => void) | undefined,
   latestRequest: number | undefined,
+  initialSequence: number | undefined,
 ) {
   const log = useRef<HTMLDivElement>(null);
   const position = useRef<Position | null>(null);
@@ -110,7 +123,7 @@ export function useTimelineViewport(
     // Retained rows can receive live updates while the destination window loads.
     if (jumping.current) {
       if (!loading) scrollToLatest(el);
-    } else restorePosition(el, previous, first, paging.current);
+    } else restorePosition(el, previous, first, paging.current, initialSequence);
     if (!loading) {
       jumping.current = false;
       paging.current = false;
