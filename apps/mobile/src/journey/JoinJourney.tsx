@@ -10,7 +10,6 @@ import { isInviteToken } from "../session/storage";
 import { T } from "../theme/Text";
 import { groupError, invalidInviteCopy, removedInviteCopy, type Phase } from "./groupRules";
 import { Loading } from "./Loading";
-import { forgetInvite } from "./pendingInvite";
 
 type Router = ReturnType<typeof useRouter>;
 type InviteInfo = FunctionReturnType<typeof api.groups.inviteInfo>;
@@ -41,15 +40,8 @@ function useInvite(token: string): View {
   return valid ? viewOf(info) : { kind: "invalid" };
 }
 
-/**
- * A link that is invalid, used up, or already yours drops the saved invite, so it never comes
- * back. Someone who is in the group goes straight to it.
- */
+/** Someone who is already in the group goes straight to it. */
 function useSettled(view: View, router: Router) {
-  const spent = view.kind !== "loading" && !(view.kind === "card" && view.info.status === "open");
-  useEffect(() => {
-    if (spent) void forgetInvite();
-  }, [spent]);
   const groupId = view.kind === "member" ? view.groupId : null;
   useEffect(() => {
     if (groupId) openGroup(router, groupId);
@@ -66,7 +58,6 @@ function useJoin(token: string, router: Router) {
     setPhase({ kind: "pending" });
     try {
       const groupId = await join({ token });
-      await forgetInvite();
       openGroup(router, groupId);
     } catch (cause) {
       busy.current = false;
@@ -105,17 +96,14 @@ function InviteCard({ info, phase, onJoin }: { info: Card; phase: Phase; onJoin:
   );
 }
 
-/** A link to a group: who it is, and one button to join. The saved invite is dropped once it has done its job. */
+/** A link to a group: who it is, and one button to join. */
 export function JoinJourney({ token }: { token: string }) {
   const router = useRouter();
   const view = useInvite(token);
   useSettled(view, router);
   const { phase, accept } = useJoin(token, router);
   if (view.kind === "loading" || view.kind === "member") return <Loading />;
-  const close = () => {
-    void forgetInvite();
-    router.dismissTo("/");
-  };
+  const close = () => router.dismissTo("/");
   return (
     <Screen>
       <PageNav title="" start={{ back: true, onPress: close }} />

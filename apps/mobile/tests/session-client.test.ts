@@ -848,3 +848,48 @@ void test("signing out forgets a saved invite, and a sign-in keeps it", async ()
   await client.verifyEmail("b@example.net", "123456");
   assert.equal(keychain.value("pendingInvite"), record);
 });
+
+const INVITE = "inviteFixtureToken";
+const NEWER_INVITE = "newerFixtureToken9";
+const inviteRecord = (token: string) => JSON.stringify({ token, expiresAt: Date.now() + 600_000 });
+
+void test("a saved invite is read once: the first sign-in after it takes it, the next gets nothing", async () => {
+  const { keychain, client } = harness({});
+  await client.rememberInvite(INVITE);
+  assert.equal(await client.takeInvite(), INVITE);
+  assert.equal(keychain.value("pendingInvite"), null);
+  assert.equal(await client.takeInvite(), null);
+});
+
+void test("a remember that was held in the keychain cannot land after the forget asked for later", async () => {
+  const { keychain, client } = harness({});
+  const release = keychain.holdWrites();
+  const remembering = client.rememberInvite(INVITE);
+  const forgetting = client.forgetInvite(INVITE);
+  release();
+  await Promise.all([remembering, forgetting]);
+  assert.equal(keychain.value("pendingInvite"), null);
+});
+
+void test("an old route's forget never deletes a newer invite", async () => {
+  const { keychain, client } = harness({});
+  await client.rememberInvite(INVITE);
+  await client.rememberInvite(NEWER_INVITE);
+  await client.forgetInvite(INVITE);
+  assert.equal(await client.takeInvite(), NEWER_INVITE);
+  assert.equal(keychain.value("pendingInvite"), null);
+});
+
+void test("a sign-out that cannot delete the saved invite fails and keeps the person signed in", async () => {
+  const { worker, keychain, client } = harness({
+    refreshToken: "refresh-a",
+    pendingInvite: inviteRecord(INVITE),
+  });
+  worker.auto("token", () => json(phoneSession("a")));
+  await client.bootstrap();
+  keychain.failWrites(["pendingInvite"]);
+  await assert.rejects(client.signOut());
+  assert.equal(statusOf(client), "authenticated");
+  assert.equal(keychain.value("refreshToken"), "refresh-a");
+  assert.equal(keychain.value("pendingInvite") === null, false);
+});

@@ -20,8 +20,10 @@ import {
   ATTEMPT_TTL_MS,
   readAttempt,
   readEmailAttempt,
+  readPendingInvite,
   writeAttempt,
   writeEmailAttempt,
+  writePendingInvite,
   type OAuthAttempt,
   type Store,
 } from "./storage.ts";
@@ -350,6 +352,25 @@ export function createSessionClient(edges: SessionEdges) {
     }
   }
 
+  /** Keeps the invite link someone opened before they could use it, until it is taken, forgotten or ten minutes old. */
+  const rememberInvite = (token: string) =>
+    enqueue(() => writePendingInvite(store, token, edges.now()));
+
+  /** The saved invite, once: reading it deletes it, so it is never offered twice. */
+  const takeInvite = () =>
+    enqueue(async () => {
+      const token = await readPendingInvite(store, edges.now());
+      if (token) await store.delete("pendingInvite");
+      return token;
+    });
+
+  /** Drops `token`'s saved invite, but not a newer one that replaced it. */
+  const forgetInvite = (token: string) =>
+    enqueue(async () => {
+      if ((await readPendingInvite(store, edges.now())) === token)
+        await store.delete("pendingInvite");
+    });
+
   /** Asks the server to revoke a signed-out token. Nothing is saved: if the app ends first, the server session runs out by itself. */
   async function revokeQuietly(token: string) {
     for (let attempt = 0; attempt < REVOKE_TRIES; attempt += 1) {
@@ -377,9 +398,10 @@ export function createSessionClient(edges: SessionEdges) {
     const token = await enqueue(async () => {
       try {
         const active = await store.get("refreshToken").catch(() => null);
+        // The invite goes first and a failure to delete it fails the sign-out too, so a later account never meets it.
+        await store.delete("pendingInvite");
         await store.delete("refreshToken");
         await clearAttempts().catch(noop);
-        await store.delete("pendingInvite").catch(noop);
         publish({ status: "unauthenticated" });
         return active;
       } finally {
@@ -406,6 +428,9 @@ export function createSessionClient(edges: SessionEdges) {
     verifyEmail,
     startOAuth,
     finishOAuth,
+    rememberInvite,
+    takeInvite,
+    forgetInvite,
     signOut,
     subscribe,
     snapshot: () => state,

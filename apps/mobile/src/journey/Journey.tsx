@@ -11,11 +11,11 @@ import { GroupsJourney } from "./GroupsJourney";
 import { JoinJourney } from "./JoinJourney";
 import { Loading } from "./Loading";
 import { postNotice } from "./notice";
-import { rememberInvite, savedInvite } from "./pendingInvite";
 import { SetupJourney } from "./SetupJourney";
 import { savingSetup, type SetupSaving } from "./setupRules";
 import { SignInJourney } from "./SignInJourney";
 import { useSignOut } from "./SignOut";
+import { useSavedInvite } from "./useSavedInvite";
 import { useStage } from "./useStage";
 
 function AccountUnavailable() {
@@ -68,15 +68,17 @@ export function Journey({ invite }: { invite?: string }) {
   const stage = useStage();
   const router = useRouter();
   const ready = stage.kind === "ready";
-  useEffect(() => {
-    if (invite && !ready) void rememberInvite(invite);
-  }, [invite, ready]);
+  useSavedInvite(invite, ready, sessionClient);
   useEffect(() => {
     let live = true;
     if (!invite && ready)
-      void savedInvite().then((token) => {
-        if (live && token) router.replace({ pathname: "/join/[token]", params: { token } });
-      });
+      void sessionClient
+        .takeInvite()
+        .then((token) => {
+          if (live && token) router.replace({ pathname: "/join/[token]", params: { token } });
+        })
+        // A keychain that cannot be read leaves the person on Groups, with no invite to follow.
+        .catch(() => {});
     return () => {
       live = false;
     };
