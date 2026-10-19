@@ -6,6 +6,8 @@
     "e2e.phone.config.ts",
     "e2e.android.config.ts",
     "tests/*.e2e.ts",
+    // A classic worker loaded by navigator.serviceWorker.register, not an import.
+    "apps/web/public/notifications.js",
   ],
   "ignorePatterns": [
     "**/dist/**",

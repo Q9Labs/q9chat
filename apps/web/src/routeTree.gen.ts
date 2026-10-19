@@ -14,6 +14,7 @@ import { Route as GalleryRouteImport } from './routes/gallery'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as AuthErrorRouteImport } from './routes/auth/error'
 import { Route as AuthPhoneCallbackRouteImport } from './routes/auth/phone-callback'
+import { Route as GGroupIdRouteImport } from './routes/g.$groupId'
 import { Route as JoinTokenRouteImport } from './routes/join/$token'
 import { Route as ApiAuthCallbackRouteImport } from './routes/api/auth/callback'
 import { Route as ApiAuthSignOutRouteImport } from './routes/api/auth/sign-out'
@@ -46,6 +47,11 @@ const AuthErrorRoute = AuthErrorRouteImport.update({
 const AuthPhoneCallbackRoute = AuthPhoneCallbackRouteImport.update({
   id: '/auth/phone-callback',
   path: '/auth/phone-callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GGroupIdRoute = GGroupIdRouteImport.update({
+  id: '/g/$groupId',
+  path: '/g/$groupId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const JoinTokenRoute = JoinTokenRouteImport.update({
@@ -95,6 +101,7 @@ export interface FileRoutesByFullPath {
   '/api/health': typeof ApiHealthRoute
   '/auth/error': typeof AuthErrorRoute
   '/auth/phone-callback': typeof AuthPhoneCallbackRoute
+  '/g/$groupId': typeof GGroupIdRoute
   '/join/$token': typeof JoinTokenRoute
   '/api/auth/callback': typeof ApiAuthCallbackRoute
   '/api/auth/sign-out': typeof ApiAuthSignOutRoute
@@ -110,6 +117,7 @@ export interface FileRoutesByTo {
   '/api/health': typeof ApiHealthRoute
   '/auth/error': typeof AuthErrorRoute
   '/auth/phone-callback': typeof AuthPhoneCallbackRoute
+  '/g/$groupId': typeof GGroupIdRoute
   '/join/$token': typeof JoinTokenRoute
   '/api/auth/callback': typeof ApiAuthCallbackRoute
   '/api/auth/sign-out': typeof ApiAuthSignOutRoute
@@ -126,6 +134,7 @@ export interface FileRoutesById {
   '/api/health': typeof ApiHealthRoute
   '/auth/error': typeof AuthErrorRoute
   '/auth/phone-callback': typeof AuthPhoneCallbackRoute
+  '/g/$groupId': typeof GGroupIdRoute
   '/join/$token': typeof JoinTokenRoute
   '/api/auth/callback': typeof ApiAuthCallbackRoute
   '/api/auth/sign-out': typeof ApiAuthSignOutRoute
@@ -143,6 +152,7 @@ export interface FileRouteTypes {
     | '/api/health'
     | '/auth/error'
     | '/auth/phone-callback'
+    | '/g/$groupId'
     | '/join/$token'
     | '/api/auth/callback'
     | '/api/auth/sign-out'
@@ -158,6 +168,7 @@ export interface FileRouteTypes {
     | '/api/health'
     | '/auth/error'
     | '/auth/phone-callback'
+    | '/g/$groupId'
     | '/join/$token'
     | '/api/auth/callback'
     | '/api/auth/sign-out'
@@ -173,6 +184,7 @@ export interface FileRouteTypes {
     | '/api/health'
     | '/auth/error'
     | '/auth/phone-callback'
+    | '/g/$groupId'
     | '/join/$token'
     | '/api/auth/callback'
     | '/api/auth/sign-out'
@@ -189,6 +201,7 @@ export interface RootRouteChildren {
   ApiHealthRoute: typeof ApiHealthRoute
   AuthErrorRoute: typeof AuthErrorRoute
   AuthPhoneCallbackRoute: typeof AuthPhoneCallbackRoute
+  GGroupIdRoute: typeof GGroupIdRoute
   JoinTokenRoute: typeof JoinTokenRoute
   ApiAuthCallbackRoute: typeof ApiAuthCallbackRoute
   ApiAuthSignOutRoute: typeof ApiAuthSignOutRoute
@@ -234,6 +247,13 @@ declare module '@tanstack/react-router' {
       path: '/auth/phone-callback'
       fullPath: '/auth/phone-callback'
       preLoaderRoute: typeof AuthPhoneCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/g/$groupId': {
+      id: '/g/$groupId'
+      path: '/g/$groupId'
+      fullPath: '/g/$groupId'
+      preLoaderRoute: typeof GGroupIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/join/$token': {
@@ -301,6 +321,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiHealthRoute: ApiHealthRoute,
   AuthErrorRoute: AuthErrorRoute,
   AuthPhoneCallbackRoute: AuthPhoneCallbackRoute,
+  GGroupIdRoute: GGroupIdRoute,
   JoinTokenRoute: JoinTokenRoute,
   ApiAuthCallbackRoute: ApiAuthCallbackRoute,
   ApiAuthSignOutRoute: ApiAuthSignOutRoute,

@@ -8,15 +8,17 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 
 import type { GroupListRow, Me } from "../chat/types.js";
 import { AccountTransport } from "../lib/account-transport.js";
-import { retireAccountTransport } from "../lib/convex.js";
+import { accountConvexClient, retireAccountTransport } from "../lib/convex.js";
 import { useSession } from "../lib/session.js";
 import { AccountDialog, DeleteAccountDialog } from "../screens/dialogs.js";
 import { ChatShell, PickAGroup } from "../screens/shell.js";
 import { NoGroupsYet, Sidebar } from "../screens/sidebar.js";
 import { Toast } from "../ui/overlay.js";
 import { AppRoot } from "../ui/root.js";
+import { signOutWithNotifications, stopDesktopNotifications } from "./desktop-notifications.js";
 import { GroupJourneyBoundary, useGroupJourney } from "./groups.js";
 import { clearProfileMedia } from "./media-storage.js";
+import { Notifications } from "./notifications.js";
 import { OAuthArrival } from "./oauth-arrival.js";
 import { isPhotoRejection, photoSelectionError, uploadPhoto, usePhotos } from "./photos.js";
 import { useSearchJourney } from "./search.js";
@@ -45,6 +47,7 @@ function useJourneySignOut() {
   const [signOutStatus, setSignOutStatus] = useState<"idle" | "pending" | "complete" | "failed">(
     "idle",
   );
+  const [notificationWarning, setNotificationWarning] = useState(false);
   const generation = useRef(0);
   const signOutSession = useRef<string | null>(null);
   const currentSession = useRef<string | null>(null);
@@ -72,21 +75,47 @@ function useJourneySignOut() {
       active = false;
     };
   }, [fetchAccessToken, user]);
-  const leave = useCallback(() => {
-    if (signOutStatus === "pending") return;
-    const started = ++generation.current;
-    signOutSession.current = currentSession.current;
-    setSignOutStatus("pending");
-    void signOut().then(
-      () => {
-        if (started === generation.current) setSignOutStatus("complete");
-      },
-      () => {
-        if (started === generation.current) setSignOutStatus("failed");
-      },
-    );
-  }, [signOut, signOutStatus]);
-  return { signOutStatus, leave, clearSignOutStatus: () => setSignOutStatus("idle") };
+  const leave = useCallback(
+    (account: "active" | "deleted") => {
+      if (signOutStatus === "pending") return;
+      const started = ++generation.current;
+      signOutSession.current = currentSession.current;
+      setNotificationWarning(false);
+      setSignOutStatus("pending");
+      void signOutWithNotifications(
+        () =>
+          stopDesktopNotifications((endpoint) =>
+            account === "deleted"
+              ? Promise.resolve()
+              : accountConvexClient().mutation(api.devices.unregister, { endpoint }),
+          ),
+        signOut,
+      ).then(
+        (cleaned) => {
+          if (started === generation.current) {
+            setNotificationWarning(!cleaned);
+            setSignOutStatus("complete");
+          }
+        },
+        () => {
+          if (started === generation.current) setSignOutStatus("failed");
+        },
+      );
+    },
+    [signOut, signOutStatus],
+  );
+  const leaveActive = useCallback(() => leave("active"), [leave]);
+  const leaveDeleted = useCallback(() => leave("deleted"), [leave]);
+  return {
+    signOutStatus,
+    notificationWarning,
+    leave: leaveActive,
+    leaveDeleted,
+    clearSignOutStatus: () => {
+      setNotificationWarning(false);
+      setSignOutStatus("idle");
+    },
+  };
 }
 
 function useDeletedAccountCleanup(signOut: () => void) {
@@ -137,8 +166,8 @@ export function Journey({
   const session = useSession();
   const [now, setNow] = useState(Date.now);
   const signOut = useJourneySignOut();
-  const { signOutStatus, leave } = signOut;
-  const deletion = useDeletedAccountCleanup(leave);
+  const { signOutStatus, notificationWarning, leave } = signOut;
+  const deletion = useDeletedAccountCleanup(signOut.leaveDeleted);
   const arrivalMethod = authError ? null : session.method;
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 30_000);
@@ -151,12 +180,11 @@ export function Journey({
           {deletion.screen ?? (
             <SessionJourney authError={authError} inviteToken={inviteToken} signOut={signOut} />
           )}
-          {signOutStatus === "failed" ? (
-            <Toast
-              message="Couldn't sign out. Try again."
-              action={{ label: "Try again", onClick: leave }}
-            />
-          ) : null}
+          <SignOutNotice
+            status={signOutStatus}
+            notificationWarning={notificationWarning}
+            onRetry={leave}
+          />
           {session.status !== "loading" ? (
             <OAuthArrival key={arrivalMethod ?? "signed-out"} method={arrivalMethod} />
           ) : null}
@@ -164,6 +192,27 @@ export function Journey({
       </DeletedAccountAction.Provider>
     </SignOutAction.Provider>
   );
+}
+
+function SignOutNotice({
+  status,
+  notificationWarning,
+  onRetry,
+}: {
+  readonly status: ReturnType<typeof useJourneySignOut>["signOutStatus"];
+  readonly notificationWarning: boolean;
+  readonly onRetry: () => void;
+}) {
+  if (notificationWarning)
+    return <Toast message="Signed out. Notification cleanup failed. Quit this browser." />;
+  if (status === "failed")
+    return (
+      <Toast
+        message="Couldn't sign out. Try again."
+        action={{ label: "Try again", onClick: onRetry }}
+      />
+    );
+  return null;
 }
 
 function SessionJourney({
@@ -188,7 +237,7 @@ function SessionJourney({
   return (
     <InviteToken.Provider value={inviteToken}>
       <AccountTransport key={session.user.id}>
-        <ProfileGate />
+        {signOut.signOutStatus === "pending" ? <Loading /> : <ProfileGate />}
       </AccountTransport>
     </InviteToken.Provider>
   );
@@ -286,6 +335,15 @@ function useSelectedGroup(groups: readonly LiveGroup[] | undefined) {
   return groups?.find((row) => row.groupId === search.group)?.groupId ?? null;
 }
 
+function notificationGroup(
+  groups: FunctionReturnType<typeof api.groups.list> | undefined,
+  selected: LiveGroup["groupId"] | null,
+) {
+  return (
+    groups?.find((row) => row.groupId === selected && row.status === "member")?.groupId ?? null
+  );
+}
+
 function Groups({
   profile,
   welcome,
@@ -339,6 +397,12 @@ function Groups({
             onNewGroup={workspace.newGroup}
             onSearch={search.openAll}
             onAccount={() => setAccountOpen(true)}
+          />
+        }
+        banner={
+          <Notifications
+            groupId={notificationGroup(groups, workspace.selected)}
+            onNotice={setNotice}
           />
         }
         main={workspace.main}

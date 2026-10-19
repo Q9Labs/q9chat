@@ -22,6 +22,10 @@
     "apps/web/src/journey/setup.tsx": "Live browser behavior is exercised by tests/j1-web.e2e.ts against staging WorkOS and the dev Convex deployment, rather than mocking the auth and subscription boundaries.",
     "apps/web/src/journey/oauth.ts": "OAuth start, one-shot consumption, cancellation, replay, reload and denied-storage behavior are exercised by tests/j1-web.e2e.ts with a real session; real vendor click-through belongs to the browser lane.",
     "apps/web/src/journey/oauth-arrival.tsx": "One-shot provider confirmation and reload behavior are exercised in tests/j1-web.e2e.ts with a real session and an overridden provider label; real vendor click-through belongs to the browser lane.",
-    "apps/web/src/journey/group-controls.tsx": "Covered through real WorkOS accounts and the dev Convex deployment by tests/j9-web.e2e.ts; direct imports would bypass the live membership and notification boundaries."
+    "apps/web/src/journey/group-controls.tsx": "Covered through real WorkOS accounts and the dev Convex deployment by tests/j9-web.e2e.ts; direct imports would bypass the live membership and notification boundaries.",
+    "apps/web/src/journey/desktop-notifications.ts": "Real PushManager enrollment and sign-out unsubscribe are exercised through the running app in tests/j8-web.e2e.ts, not API mocks.",
+    "apps/web/src/journey/notifications.tsx": "Browser permission, push registration, delivery and sign-out are exercised against the running app by tests/j8-web.e2e.ts; unit mocks would bypass browser APIs.",
+    "apps/web/src/routes/g.$groupId.tsx": "Notification click-through and old-message destinations are exercised through the running router by tests/j8-web.e2e.ts.",
+    "apps/web/src/journey/notification-viewing.ts": "Focused-tab ownership uses the real browser Web Locks API in tests/j8-web.e2e.ts; mocked tab focus would not prove cross-tab coordination."
   }
 }

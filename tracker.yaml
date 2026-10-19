@@ -142,16 +142,18 @@ outcomes:
     title: Get notified only when something needs you
     area: notifications
     state: in_progress
-    summary: Web members can choose notification modes and mute groups. Push setup and phone controls remain.
+    summary: Web permission, registration, settings and message links are wired. Native desktop delivery and click proof is blocked by the logged-out M4; phone wiring remains.
     theory: theory.md#calm
-    code: []
+    code:
+      - apps/web/src/journey/notifications.tsx
+      - apps/web/public/notifications.js
+      - tests/j8-web.e2e.ts
     priority: P0
-    size: L
-    size_reason: Web push, APNs and FCM delivery plus per-group settings and deep links.
+    size: M
+    size_reason: Native desktop proof and phone notification permission, delivery and message destinations remain.
     remaining:
-      - Notify on mentions and replies by default; let a person choose every message per group.
-      - Deliver through web push, APNs and FCM, and open the notification at the message.
-      - Add the phone mute controls; web mute settings and grey counts work.
+      - Prove browser push delivery and notification click-through from a logged-in M4 desktop.
+      - Deliver notifications on the phone and open them at the message.
 
   - id: chat.leave_group
     title: Leave a group or remove a member

@@ -1098,6 +1098,7 @@ describe("bounded API limits", () => {
       ...pushKeys(),
     });
     await alice.client.mutation(api.devices.viewing, { endpoint, groupId });
+    await alice.client.mutation(api.devices.registerWeb, { endpoint, ...pushKeys() });
     await bob.client.mutation(api.devices.viewing, { endpoint, groupId: null });
     await bob.client.mutation(api.devices.unregister, { endpoint });
     expect(await t.run((ctx) => ctx.db.query("devices").collect())).toMatchObject([
