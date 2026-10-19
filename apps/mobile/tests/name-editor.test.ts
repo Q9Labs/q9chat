@@ -189,6 +189,7 @@ void test("a photo change that has not finished asks before leaving, and Stay he
   world.photoBusy = true;
   await editor.exit(leave("back"));
   assert.deepEqual(left, []);
+  assert.equal(editor.snapshot().unsaved?.title, "Your photo isn't saved");
   assert.equal(editor.snapshot().unsaved?.confirmLabel, "Leave anyway");
   editor.keepEditing();
   assert.deepEqual(left, []);

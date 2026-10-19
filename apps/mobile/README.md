@@ -20,9 +20,9 @@ The phone talks to the web Worker for email codes and for the OAuth code exchang
 - The Worker's transaction cookies are kept in a small jar in `src/session/cookies.ts`, because React Native has no browser cookie store.
 - Google and Apple open a system auth session at the WorkOS authorize URL (PKCE, S256) with `<AUTH_ORIGIN>/auth/phone-callback` as the redirect. The Worker page sends the browser on to `q9chat://auth/callback`, and the app trades the code for a session through `/api/auth/oauth/exchange`. The WorkOS staging app lists `http://localhost:3000/auth/phone-callback` for this.
 - The session lives in SecureStore. Convex gets its access token through `ConvexProviderWithAuth`.
-- `src/session/core.ts` owns every session change (restore, refresh, sign-in, sign-out, the OAuth attempt). It reads the refresh token from SecureStore inside each operation and keeps none in memory, and a change that finishes after a newer one is dropped. `tests/session-client.test.ts` drives it with a fake Worker, keychain and auth window.
+- `src/session/core.ts` owns every session change (restore, refresh, sign-in, sign-out, the OAuth attempt). It reads the refresh token from SecureStore inside each operation and keeps none in memory (except the one a sign-out holds to revoke), and a change that finishes after a newer one is dropped. `tests/session-client.test.ts` drives it with a fake Worker, keychain and auth window.
 - A saved session that cannot be checked (no connection, keychain error) stays saved and shows "Can't connect. Try again." with a retry on the button and when the app returns to the foreground. Only a 401 from the Worker signs the person out.
-- Sign out shows "Signed out" only after the Worker confirms, and the sign-in form stays off until then.
+- Sign out deletes the saved token from SecureStore, then shows "Signed out", so it works offline. If the delete fails the person stays signed in and a toast says so. The Worker revoke runs afterwards, three tries while the app lives, and nothing about it is saved: if the app ends first, the server session runs out by itself.
 
 ## Checks
 

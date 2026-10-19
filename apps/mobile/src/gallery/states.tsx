@@ -709,6 +709,7 @@ export const STATES: GalleryState[] = [
         confirmDelete={false}
         toast={null}
         unsaved={{
+          title: "Your name isn't saved",
           text: "Enter a name of 1 to 60 characters, or discard your change.",
           confirmLabel: "Discard changes",
           cancelLabel: "Keep editing",
@@ -731,6 +732,7 @@ export const STATES: GalleryState[] = [
         confirmDelete={false}
         toast={null}
         unsaved={{
+          title: "Your name isn't saved",
           text: "You're offline, so your name can't be saved. Keep editing, or discard your change.",
           confirmLabel: "Discard changes",
           cancelLabel: "Keep editing",
@@ -753,6 +755,7 @@ export const STATES: GalleryState[] = [
         confirmDelete={false}
         toast={null}
         unsaved={{
+          title: "Your name isn't saved",
           text: "You're offline, so your name hasn't saved yet. It may still save when you're back online.",
           confirmLabel: "Leave anyway",
           cancelLabel: "Stay here",
@@ -775,6 +778,7 @@ export const STATES: GalleryState[] = [
         confirmDelete={false}
         toast={null}
         unsaved={{
+          title: "Your photo isn't saved",
           text: "Your photo change isn't done yet. If you leave now, it may not be saved.",
           confirmLabel: "Leave anyway",
           cancelLabel: "Stay here",

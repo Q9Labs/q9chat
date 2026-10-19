@@ -90,6 +90,7 @@ export function AccountJourney({
       unsaved={
         editing.unsaved && {
           text: editing.unsaved.text,
+          title: editing.unsaved.title,
           confirmLabel: editing.unsaved.confirmLabel,
           cancelLabel: editing.unsaved.cancelLabel,
           onKeepEditing: editing.keepEditing,

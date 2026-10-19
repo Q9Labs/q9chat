@@ -18,6 +18,7 @@ export type AccountScreenProps = {
   /** Set when leaving could not save the name; asks whether to keep editing or discard. */
   unsaved: {
     text: string;
+    title: string;
     confirmLabel: string;
     cancelLabel: string;
     onKeepEditing: () => void;
@@ -163,7 +164,7 @@ export function AccountScreen(props: AccountScreenProps) {
       ) : null}
       {props.unsaved ? (
         <ConfirmSheet
-          title="Your name isn't saved"
+          title={props.unsaved.title}
           text={props.unsaved.text}
           confirmLabel={props.unsaved.confirmLabel}
           cancelLabel={props.unsaved.cancelLabel}

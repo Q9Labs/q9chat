@@ -2,6 +2,7 @@ import { MAX_NAME, saveThenCheck } from "./nameRules.ts";
 
 /** What the sheet over Account says when the name cannot be saved before leaving. */
 type Unsaved = {
+  title: string;
   text: string;
   confirmLabel: string;
   cancelLabel: string;
@@ -28,29 +29,36 @@ export type NameEditorInputs = {
   photoBusy: boolean;
 };
 
+const NAME_TITLE = "Your name isn't saved";
+
 const ASK = {
   invalid: {
+    title: NAME_TITLE,
     text: "Enter a name of 1 to 60 characters, or discard your change.",
     confirmLabel: "Discard changes",
     cancelLabel: "Keep editing",
   },
   failed: {
+    title: NAME_TITLE,
     text: "Couldn't save your name. Try again, or discard your change.",
     confirmLabel: "Discard changes",
     cancelLabel: "Keep editing",
   },
   offline: {
+    title: NAME_TITLE,
     text: "You're offline, so your name can't be saved. Keep editing, or discard your change.",
     confirmLabel: "Discard changes",
     cancelLabel: "Keep editing",
   },
   // A Convex mutation cannot be cancelled: it stays queued and goes out when the connection is back.
   waiting: {
+    title: NAME_TITLE,
     text: "You're offline, so your name hasn't saved yet. It may still save when you're back online.",
     confirmLabel: "Leave anyway",
     cancelLabel: "Stay here",
   },
   photo: {
+    title: "Your photo isn't saved",
     text: "Your photo change isn't done yet. If you leave now, it may not be saved.",
     confirmLabel: "Leave anyway",
     cancelLabel: "Stay here",
