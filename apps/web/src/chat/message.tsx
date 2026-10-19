@@ -101,12 +101,21 @@ function QuoteBar({
 }
 
 /** Borderless reaction pills on a soft fill with a count; your own carries the accent wash. */
+function reactionPeople(reaction: Reaction) {
+  const names = reactorNames(reaction.people);
+  const others = reaction.count - reaction.people.length;
+  if (others <= 0) return names;
+  return `${names}${names ? " and " : ""}${others} ${others === 1 ? "other" : "others"}`;
+}
+
 function ReactionPills({
   reactions,
   mine,
   onToggle,
   readOnly,
+  onInspect,
 }: {
+  readonly onInspect: () => void;
   readonly reactions: readonly Reaction[];
   readonly mine: boolean;
   readonly onToggle: (emoji: Emoji) => void;
@@ -119,13 +128,15 @@ function ReactionPills({
   return (
     <div className="rx">
       {shown.map((reaction) => {
-        const who = reactorNames(reaction.people);
+        const who = reactionPeople(reaction);
         return (
           <button
             key={reaction.emoji}
             type="button"
             className={`chip${reaction.mine ? " me" : ""}`}
             disabled={readOnly}
+            onMouseEnter={onInspect}
+            onFocus={onInspect}
             aria-pressed={reaction.mine}
             aria-label={
               readOnly
@@ -146,6 +157,7 @@ function ReactionPills({
 }
 
 export interface MessageHandlers {
+  readonly onInspectReactions?: (message: PostView) => void;
   readonly onReact: (message: PostView, emoji: Emoji) => void;
   readonly onReply: (message: PostView) => void;
   readonly onEdit: (message: PostView) => void;
@@ -154,7 +166,7 @@ export interface MessageHandlers {
   readonly onReport: (message: PostView) => void;
   readonly onRetry: (message: PostView) => void;
   readonly onOpenQuote: (reply: ReplyTo) => void;
-  readonly onTogglePlay: (message: PostView) => void;
+  readonly onMediaError: (error: string, owner: string) => void;
   readonly onMenuOpenChange: (message: RunMessage, open: boolean) => void;
 }
 
@@ -167,8 +179,6 @@ interface MessageProps {
   /** Brief highlight after a jump or an edit by someone else. */
   readonly highlighted?: boolean;
   readonly menuOpen: boolean;
-  /** 0 to 1 while this message's voice note plays. */
-  readonly playProgress: number | null;
   readonly handlers: MessageHandlers;
 }
 
@@ -230,23 +240,24 @@ function Bubble({
 
 function Attachments({
   message,
-  playProgress,
-  onTogglePlay,
+  onMediaError,
 }: {
   readonly message: PostView;
-  readonly playProgress: number | null;
-  readonly onTogglePlay: (message: PostView) => void;
+  readonly onMediaError: (error: string, owner: string) => void;
 }) {
-  return message.attachments.map((attachment) => {
-    if (attachment.kind === "image") return <ImageTile key={attachment.url} image={attachment} />;
-    if (attachment.kind === "file") return <FileCard key={attachment.url} file={attachment} />;
+  // Slots are immutable within a post, including optimistic-to-live reconciliation.
+  return message.attachments.map((attachment, index) => {
+    const slot = `${message.renderKey ?? message.id}:${index}`;
+    // Safe because attachment slots never reorder within a message.
+    // react-doctor-disable-next-line react-doctor/no-array-index-as-key
+    if (attachment.kind === "image") return <ImageTile key={slot} image={attachment} />;
+    // Safe because attachment slots never reorder within a message.
+    // react-doctor-disable-next-line react-doctor/no-array-index-as-key
+    if (attachment.kind === "file") return <FileCard key={slot} file={attachment} />;
     return (
-      <VoiceRow
-        key={attachment.url}
-        voice={attachment}
-        progress={playProgress}
-        onTogglePlay={() => onTogglePlay(message)}
-      />
+      // Safe because attachment slots never reorder within a message.
+      // react-doctor-disable-next-line react-doctor/no-array-index-as-key
+      <VoiceRow key={slot} voice={attachment} onError={(error) => onMediaError(error, slot)} />
     );
   });
 }
@@ -408,6 +419,9 @@ function MessageMenu({
       onClose={() => handlers.onMenuOpenChange(message, false)}
     >
       {compact ? <ReactionRow message={message} onReact={handlers.onReact} /> : null}
+      <MenuItem icon="reply" onSelect={() => handlers.onReply(message)}>
+        Reply
+      </MenuItem>
       {hasText ? <TextActions message={message} editable={editable} handlers={handlers} /> : null}
       {mine ? (
         <MenuItem icon="trash" danger onSelect={() => handlers.onDelete(message)}>
@@ -463,14 +477,14 @@ export function Message({
   compact,
   highlighted = false,
   menuOpen,
-  playProgress,
   handlers,
-  readOnly = false,
+  readOnly: screenReadOnly = false,
 }: MessageProps) {
   if (message.kind === "deleted") {
     return <DeletedMessage message={message} highlighted={highlighted} />;
   }
   const sendState = message.sendState;
+  const readOnly = screenReadOnly || message.actionsDisabled === true;
   return (
     <div
       className={messageClass(sendState, highlighted, menuOpen)}
@@ -483,12 +497,9 @@ export function Message({
           {label}
         </div>
       ))}
-      <Attachments
-        message={message}
-        playProgress={playProgress}
-        onTogglePlay={handlers.onTogglePlay}
-      />
+      <Attachments message={message} onMediaError={handlers.onMediaError} />
       <ReactionPills
+        onInspect={() => handlers.onInspectReactions?.(message)}
         readOnly={readOnly}
         reactions={message.reactions}
         mine={message.author.isYou}

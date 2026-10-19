@@ -95,7 +95,14 @@ export interface RemovedGroup {
 
 // ---------- messages.range ----------
 
-export type Attachment =
+export interface MediaResource {
+  readonly path: string;
+  readonly load: (path: string) => Promise<string>;
+  readonly retain: (path: string) => void;
+  readonly release: (path: string) => void;
+}
+
+export type Attachment = (
   | {
       readonly kind: "image";
       readonly url: string;
@@ -103,14 +110,21 @@ export type Attachment =
       readonly height: number;
       readonly label: string;
     }
-  | { readonly kind: "file"; readonly url: string; readonly name: string; readonly size: number }
+  | {
+      readonly kind: "file";
+      readonly url: string;
+      readonly name: string;
+      readonly size: number;
+      readonly contentType?: string;
+    }
   | {
       readonly kind: "voice";
       readonly url: string;
       readonly durationMs: number;
       /** Peak levels from 0 to 1, drawn as the waveform. */
       readonly waveform: readonly number[];
-    };
+    }
+) & { readonly resource?: MediaResource };
 
 export interface Reaction {
   readonly emoji: Emoji;
@@ -154,6 +168,7 @@ interface MessageBase {
 export type SendState = "sending" | "queued" | "failed";
 
 export interface PostView extends MessageBase {
+  readonly actionsDisabled?: boolean;
   readonly kind: "post";
   readonly author: Author;
   readonly body: string;

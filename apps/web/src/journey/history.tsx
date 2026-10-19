@@ -5,11 +5,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { MessageHandlers } from "../chat/message.js";
 import { Timeline } from "../chat/timeline-view.js";
-import type { Author, MemberEvent, MessageView } from "../chat/types.js";
+import type { Author, MemberEvent, MessageView, PostView } from "../chat/types.js";
 import { Button } from "../ui/controls.js";
 import { Dialog, DialogActions } from "../ui/overlay.js";
 import { useArrivalAnnouncement } from "./arrival-announcement.js";
 import { journeyError } from "./group-errors.js";
+import { useMediaOutbox } from "./media-outbox.js";
+import { useMediaResources } from "./media-resources.js";
+import { useMessageActions } from "./message-actions.js";
 import { usePhotos } from "./photos.js";
 import { useSenderTyping } from "./sender-typing.js";
 import { TextComposer } from "./text-composer.js";
@@ -57,7 +60,12 @@ function eventView(
     }
   }
 }
-function messageView(row: Row, group: Group, photos: ReadonlyMap<string, string>): MessageView {
+function messageView(
+  row: Row,
+  group: Group,
+  photos: ReadonlyMap<string, string>,
+  resources: ReturnType<typeof useMediaResources>,
+): MessageView {
   if (row.kind === "event") return { ...row, event: eventView(row.event, photos) };
   const person = author(row.author, photos);
   if (row.kind === "deleted") return { ...row, author: person };
@@ -67,14 +75,18 @@ function messageView(row: Row, group: Group, photos: ReadonlyMap<string, string>
     author: person,
     renderKey: row.author.isYou ? row.clientKey : row.id,
     mentions: group.members.filter((p) => mentionIds.has(p.id)).map((p) => p.name),
-    attachments: [],
-    attachmentLabels: row.attachments.map((file) => ({
-      id: file.url,
-      label:
-        file.kind === "file"
-          ? `${file.name} · ${file.contentType}`
-          : `${file.kind === "image" ? "Image" : "Voice note"} · ${file.contentType}`,
-    })),
+    attachments: row.attachments.map((file) => {
+      const url = resources.urls.get(file.url) ?? "";
+      const resource = {
+        path: file.url,
+        load: resources.load,
+        retain: resources.retain,
+        release: resources.release,
+      };
+      return file.kind === "image"
+        ? { ...file, url, resource, label: "Image" }
+        : { ...file, url, resource };
+    }),
     replyTo:
       row.replyTo === null
         ? null
@@ -94,7 +106,7 @@ const handlers: MessageHandlers = {
   onReport: displayOnly,
   onRetry: displayOnly,
   onOpenQuote: displayOnly,
-  onTogglePlay: displayOnly,
+  onMediaError: displayOnly,
   onMenuOpenChange: displayOnly,
 };
 
@@ -184,8 +196,9 @@ function historyMessages(
   photos: ReadonlyMap<string, string>,
   start: number,
   openedAt: number,
+  resources: ReturnType<typeof useMediaResources>,
 ) {
-  const messages = rows.map((row) => messageView(row, group, photos));
+  const messages = rows.map((row) => messageView(row, group, photos, resources));
   if (group.kind === "pair" && start === 1 && group.partner)
     messages.unshift({
       kind: "event",
@@ -385,7 +398,22 @@ function useHistory(group: Group, opened: Opening) {
     setAtBottom,
     setAnchor,
     navigation,
+    jumpTo: (sequence: number) => {
+      const page = pageOf(sequence);
+      setReplacement(true);
+      setNavigation((value) => value + 1);
+      setAtBottom(false);
+      setWindow({ first: Math.max(0, page - 1), last: page });
+    },
   };
+}
+
+function hasTimeline(rows: readonly Row[], loading: boolean) {
+  return rows.length > 0 || !loading;
+}
+
+function pendingMessages(atLatest: boolean, text: readonly PostView[], media: readonly PostView[]) {
+  return atLatest ? [...text, ...media].toSorted((a, b) => a.createdAt - b.createdAt) : [];
 }
 
 function historyPhotoPaths(rows: readonly Row[]) {
@@ -400,6 +428,93 @@ function useAuthorSelection(rows: readonly Row[], loading: boolean) {
   const person = id === null ? null : findAuthor(rows, id);
   if (id !== null && person === null && !loading) select(null);
   return { person, select };
+}
+
+function HistoryNotice({
+  issue,
+  mediaFailed,
+  reload,
+}: {
+  readonly issue: string | undefined;
+  readonly mediaFailed: boolean;
+  readonly reload: () => void;
+}) {
+  if (!issue) return null;
+  return (
+    <p role="alert">
+      {issue}
+      {mediaFailed ? (
+        <>
+          {" "}
+          <Button onClick={reload}>Retry loading media</Button>
+        </>
+      ) : null}
+    </p>
+  );
+}
+
+function noticeKey(
+  issue: string | undefined,
+  playback: { readonly text: string; readonly event: string } | undefined,
+) {
+  return issue === playback?.text ? playback?.event : issue;
+}
+
+function usePlaybackErrors() {
+  const [playbackErrors, setPlaybackErrors] = useState<
+    ReadonlyMap<string, { readonly text: string; readonly event: string }>
+  >(() => new Map());
+  function reportPlaybackError(text: string, owner: string) {
+    const event = crypto.randomUUID();
+    setPlaybackErrors((current) => {
+      const next = new Map(current);
+      if (text) next.set(owner, { text, event });
+      else next.delete(owner);
+      return next;
+    });
+  }
+  return { issue: [...playbackErrors.values()][0], report: reportPlaybackError };
+}
+
+function useQuoteNavigation(
+  lastSequence: number,
+  rows: readonly Row[],
+  loading: boolean,
+  latest: () => void,
+  jumpTo: (sequence: number) => void,
+  searchHighlight: string | null,
+) {
+  const [target, setTarget] = useState<{ readonly id: string; readonly received: number } | null>(
+    null,
+  );
+  const [latestRequest, requestLatest] = useState(0);
+  function toLatest() {
+    setTarget(null);
+    latest();
+    requestLatest((value) => value + 1);
+  }
+  if (target && lastSequence > target.received) toLatest();
+  useEffect(() => {
+    if (!target || loading || !rows.some((row) => row.id === target.id)) return;
+    document.getElementById(`m-${target.id}`)?.scrollIntoView({ block: "center" });
+  }, [target, loading, rows]);
+  return {
+    highlightId: target?.id ?? searchHighlight,
+    latestRequest,
+    toLatest,
+    open: (reply: { readonly id: string; readonly sequence: number }) => {
+      setTarget({ id: reply.id, received: lastSequence });
+      jumpTo(reply.sequence);
+    },
+  };
+}
+
+function useHistoryMedia(rows: readonly Row[], setError: (error: string) => void) {
+  const playback = usePlaybackErrors();
+  const { photos } = usePhotos(historyPhotoPaths(rows), setError);
+  const resources = useMediaResources();
+
+  return { playback, photos, resources };
 }
 
 function useSearchHighlight(rows: readonly Row[], sequence: number | undefined, loading: boolean) {
@@ -443,46 +558,77 @@ export function History({
     setAtBottom,
     setAnchor,
     navigation,
+    jumpTo,
     sequence: newFromSequence,
   } = useHistory(group, opened);
-  const highlightId = useSearchHighlight(rows, opened.target, loading);
+  const searchHighlight = useSearchHighlight(rows, opened.target, loading);
   const { person: selectedPerson, select: setAuthor } = useAuthorSelection(rows, loading);
   const [error, setError] = useState("");
-  const { photos } = usePhotos(historyPhotoPaths(rows), setError);
+  const actions = useMessageActions(rows, setError, atLatest);
+  const {
+    highlightId,
+    latestRequest,
+    toLatest,
+    open: openQuote,
+  } = useQuoteNavigation(group.lastSequence, rows, loading, latest, jumpTo, searchHighlight);
+  const historyMedia = useHistoryMedia(rows, setError);
+  const { photos, resources, playback } = historyMedia;
   const onVisible = useRead(group, opened.read, {
     setError,
-    covered,
+    covered: covered || actions.covered,
     authorOpen: selectedPerson !== null,
   });
   const announcement = useArrivalAnnouncement(rows, group.lastSequence, opened.latest, navigation);
   const outbox = useTextOutbox(group, rows);
+  const media = useMediaOutbox(group, rows);
   const senderTyping = useSenderTyping(group.groupId);
-  const [latestRequest, requestLatest] = useState(0);
   const messages = [
-    ...historyMessages(rows, group, photos, start, opened.at),
-    ...(atLatest ? outbox.messages : []),
+    ...historyMessages(rows, group, photos, start, opened.at, resources),
+    ...pendingMessages(atLatest, outbox.messages, media.messages),
   ];
-  function toLatest() {
-    latest();
-    requestLatest((value) => value + 1);
-  }
   function sendText() {
-    if (!outbox.submit()) return;
+    if (actions.editDraft !== undefined) {
+      actions.save();
+      return;
+    }
+    if (!outbox.submit(actions.quote)) return;
+    actions.cancel();
     senderTyping.clear();
     toLatest();
   }
-  const issue = [error, outbox.error, senderTyping.error].find(Boolean);
+  const issue = [
+    error,
+    resources.error,
+    playback.issue?.text,
+    media.error,
+    outbox.error,
+    senderTyping.error,
+  ].find(Boolean);
   function changeDraft(value: string) {
+    if (actions.editDraft !== undefined) {
+      actions.changeEdit(value);
+      return;
+    }
     outbox.change(value);
     senderTyping.change(value);
   }
   function retry(message: MessageView) {
     outbox.retry(message.id);
+    media.retry(message.renderKey ?? message.id);
     toLatest();
   }
+  const renderedMessages = messages.map((message) =>
+    message.kind === "post" ? actions.people(message) : message,
+  );
+  const showTimeline = hasTimeline(rows, loading);
   return (
     <>
-      {issue ? <p role="alert">{issue}</p> : null}
+      <HistoryNotice
+        key={noticeKey(issue, playback.issue)}
+        issue={issue}
+        mediaFailed={resources.error !== ""}
+        reload={resources.retry}
+      />
       <output
         className="send-announcement"
         aria-label="Send status"
@@ -491,21 +637,23 @@ export function History({
       >
         <span key={outbox.failure.id}>{outbox.failure.text}</span>
       </output>
-      {rows.length || !loading ? (
+      {showTimeline ? (
         <Timeline
-          messages={messages}
+          readOnly={actions.readOnly}
+          messages={renderedMessages}
           newFromSequence={newFromSequence}
           typing={[]}
           typingLine={<LiveTypingLine groupId={group.groupId} />}
           handlers={{
             ...handlers,
+            ...actions.handlers,
+            onOpenQuote: openQuote,
             onRetry: retry,
+            onMediaError: playback.report,
           }}
           onOpenAuthor={(person) => setAuthor(person.id)}
-          menuMessageId={null}
+          menuMessageId={actions.menu}
           highlightId={highlightId}
-          playing={null}
-          readOnly
           reading={{
             initialSequence: opened.target,
             onVisible,
@@ -513,7 +661,7 @@ export function History({
             announcement,
             onOlder: older,
             onNewer: newer,
-            onLatest: latest,
+            onLatest: toLatest,
             onAtBottom: setAtBottom,
             loading,
             latestRequest,
@@ -523,12 +671,20 @@ export function History({
         <output className="tl" aria-label="Loading messages" />
       )}
       <TextComposer
+        actions={actions}
         title={group.title}
         store={outbox.composer}
         onChange={changeDraft}
         onSend={sendText}
         onBlur={senderTyping.clear}
+        onMedia={(files) => {
+          media.enqueue(files, actions.quote);
+          actions.cancel();
+          toLatest();
+        }}
+        onError={media.setError}
       />
+      {actions.dialogs}
       <HistoryAuthor
         person={selectedPerson}
         onClose={() => setAuthor(null)}

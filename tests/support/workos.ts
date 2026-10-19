@@ -2,9 +2,11 @@ import { api } from "@q9chat/convex";
 import { ConvexHttpClient } from "convex/browser";
 import { Schema } from "effect";
 
+import { webOrigin } from "./origin.js";
+
 const key = process.env["WORKOS_API_KEY"];
 if (!key || !key.startsWith("sk_test_")) throw new Error("A staging WorkOS key is required");
-const authOrigin = process.env["J1_AUTH_ORIGIN"] ?? "http://localhost:3000";
+const authOrigin = process.env["J1_AUTH_ORIGIN"] ?? webOrigin;
 const headers = { Authorization: `Bearer ${key}` };
 const events = Schema.Struct({
   data: Schema.Array(

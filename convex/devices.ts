@@ -98,7 +98,8 @@ export const registerWeb = mutation({
       .withIndex("by_endpoint", (q) => q.eq("endpoint", args.endpoint))
       .unique();
     const value = { ...args, kind: "web" as const, profileId: profile._id };
-    if (row) await ctx.db.replace(row._id, value);
+    if (row?.kind === "web" && row.profileId === profile._id) await ctx.db.patch(row._id, args);
+    else if (row) await ctx.db.replace(row._id, value);
     else await ctx.db.insert("devices", value);
     await cap(ctx, profile._id);
     return null;

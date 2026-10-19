@@ -1,8 +1,17 @@
 import { Either, Schema } from "effect";
 
+export const QuotedReply = Schema.Struct({
+  id: Schema.String,
+  sequence: Schema.Number,
+  summary: Schema.String,
+  author: Schema.Struct({ id: Schema.String, name: Schema.String, isYou: Schema.Boolean }),
+});
+export type QuotedReply = typeof QuotedReply.Type;
+
 const PendingText = Schema.Struct({
   clientKey: Schema.String,
   body: Schema.String,
+  reply: Schema.optional(QuotedReply),
   createdAt: Schema.Number,
   status: Schema.Literal("sending", "failed"),
 });

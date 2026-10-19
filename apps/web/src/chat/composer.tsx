@@ -16,6 +16,7 @@ export interface Recording {
 }
 
 export interface ComposerProps {
+  readonly onMicrophoneMount?: (element: HTMLButtonElement | null) => void;
   readonly textOnly?: boolean;
   readonly onBlur?: () => void;
   readonly sendDisabled?: boolean;
@@ -146,7 +147,7 @@ type ComposerFieldProps = Omit<
 >;
 
 /** Attach, the textarea that grows with its text, then a mic, then send. */
-function ComposerField(props: ComposerFieldProps) {
+function ComposerField({ onMicrophoneMount, ...props }: ComposerFieldProps) {
   const { title, value, onChange, onSend, mode, onCancelMode, onEditLast } = props;
   const { attachOpen, onAttachOpenChange, onPickAttachment, onRecord } = props;
   const field = useRef<HTMLTextAreaElement>(null);
@@ -210,6 +211,7 @@ function ComposerField(props: ComposerFieldProps) {
           <button
             type="button"
             className="ib rec"
+            ref={onMicrophoneMount}
             disabled={props.textOnly}
             aria-label="Record a voice note"
             onClick={onRecord}

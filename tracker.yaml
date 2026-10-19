@@ -62,46 +62,49 @@ outcomes:
     title: Send text, images, files and voice notes
     area: messages
     state: in_progress
-    summary: Web text sends appear immediately with retry-safe delivery and drafts kept per group. Attachments and sending on the phone remain.
+    summary: Web text, images, files and voice notes send with immediate feedback, safe retries and per-group drafts. Sending on the phone remains.
     theory: theory.md#messages
     code:
       - apps/web/src/journey/text-outbox.ts
       - apps/web/src/journey/text-composer.tsx
+      - apps/web/src/journey/media-outbox.ts
+      - apps/web/src/journey/voice-recorder.ts
     priority: P0
     size: L
-    size_reason: Uploads, previews and browser voice recording plus sending on the phone remain.
+    size_reason: Sending text and attachments on the phone remains.
     remaining:
-      - Upload images, files and voice notes on the web with previews and protected playback or download.
       - Send text, images, files and voice notes on the phone, with immediate delivery, safe retries and per-group drafts.
 
   - id: chat.quote_replies
     title: Reply by quoting and jump to the original
     area: messages
-    state: planned
-    summary: Not built.
+    state: in_progress
+    summary: Web replies show a quote in the composer and sent message, preserve it through retries, and jump outside the loaded history with a return to latest. Phone wiring remains.
     theory: theory.md#messages
-    code: []
+    code:
+      - apps/web/src/journey/history.tsx
+      - apps/web/src/journey/quoted-reply.ts
+      - tests/j5-j6-web.e2e.ts
     priority: P0
     size: M
-    size_reason: Quote rendering plus jumping to an original outside the loaded page and back to the latest.
+    size_reason: The phone needs quote composition and history navigation.
     remaining:
-      - Quote a message inline when replying.
-      - Jump to the original even far back, and return to the latest messages on send, receive or request.
+      - Quote and jump to the original on the phone.
 
   - id: chat.edit_react_typing
     title: Edit or delete your messages, react, and see who is typing
     area: messages
-    state: planned
-    summary: Not built.
+    state: in_progress
+    summary: Web members edit and delete their own messages, react with one of five emoji, see reactor names and report other messages. Web typing shipped with J4. Phone wiring remains.
     theory: theory.md#messages
-    code: []
+    code:
+      - apps/web/src/journey/message-actions.tsx
+      - tests/j5-j6-web.e2e.ts
     priority: P1
     size: M
-    size_reason: Two author-only mutations, a reaction toggle and short-lived typing state on both apps.
+    size_reason: The phone needs editing, deletion, reactions and typing.
     remaining:
-      - Edit your own message and mark it edited; delete your own message and leave a placeholder.
-      - React with one of five fixed emoji and toggle your reaction off.
-      - Show who is typing in a group, with no online indicator.
+      - Edit, delete, react, report and show typing on the phone.
 
   - id: chat.search
     title: Find an old message with search
@@ -123,16 +126,18 @@ outcomes:
     title: Get notified only when something needs you
     area: notifications
     state: in_progress
-    summary: Web members can choose notification modes and mute groups. Push setup and phone controls remain.
+    summary: Web permission, registration, settings and message links are wired. Native desktop delivery and click proof is blocked by the logged-out M4; phone wiring remains.
     theory: theory.md#calm
-    code: []
+    code:
+      - apps/web/src/journey/notifications.tsx
+      - apps/web/public/notifications.js
+      - tests/j8-web.e2e.ts
     priority: P0
-    size: L
-    size_reason: Web push, APNs and FCM delivery plus per-group settings and deep links.
+    size: M
+    size_reason: Native desktop proof and phone notification permission, delivery and message destinations remain.
     remaining:
-      - Notify on mentions and replies by default; let a person choose every message per group.
-      - Deliver through web push, APNs and FCM, and open the notification at the message.
-      - Add the phone mute controls; web mute settings and grey counts work.
+      - Prove browser push delivery and notification click-through from a logged-in M4 desktop.
+      - Deliver notifications on the phone and open them at the message.
 
   - id: chat.leave_group
     title: Leave a group or remove a member
@@ -152,16 +157,19 @@ outcomes:
   - id: chat.store_requirements
     title: Delete your account and report a message
     area: foundation
-    state: planned
-    summary: Not built. Both are App Store requirements.
+    state: in_progress
+    summary: Web members can delete their account and report a message. The phone app remains.
     theory: theory.md#version-1-journeys
-    code: []
+    code:
+      - apps/web/src/journey/journey.tsx
+      - apps/web/src/journey/message-actions.tsx
+      - tests/j5-j6-web.e2e.ts
     priority: P1
     size: M
     size_reason: Account deletion across data and storage, plus a simple report flow.
     remaining:
-      - Delete an account and its personal data from both apps.
-      - Report a message for review.
+      - Delete an account and its personal data from the phone app.
+      - Report a message for review from the phone app.
 
   - id: mobile.app
     title: The phone app offers every journey

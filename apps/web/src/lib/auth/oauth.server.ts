@@ -89,6 +89,8 @@ export async function oauthCallback(request: Request) {
       redirect_uri: `${url.origin}/api/auth/callback`,
     });
     const session = await sessionResponse(auth, "web");
+    // cspell:ignore clickjacking
+    // react-doctor-disable-next-line react-doctor/clickjacking-redirect-risk -- Safe because returnPath revalidates the destination against the request origin.
     const success = redirect(returnPath(transaction.returnTo, url.origin));
     for (const value of session.headers.getSetCookie()) success.headers.append("Set-Cookie", value);
     return success;
