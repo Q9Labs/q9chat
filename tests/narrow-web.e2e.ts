@@ -59,7 +59,14 @@ test(
         await page.locator(".search-box").click();
         await page.getByRole("dialog", { name: "Search messages", exact: true }).waitFor();
         await noOverflow();
-        await page.keyboard.press("Escape");
+        await page.screenshot({ path: `${proof}/search-${width}.png`, animations: "disabled" });
+        await page.getByRole("button", { name: "Cancel", exact: true }).click();
+        expect(
+          await page.getByRole("dialog", { name: "Search messages", exact: true }).count(),
+        ).toBe(0);
+        expect(
+          await page.locator(".search-box").evaluate((opener) => opener === document.activeElement),
+        ).toBe(true);
         await page.getByRole("button", { name: "Account", exact: true }).click();
         await page.getByRole("dialog", { name: "Account", exact: true }).waitFor();
         await noOverflow();
@@ -168,6 +175,19 @@ test(
         await page.locator(".side").evaluate((element) => element.getBoundingClientRect().width),
       ).toBe(288);
       await page.screenshot({ path: `${proof}/desktop.png`, animations: "disabled" });
+      await page.locator(".search-box").click();
+      const search = page.getByRole("dialog", { name: "Search messages", exact: true });
+      await search.waitFor();
+      expect(await search.getByRole("button", { name: "Cancel", exact: true }).count()).toBe(0);
+      await page.keyboard.press("Tab");
+      expect(
+        await search.getByRole("textbox").evaluate((input) => input === document.activeElement),
+      ).toBe(true);
+      await page.keyboard.press("Shift+Tab");
+      expect(
+        await search.getByRole("textbox").evaluate((input) => input === document.activeElement),
+      ).toBe(true);
+      await page.keyboard.press("Escape");
     } finally {
       await account.client.mutation(api.profiles.deleteAccount, {});
       await removeTestUser(email);

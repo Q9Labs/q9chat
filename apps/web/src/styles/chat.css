@@ -2167,6 +2167,12 @@
 }
 
 /* search: a field at the top, results below */
+.search-input-row {
+  display: contents;
+}
+.search-cancel {
+  display: none;
+}
 .sin {
   display: flex;
   align-items: center;
@@ -2617,6 +2623,30 @@ a.file {
   }
   .notice-banner .btn {
     flex: 1;
+  }
+  .search-input-row {
+    display: flex;
+    align-items: center;
+    flex: none;
+  }
+  .search-input-row .sin {
+    flex: 1;
+    min-width: 0;
+    margin-inline-end: 0;
+  }
+  .sin input {
+    min-width: 0;
+  }
+  .search-cancel {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    padding-inline: 12px;
+    color: var(--tx);
+  }
+  .search-hints {
+    display: none;
   }
   .dlg,
   .dlg.wide,
