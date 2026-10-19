@@ -47,7 +47,9 @@ jobs:
         run: pnpm exec q9gate run --base origin/main
 
       - name: Build browser artifact for secret exclusion
-        run: pnpm --filter @q9chat/web build
+        # The base gate builds only changed packages, so build the web app's
+        # workspace dependencies here too.
+        run: pnpm --filter "@q9chat/web..." build
 
       - name: Check built client excludes server secrets
         run: node --test apps/web/tests/client-bundle.test.ts
