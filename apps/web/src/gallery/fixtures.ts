@@ -716,6 +716,7 @@ export function pairGroup(options: Options & { readonly notify?: NotifyMode } = 
 export function removedGroup(options: Options = {}): RemovedGroup {
   return {
     status: "removed",
+    memberCount: 4,
     title: options.long === true ? LONG_LAUNCH : "Q9 Chat launch",
     avatar: groupAvatar("QL"),
     removedBy: "Shoaib",

@@ -88,7 +88,7 @@ function InfoHero({ group }: { readonly group: GroupDetail | RemovedGroup }) {
     <div className="info-hero">
       <Avatar avatar={group.avatar} size="xl" />
       <h3>{group.title}</h3>
-      {group.status === "member" && group.kind === "group" ? (
+      {group.status === "removed" || group.kind === "group" ? (
         <p>{group.memberCount} members</p>
       ) : null}
     </div>
