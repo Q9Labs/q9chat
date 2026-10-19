@@ -6,10 +6,19 @@ import { runPhoneGroups } from "./support/phone-groups-flow.js";
 void test(
   "Phone groups: search, mute, leave and remove",
   { timeout: 900_000, platforms: ["ios"] },
-  async ({ app, device, screen }) => {
-    await device.clearKeychain();
-    // The engine opens the app before the test; restart so it reads the now-empty keychain.
+  async ({ app, screen }) => {
     await app.restart();
+    const email = screen.getByLabel("Email");
+    const signOut = screen.getByRole("button", "Sign out", { exact: true });
+    const account = screen.getByRole("button", "Account", { exact: true });
+    await expect
+      .poll(
+        async () =>
+          (await email.isVisible()) || (await signOut.isVisible()) || (await account.isVisible()),
+      )
+      .toBe(true);
+    if (await account.isVisible()) await account.tap();
+    if (await signOut.isVisible()) await signOut.tap();
     await expect(screen.getByLabel("Email")).toBeVisible({ timeout: 120_000 });
     await runPhoneGroups({
       screen,

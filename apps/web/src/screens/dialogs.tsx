@@ -404,32 +404,37 @@ export function SearchDialog({
 }: SearchDialogProps) {
   return (
     <Dialog label="Search messages" size="top" onClose={onClose}>
-      <div className="sin">
-        <Icon name="search" />
-        <input
-          data-autofocus=""
-          value={query}
-          aria-label="Search messages"
-          placeholder="Search messages"
-          autoComplete="off"
-          spellCheck={false}
-          onChange={(event) => onQueryChange(event.target.value)}
-          onKeyDown={(event) => {
-            const first = hits[0];
-            if (event.key === "Enter" && first !== undefined) {
-              event.preventDefault();
-              onOpenHit(first);
-            }
-          }}
-        />
-        {scopeTitle === null ? null : (
-          <span className="scope-chip">
-            In {scopeLabel(scopeTitle)}
-            <button type="button" aria-label="Search all groups" onClick={onClearScope}>
-              <Icon name="x" />
-            </button>
-          </span>
-        )}
+      <div className="search-input-row">
+        <div className="sin">
+          <Icon name="search" />
+          <input
+            data-autofocus=""
+            value={query}
+            aria-label="Search messages"
+            placeholder="Search messages"
+            autoComplete="off"
+            spellCheck={false}
+            onChange={(event) => onQueryChange(event.target.value)}
+            onKeyDown={(event) => {
+              const first = hits[0];
+              if (event.key === "Enter" && first !== undefined) {
+                event.preventDefault();
+                onOpenHit(first);
+              }
+            }}
+          />
+          {scopeTitle === null ? null : (
+            <span className="scope-chip">
+              In {scopeLabel(scopeTitle)}
+              <button type="button" aria-label="Search all groups" onClick={onClearScope}>
+                <Icon name="x" />
+              </button>
+            </span>
+          )}
+        </div>
+        <button type="button" className="search-cancel" onClick={onClose}>
+          Cancel
+        </button>
       </div>
       <div className="res" aria-live="polite">
         {status ? (

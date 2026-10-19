@@ -103,6 +103,7 @@ export function AppRoot({ children, theme = "system", clock }: AppRootProps) {
 }
 
 function Tip({ tip }: { readonly tip: TipState }) {
+  const { root } = useRoot();
   const subscribe = useCallback(
     (notify: () => void) => {
       const observer = new MutationObserver(notify);
@@ -120,7 +121,8 @@ function Tip({ tip }: { readonly tip: TipState }) {
   const measure = useCallback((el: HTMLElement | null) => {
     if (el !== null) setWidth(el.offsetWidth);
   }, []);
-  const left = tip.side === "start" ? tip.left - width : tip.left;
+  const inset = tip.side === null ? width / 2 : tip.side === "start" ? width : 0;
+  const left = Math.max(8, Math.min(tip.left - inset, (root?.clientWidth ?? 0) - width - 8));
   return (
     <div
       ref={measure}

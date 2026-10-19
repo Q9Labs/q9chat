@@ -4,7 +4,7 @@ import { api, type Id } from "@q9chat/convex";
 import type { ConvexHttpClient } from "convex/browser";
 import { expect, type Locator, type Screen } from "e2e";
 
-import { createPhoneAccount } from "./phone-fixtures.js";
+import { createPhoneAccount, createPhoneGroup, signOutPhone } from "./phone-fixtures.js";
 import { deletePhoneProfile, magicCode, removeTestUser, type PhoneSession } from "./workos.js";
 
 /** One real member reads another's posts; both native platforms run this same journey. */
@@ -23,11 +23,7 @@ export async function runJ3(p: {
     const reader = await createPhoneAccount(readerEmail, "Nadia Reader", sessions);
     const peer = await createPhoneAccount(peerEmail, "Bilal Writer", sessions);
     const title = `J3 Reading ${stamp}`;
-    const groupId = await peer.client.mutation(api.groups.create, {
-      name: title,
-      memberIds: [reader.id],
-      inviteToken: stamp,
-    });
+    const groupId = await createPhoneGroup(peer.client, title, reader.id);
     async function send(body: string) {
       return peer.client.mutation(api.messages.send, {
         groupId,
@@ -80,10 +76,7 @@ export async function runJ3(p: {
       throw new Error("Covered history advanced read state");
     await peer.client.mutation(api.groups.removeMember, { groupId, profileId: reader.id });
     await expect(p.screen.getByText("You were removed from this group")).toBeVisible();
-    await p.screen.getByRole("button", "Back to groups").tap();
-    await p.screen.getByRole("button", "Account", { exact: true }).tap();
-    await p.screen.getByRole("button", "Sign out", { exact: true }).tap();
-    await expect(p.screen.getByRole("button", "Continue with Google")).toBeVisible();
+    await signOutPhone(p.screen);
   } finally {
     await cleanAccounts(sessions, emails);
   }

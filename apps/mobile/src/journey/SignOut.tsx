@@ -1,7 +1,10 @@
+import { api } from "@q9chat/convex";
+import { useConvexAuth, useQuery } from "convex/react";
 import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -12,6 +15,7 @@ import { View } from "react-native";
 import { Toast } from "../kit/Overlays";
 import { useToast } from "../kit/useToast";
 import { sessionClient } from "../session/client";
+import { clearGroupText, rememberTextProfile } from "./textStore";
 
 type SignOutApi = {
   complete: boolean;
@@ -24,9 +28,9 @@ type SignOutApi = {
 const SignOutContext = createContext<SignOutApi | null>(null);
 
 export function useSignOut(): SignOutApi {
-  const api = useContext(SignOutContext);
-  if (!api) throw new Error("useSignOut needs a SignOutProvider");
-  return api;
+  const context = useContext(SignOutContext);
+  if (!context) throw new Error("useSignOut needs a SignOutProvider");
+  return context;
 }
 
 /**
@@ -34,6 +38,16 @@ export function useSignOut(): SignOutApi {
  * out" shows there. When the phone cannot forget it, they stay signed in and a toast says so.
  */
 export function SignOutProvider({ children }: { children: ReactNode }) {
+  const { isAuthenticated } = useConvexAuth();
+  const me = useQuery(api.profiles.me, isAuthenticated ? {} : "skip");
+  const groups = useQuery(api.groups.list, me?.status === "ready" ? {} : "skip");
+  useEffect(() => {
+    if (me?.status !== "ready") return;
+    rememberTextProfile(me.profile.id);
+    for (const group of groups ?? []) {
+      if (group.status === "removed") clearGroupText(me.profile.id, group.groupId);
+    }
+  }, [me, groups]);
   const [complete, setComplete] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [toast, showToast] = useToast();

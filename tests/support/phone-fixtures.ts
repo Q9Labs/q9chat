@@ -1,4 +1,6 @@
-import { api } from "@q9chat/convex";
+import { randomUUID } from "node:crypto";
+
+import { api, type Id } from "@q9chat/convex";
 import { ConvexHttpClient } from "convex/browser";
 import { expect, type Locator, type Screen } from "e2e";
 
@@ -27,4 +29,19 @@ export async function enterPhoneEmailCode(
   await p.screen.getByRole("button", "Email me a code").tap();
   await expect(p.screen.getByText("Check your email")).toBeVisible();
   await p.enterCode(await magicCode(email));
+}
+
+export function createPhoneGroup(client: ConvexHttpClient, name: string, memberId: Id<"profiles">) {
+  return client.mutation(api.groups.create, {
+    name,
+    memberIds: [memberId],
+    inviteToken: randomUUID().replaceAll("-", ""),
+  });
+}
+
+export async function signOutPhone(screen: Screen) {
+  await screen.getByRole("button", "Back to groups").tap();
+  await screen.getByRole("button", "Account", { exact: true }).tap();
+  await screen.getByRole("button", "Sign out", { exact: true }).tap();
+  await expect(screen.getByRole("button", "Continue with Google")).toBeVisible();
 }
