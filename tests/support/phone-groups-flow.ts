@@ -9,6 +9,7 @@ import { deletePhoneProfile, removeTestUser, type PhoneSession } from "./workos.
 /** One real phone journey: search across groups, then manage membership from both sides. */
 export async function runPhoneGroups(p: {
   screen: Screen;
+  restart: () => Promise<void>;
   enter: (field: Locator, value: string) => Promise<void>;
   shot: (name: string) => Promise<void> | void;
 }) {
@@ -34,6 +35,13 @@ export async function runPhoneGroups(p: {
     await screen.getByRole("button", "Account", { exact: true }).tap();
     await screen.getByRole("button", "Sign out", { exact: true }).tap();
     await expect(screen.getByLabel("Email")).toBeVisible();
+  }
+  async function searchWithoutGroup(formerTitle: string) {
+    await screen.getByLabel("Search", { exact: true }).tap();
+    await p.enter(screen.getByLabel("Search messages"), "Lighthouse");
+    await expect(screen.getByText("1 message")).toBeVisible();
+    await expect(screen.getByRole("button", new RegExp(formerTitle))).not.toBeVisible();
+    await screen.getByRole("button", "Cancel", { exact: true }).tap();
   }
   try {
     const reader = await createPhoneAccount(readerEmail, "Nadia Reader", sessions);
@@ -149,16 +157,25 @@ export async function runPhoneGroups(p: {
     await p.shot("phone-groups-removed-view");
     await screen.getByRole("button", "Remove from my list").tap();
     await expect(removedRow).not.toBeVisible();
-    await screen.getByLabel("Search", { exact: true }).tap();
-    await p.enter(screen.getByLabel("Search messages"), "Lighthouse");
-    await expect(screen.getByText("1 message")).toBeVisible();
-    await expect(
-      screen.getByRole("button", `${title}, Bilal: Lighthouse launch decision`),
-    ).not.toBeVisible();
-    await screen.getByRole("button", "Cancel", { exact: true }).tap();
+    await searchWithoutGroup(title);
     await logout();
     await login(readerEmail);
     await screen.getByRole("button", new RegExp(leaveTitle)).tap();
+    const composer = screen.getByRole("textbox", new RegExp(`^Message ${leaveTitle}`));
+    await p.enter(composer, "Erase this failed leave send");
+    await fetch("http://localhost:8321/__fault", { method: "POST" });
+    await expect(
+      screen.getByText("You're offline. Retry unsent messages when you're back."),
+    ).toBeVisible({ timeout: 30_000 });
+    await screen.getByRole("button", "Send", { exact: true }).tap();
+    await expect(screen.getByRole("button", "Retry", { exact: true })).toBeVisible();
+    await p.enter(composer, "Erase this private leave draft");
+    await expect(composer).toHaveValue("Erase this private leave draft");
+    await p.shot("phone-groups-before-leave-draft");
+    await fetch("http://localhost:8321/__fault", { method: "DELETE" });
+    await expect(
+      screen.getByText("You're offline. Retry unsent messages when you're back."),
+    ).not.toBeVisible({ timeout: 30_000 });
     await screen.getByRole("button", `Group info for ${leaveTitle}`).tap();
     await screen.getByRole("button", "Leave group", { exact: true }).tap();
     await expect(screen.getByText(`Leave ${leaveTitle}?`)).toBeVisible();
@@ -168,11 +185,23 @@ export async function runPhoneGroups(p: {
     await expect(screen.getByRole("button", new RegExp(leaveTitle))).not.toBeVisible();
     if ((await reader.client.query(api.groups.get, { groupId: leaveGroup })) !== null)
       throw new Error("Left group still exposes history");
-    await screen.getByLabel("Search", { exact: true }).tap();
-    await p.enter(screen.getByLabel("Search messages"), "Lighthouse");
-    await expect(screen.getByText("1 message")).toBeVisible();
+    await p.restart();
+    await expect(screen.getByRole("button", "Account", { exact: true })).toBeVisible({
+      timeout: 60_000,
+    });
     await expect(screen.getByRole("button", new RegExp(leaveTitle))).not.toBeVisible();
-    await screen.getByRole("button", "Cancel", { exact: true }).tap();
+    await searchWithoutGroup(leaveTitle);
+    // Re-adding after a process restart makes an unerased durable draft/outbox observable.
+    await peer.client.mutation(api.groups.addMembers, {
+      groupId: leaveGroup,
+      profileIds: [reader.id],
+    });
+    await screen.getByRole("button", new RegExp(leaveTitle)).tap();
+    await expect(composer).toHaveValue("");
+    await expect(screen.getByRole("button", "Retry", { exact: true })).not.toBeVisible();
+    await expect(screen.getByLabel("Nadia: Erase this failed leave send")).not.toBeVisible();
+    await p.shot("phone-groups-after-restart-erased");
+    await screen.getByRole("button", "Back to groups").tap();
     await logout();
     if (target.sequence < 1) throw new Error("Missing search target");
   } finally {

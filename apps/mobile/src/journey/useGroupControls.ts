@@ -1,10 +1,11 @@
 import { api, type Id } from "@q9chat/convex";
-import { useConvexConnectionState, useMutation } from "convex/react";
+import { useConvexConnectionState, useMutation, useQuery } from "convex/react";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useRef, useState } from "react";
 
 import { groupError } from "./groupRules";
 import { createWriteRun, OFFLINE_NOTICE } from "./pendingWrite";
+import { clearGroupText } from "./textStore";
 
 type Notify = "all" | "mentions" | "muted";
 const NOTICES = {
@@ -23,6 +24,7 @@ export function useGroupControls(input: {
   const { groupId, showToast, closeSheet, onLeave } = input;
   const setNotify = useMutation(api.groups.setNotify);
   const leave = useMutation(api.groups.leave);
+  const me = useQuery(api.profiles.me, {});
   const remove = useMutation(api.groups.removeMember);
   const busy = useRef(false);
   const [phase, setPhase] = useState<"idle" | "saving">("idle");
@@ -69,6 +71,11 @@ export function useGroupControls(input: {
         () => remove({ groupId, profileId: person.id }),
         () => showToast(`Removed ${person.name}`),
       ),
-    leave: () => void write(() => leave({ groupId }), onLeave),
+    leave: () =>
+      void write(async () => {
+        await leave({ groupId });
+        // Erasure is part of the write, not its cancellable navigation continuation.
+        if (me?.status === "ready") clearGroupText(me.profile.id, groupId);
+      }, onLeave),
   };
 }

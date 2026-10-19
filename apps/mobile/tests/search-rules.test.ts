@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { historyOpening } from "../src/journey/historyTarget.ts";
-import { searchSequence, splitSearchSnippet } from "../src/journey/searchRules.ts";
+import {
+  retainSearchHits,
+  searchSequence,
+  splitSearchSnippet,
+} from "../src/journey/searchRules.ts";
 
 void test("only positive safe integer message links select a history entry", () => {
   for (const value of [undefined, "", "0", "-1", "1.5", "NaN", "1e2", "01", "9007199254740992"])
@@ -38,4 +42,18 @@ void test("a search destination positions history without moving its unread boun
     target: null,
   });
   assert.equal(historyOpening(group, null).unread, 81);
+});
+
+void test("membership loss discards cached and late search snippets for scoped and all-group searches", () => {
+  const hits = [
+    { groupId: "left", snippet: "private left message" },
+    { groupId: "removed", snippet: "private removed message" },
+    { groupId: "kept", snippet: "still a member" },
+  ];
+  const members = new Set(["kept"]);
+  const retained = retainSearchHits(hits, members);
+  assert.deepEqual(retained, [hits[2]]);
+  assert.deepEqual(retainSearchHits(hits.slice(0, 1), members), []);
+  assert.deepEqual(retainSearchHits(hits, new Set()), []);
+  assert.deepEqual(retainSearchHits(retained, members), retained);
 });

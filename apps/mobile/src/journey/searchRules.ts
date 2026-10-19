@@ -16,3 +16,11 @@ export function splitSearchSnippet(snippet: string, query: string) {
     after: snippet.slice(start + word.length),
   };
 }
+
+/** Never retain snippets from a group outside the current membership set. */
+export function retainSearchHits<Hit extends { groupId: string }>(
+  hits: readonly Hit[],
+  members: ReadonlySet<string>,
+): Hit[] {
+  return hits.filter((hit) => members.has(hit.groupId));
+}

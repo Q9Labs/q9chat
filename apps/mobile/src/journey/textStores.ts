@@ -107,6 +107,15 @@ export function createTextStores(storage: {
       return store;
     },
     clearGroupText: (profile: string, group: string) => clear(profile, group),
+    retainGroupText(this: void, profile: string, groupIds: readonly string[]) {
+      const members = new Set(groupIds);
+      const prefix = `q9-text-${profile}-`;
+      for (const name of new Set([...stores.keys(), ...storage.names()])) {
+        if (!name.startsWith(prefix) || !name.endsWith(".json")) continue;
+        const group = name.slice(prefix.length, -".json".length);
+        if (!members.has(group)) clear(profile, group);
+      }
+    },
     clearAccountText(this: void) {
       if (!owner.exists) return;
       clear(owner.textSync());

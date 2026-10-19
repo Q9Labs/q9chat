@@ -76,3 +76,25 @@ void test("removal clears only that profile's group, on disk and in the cache", 
   assert.equal(registry.textStore("me", "kept").get().draft, "private draft");
   assert.equal(registry.textStore("other", "removed").get().draft, "private draft");
 });
+
+void test("membership reconciliation erases left and removed text after restart, without touching other groups", () => {
+  const storage = memoryStorage();
+  const beforeRestart = createTextStores(storage);
+  beforeRestart.textStore("me", "left").update(saved);
+  beforeRestart.textStore("me", "removed").update(saved);
+  beforeRestart.textStore("me", "kept").update(saved);
+  beforeRestart.textStore("other", "left").update(saved);
+  const current = createTextStores(storage);
+  const left = current.textStore("me", "left");
+  current.retainGroupText("me", ["kept"]);
+  assert.equal(left.update(saved), false);
+  left.error("late callback");
+  assert.deepEqual(left.get(), { draft: "", pending: [], error: "" });
+  assert.equal(storage.files.has("q9-text-me-left.json"), false);
+  assert.equal(storage.files.has("q9-text-me-removed.json"), false);
+  const restarted = createTextStores(storage);
+  assert.deepEqual(restarted.textStore("me", "left").get(), { draft: "", pending: [], error: "" });
+  assert.deepEqual(restarted.textStore("me", "removed").get().pending, []);
+  assert.equal(restarted.textStore("me", "kept").get().draft, saved.draft);
+  assert.equal(restarted.textStore("other", "left").get().draft, saved.draft);
+});

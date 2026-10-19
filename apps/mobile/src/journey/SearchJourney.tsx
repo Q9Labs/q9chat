@@ -30,6 +30,7 @@ export function SearchJourney({ groupId }: { groupId: Id<"groups"> | undefined }
     scopeId,
     scopeLost: scope.lost,
     loadingGroups: !groups,
+    groups,
   });
   const hits =
     status || current?.kind !== "ready"

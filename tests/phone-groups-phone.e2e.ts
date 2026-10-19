@@ -22,6 +22,7 @@ void test(
     await expect(screen.getByLabel("Email")).toBeVisible({ timeout: 120_000 });
     await runPhoneGroups({
       screen,
+      restart: () => app.restart(),
       enter: async (field, value) => {
         await field.focus();
         await expect(screen.getByTestId("inputView")).toBeVisible();
