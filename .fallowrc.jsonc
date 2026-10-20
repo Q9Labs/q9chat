@@ -5,6 +5,7 @@
     "e2e.config.ts",
     "e2e.phone.config.ts",
     "e2e.android.config.ts",
+    "e2e.push.config.ts",
     "tests/*.e2e.ts",
     // The locked native harness starts this real-network fault proxy as a separate process.
     "tests/support/phone-groups-network.ts",
