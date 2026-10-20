@@ -24,6 +24,7 @@
 - **Send attachments from your phone**: Share photos, files and voice notes with upload retry and protected playback. Sign out returns to sign-in even when session cleanup fails.
 - **Use chat in a narrow browser**: Groups, conversations and Group info now use one full-width pane below 720 pixels. Back returns to Groups, and message and recording controls stay within reach.
 - **Phone message actions and account deletion**: Reply with a quote, edit or delete your messages, react, report a message and delete your account from the phone app.
+- **Phone notifications for groups**: Turn on phone notifications after sign-in. Get mentions and replies by default, choose every message for a group, and tap an alert to open its message.
 
 ### Fixed
 

@@ -13,6 +13,7 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect, useMemo, useState } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
+import { PhoneNotificationsProvider } from "../src/journey/PhoneNotifications";
 import { SignOutProvider } from "../src/journey/SignOut";
 import { useStage } from "../src/journey/useStage";
 import { useStageAnswered } from "../src/journey/useStageAnswered";
@@ -99,9 +100,11 @@ export default function RootLayout() {
       <ThemeProvider>
         <SessionProvider>
           <Photos>
-            <SignOutProvider>
-              <Navigator />
-            </SignOutProvider>
+            <PhoneNotificationsProvider>
+              <SignOutProvider>
+                <Navigator />
+              </SignOutProvider>
+            </PhoneNotificationsProvider>
           </Photos>
         </SessionProvider>
       </ThemeProvider>

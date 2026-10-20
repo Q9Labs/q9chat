@@ -12,6 +12,7 @@ import type { SignInMethod } from "../session/contracts";
 import type { Me } from "../types";
 import { profileAvatar } from "./groupRows";
 import { leaveScreen } from "./leaveScreen";
+import { usePhoneNotifications } from "./PhoneNotifications";
 import { phoneWrite } from "./phoneWrite";
 import { photoNoticeOf, pickPhoto, uploadPhoto } from "./photos";
 import { useSignOut } from "./SignOut";
@@ -31,6 +32,7 @@ export function AccountJourney({
 }) {
   const router = useRouter();
   const signOut = useSignOut();
+  const push = usePhoneNotifications();
   const update = useMutation(api.profiles.update);
   const { isWebSocketConnected } = useConvexConnectionState();
   // A photo change in progress is held back like a name change: leaving would drop it.
@@ -79,12 +81,15 @@ export function AccountJourney({
     setDeleting(true);
     editing.clear();
     try {
+      await push.unregister();
       await phoneWrite((client) => client.mutation(api.profiles.deleteAccount, {}));
     } catch {
-      deleteBusy.current = false;
-      setDeleting(false);
+      push.resume();
       showToast("Couldn't delete your account. Try again.");
       return;
+    } finally {
+      deleteBusy.current = false;
+      setDeleting(false);
     }
     signOut.leave();
   }
