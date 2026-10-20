@@ -42,7 +42,7 @@ Set `J8_REAL_IOS=1` for a real iOS delivery attempt after APNs credentials are a
 
 ## Recorded outcome
 
-The Android happy path passed with real Expo/FCM delivery, background and cold-start taps, visible-group suppression, All messages, muted mentions, offline sign-out retry, sign-out unregistration, and account deletion. The Google APIs AVD includes Google Play services.
+The Android happy path passed with real Expo/FCM delivery, background and cold-start taps, visible-group suppression, All messages, muted mentions, offline sign-out retry, removing registration on sign-out, and account deletion. The Google APIs AVD includes Google Play services.
 
 The iOS simulator uses an Xcode-built development client with ad-hoc signing (`CODE_SIGN_IDENTITY=-`, `CODE_SIGNING_ALLOWED=YES`). An unsigned simulator build does not provide the keychain entitlements used by sign-in. No Apple distribution certificate or store release is involved in this simulator build.
 
