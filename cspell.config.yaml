@@ -7,6 +7,8 @@ ignoreRegExpList:
 files:
   - "**/*.{md,mdx,ts,tsx,js,mjs,cjs,json,jsonc,yaml,yml}"
 ignorePaths:
+  # Generated Firebase client identifiers are not prose.
+  - apps/mobile/google-services.json
   - node_modules/**
   - dist/**
   - coverage/**
@@ -90,3 +92,11 @@ words:
   # The mock's screen name for the New group dialog, kept as the gallery state id.
   - newgroup
   - ratelimits
+  # Native push tooling and the Firebase IAM role.
+  - firebasecloudmessaging
+  - lockf
+  - xcrun
+  - simctl
+  - screencap
+  - dumpsys
+  - noredact

@@ -15,6 +15,7 @@ import { View } from "react-native";
 import { Toast } from "../kit/Overlays";
 import { useToast } from "../kit/useToast";
 import { sessionClient } from "../session/client";
+import { usePhoneNotifications } from "./PhoneNotifications";
 import { rememberTextProfile, retainGroupText } from "./textStore";
 
 type SignOutApi = {
@@ -38,6 +39,7 @@ export function useSignOut(): SignOutApi {
  * out" shows there. When the phone cannot forget it, they stay signed in and a toast says so.
  */
 export function SignOutProvider({ children }: { children: ReactNode }) {
+  const push = usePhoneNotifications();
   const { isAuthenticated } = useConvexAuth();
   const me = useQuery(api.profiles.me, isAuthenticated ? {} : "skip");
   const groups = useQuery(api.groups.list, me?.status === "ready" ? {} : "skip");
@@ -60,16 +62,20 @@ export function SignOutProvider({ children }: { children: ReactNode }) {
     const started = ++latest.current;
     setComplete(false);
     setSigningOut(true);
-    void sessionClient
-      .signOut()
+    void push
+      .unregister()
+      .then(() => sessionClient.signOut())
       .then(
         () => {
           if (started === latest.current) setComplete(true);
         },
-        () => showToast("Couldn't sign out. Try again."),
+        () => {
+          push.resume();
+          showToast("Couldn't sign out. Connect and try again.");
+        },
       )
       .finally(() => setSigningOut(false));
-  }, [signingOut, showToast]);
+  }, [signingOut, showToast, push]);
   const clear = useCallback(() => {
     latest.current += 1;
     setComplete(false);

@@ -1,0 +1,12 @@
+[extend]
+useDefault = true
+
+# Firebase client configuration ships inside the app; it is not a server credential.
+# https://firebase.google.com/docs/projects/api-keys
+[[allowlists]]
+targetRules = ["gcp-api-key", "generic-api-key"]
+description = "Public Firebase Android client key, only in its generated client field"
+condition = "AND"
+paths = ['''(?:^|/)apps/mobile/google-services\.json$''']
+regexTarget = "line"
+regexes = ['''^\s*"current_key": "AIza[0-9A-Za-z_-]{35}"\s*$''']

@@ -62,32 +62,20 @@ outcomes:
     title: Get notified only when something needs you
     area: notifications
     state: in_progress
-    summary: Web permission, registration, settings and message links are wired. Native desktop delivery and click proof is blocked by the logged-out M4; phone wiring remains.
+    summary: Web and phone alerts, group settings and message links are built. Desktop delivery and real iPhone delivery still need proof.
     theory: theory.md#calm
     code:
       - apps/web/src/journey/notifications.tsx
       - apps/web/public/notifications.js
       - tests/j8-web.e2e.ts
+      - apps/mobile/src/journey/PhoneNotifications.tsx
+      - tests/j8-push.e2e.ts
     priority: P0
     size: M
-    size_reason: Native desktop proof and phone notification permission, delivery and message destinations remain.
+    size_reason: Desktop delivery and real iPhone delivery checks remain.
     remaining:
       - Prove browser push delivery and notification click-through from a logged-in M4 desktop.
-      - Deliver notifications on the phone and open them at the message.
-
-  - id: mobile.app
-    title: The phone app offers every journey
-    area: mobile
-    state: in_progress
-    summary: The phone supports sign-in, profiles, groups, messages and attachments, search, group controls, quoted replies, message actions and account deletion. Phone notifications still need wiring.
-    theory: theory.md#fast-and-reliable
-    code:
-      - apps/mobile
-    priority: P0
-    size: L
-    size_reason: Phone notifications still need wiring and device checks.
-    remaining:
-      - Deliver phone notifications and open them at the message.
+      - Prove real iPhone notification delivery through APNs on a signed build.
 
   - id: release.first_live
     title: Q9's team uses Q9 Chat on chat.q9labs.ai and TestFlight

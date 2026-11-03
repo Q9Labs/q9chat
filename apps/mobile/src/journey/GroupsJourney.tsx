@@ -3,13 +3,13 @@ import { useQuery } from "convex/react";
 import { useRouter } from "expo-router";
 import { useEffect, useMemo } from "react";
 
-import { noop } from "../kit/noop";
 import { useToast } from "../kit/useToast";
 import { GroupsScreen } from "../screens/GroupsScreen";
 import { config } from "../session/config";
 import { groupRows, profileAvatar } from "./groupRows";
 import { Loading } from "./Loading";
 import { takeNotice } from "./notice";
+import { usePhoneNotifications } from "./PhoneNotifications";
 import { useOffline } from "./useOffline";
 import type { ReadyProfile } from "./useStage";
 import { useToday } from "./useToday";
@@ -17,6 +17,7 @@ import { useToday } from "./useToday";
 /** The live groups list. */
 export function GroupsJourney({ profile }: { profile: ReadyProfile }) {
   const router = useRouter();
+  const push = usePhoneNotifications();
   const groups = useQuery(api.groups.list, {});
   const [toast, showToast] = useToast();
   useEffect(() => {
@@ -36,14 +37,14 @@ export function GroupsJourney({ profile }: { profile: ReadyProfile }) {
       me={profileAvatar(profile, config.siteUrl)}
       rows={groups === undefined ? null : rows}
       offline={offline}
-      showPermissionBanner={false}
-      toast={toast}
+      showPermissionBanner={push.banner}
+      toast={toast ?? push.notice}
       onOpenGroup={(groupId) => router.push({ pathname: "/g/[groupId]", params: { groupId } })}
       onNewGroup={() => router.push("/new-group")}
       onAccount={() => router.push("/account")}
       onSearch={() => router.push("/search")}
-      onNotNow={noop}
-      onTurnOn={noop}
+      onNotNow={push.notNow}
+      onTurnOn={push.turnOn}
     />
   );
 }
