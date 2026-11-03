@@ -25,3 +25,11 @@ pnpm deploy:web
 
 The CI workflow deploys only from `main`. Check `/api/health` and sign in after
 deploying.
+
+## Phone builds
+
+Build and submit from `apps/mobile` with `eas build -p ios|android --profile production`
+and `eas submit --profile production --id <build>`. The iOS submit needs an App
+Store Connect API key in `ascApiKeyPath`, `ascApiKeyId` and `ascApiKeyIssuerId`
+(1Password, Mobile App Releases); keep that path out of Git. Roll back the web
+Worker with `wrangler rollback` to the previous version.
