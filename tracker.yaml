@@ -40,7 +40,7 @@ outcomes:
     title: Create a group or start a group of two
     area: groups
     state: in_progress
-    summary: Group creation, people search, pairs, adding members and joining by invite are wired to the dev backend on web and on the phone. The phone end-to-end test passes on an iOS simulator and an Android emulator. A saved invite survives sign-in once and is then cleared, and a write that may never end (offline) can be left after a warning. An HTTPS invite link does not open the phone app yet.
+    summary: Group creation, people search, pairs, adding members and joining by invite are wired to the dev backend on web and on the phone. The phone end-to-end test passes on an iOS simulator and an Android emulator. A saved invite survives sign-in once and is then cleared, and a write that may never end (offline) can be left after a warning. The Worker serves the app link files and the builds declare the domain, but no device has opened an HTTPS invite link yet.
     theory: theory.md#groups
     code:
       - apps/web/src/journey/groups.tsx
@@ -53,9 +53,9 @@ outcomes:
       - convex/groups.ts
     priority: P0
     size: S
-    size_reason: Only the HTTPS app link and a run on a physical phone remain.
+    size_reason: Only a run on a physical phone remains.
     remaining:
-      - Open the phone app from an HTTPS invite link (iOS associated domains, an Android verified intent filter, and the Worker's apple-app-site-association and assetlinks.json), which needs the Apple team ID and the release certificate from the first EAS build.
+      - Open the phone app from an HTTPS invite link on a physical iPhone and Android phone.
       - Run the group journey on a physical phone.
 
   - id: chat.calm_notifications
@@ -80,15 +80,17 @@ outcomes:
   - id: release.first_live
     title: Q9's team uses Q9 Chat on chat.q9labs.ai and TestFlight
     area: release
-    state: planned
-    summary: Nothing is deployed. A fresh Convex production, the web Worker on chat.q9labs.ai and EAS builds are needed.
+    state: in_progress
+    summary: The web app runs on chat.q9labs.ai against the production Convex deployment utmost-alligator-175, and serves apple-app-site-association and assetlinks.json. iOS build 9 is in TestFlight for the Q9 group and Android version code 6 is on the Play internal track, both with phone notifications and app links. The Q9 TestFlight group has four testers who are invited but have not accepted, and the Play internal track has no testers added yet.
     theory: theory.md#stack
-    code: []
+    code:
+      - apps/web/wrangler.jsonc
+      - apps/web/src/lib/app-links.ts
+      - apps/mobile/eas.json
+      - docs/runbooks/deploy.md
     priority: P0
-    size: M
-    size_reason: Production setup across Convex, Cloudflare, sign-in providers and EAS, each needing Hasan's approval.
+    size: S
+    size_reason: Only tester access and checks on real devices remain.
     remaining:
-      - Create the Convex production and set its settings.
-      - Deploy the web app to chat.q9labs.ai and allow it in the production WorkOS environment.
-      - Build with EAS and submit to TestFlight and Play internal testing.
-      - Serve apple-app-site-association and assetlinks.json from the Worker with the first build's team ID and certificate, so HTTPS invite links open the phone app.
+      - Add the Q9 team to the Play internal testing list in Play Console and share the opt-in link.
+      - Confirm a TestFlight tester installs build 9, receives a push and opens an HTTPS invite link in the app.
