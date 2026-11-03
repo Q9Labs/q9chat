@@ -21,6 +21,11 @@ ignorePaths:
   - convex/_generated/**
 words:
   - APP
+  - applinks
+  - assetlinks
+  - BROWSABLE
+  - Dotjson
+  - Dotwell
   - AuthKit
   - WorkOS
   - chdir
