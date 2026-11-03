@@ -25,6 +25,7 @@
 - **Use chat in a narrow browser**: Groups, conversations and Group info now use one full-width pane below 720 pixels. Back returns to Groups, and message and recording controls stay within reach.
 - **Phone message actions and account deletion**: Reply with a quote, edit or delete your messages, react, report a message and delete your account from the phone app.
 - **Phone notifications for groups**: Turn on phone notifications after sign-in. Get mentions and replies by default, choose every message for a group, and tap an alert to open its message.
+- **Invite and message links open the phone app**: Q9 Chat links to invites and groups now open the phone app when it is installed.
 
 ### Fixed
 

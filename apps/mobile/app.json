@@ -10,12 +10,24 @@
     "ios": {
       "bundleIdentifier": "ai.q9labs.chat",
       "supportsTablet": false,
+      "associatedDomains": ["applinks:chat.q9labs.ai"],
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
       "package": "ai.q9labs.chat",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            { "scheme": "https", "host": "chat.q9labs.ai", "pathPrefix": "/join/" },
+            { "scheme": "https", "host": "chat.q9labs.ai", "pathPrefix": "/g/" }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "monochromeImage": "./assets/adaptive-monochrome.png",

@@ -11,6 +11,8 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as GalleryRouteImport } from './routes/gallery'
+import { Route as DotwellKnownAppleAppSiteAssociationRouteImport } from './routes/[.]well-known/apple-app-site-association'
+import { Route as DotwellKnownAssetlinksDotjsonRouteImport } from './routes/[.]well-known/assetlinks[.]json'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as AuthErrorRouteImport } from './routes/auth/error'
 import { Route as AuthPhoneCallbackRouteImport } from './routes/auth/phone-callback'
@@ -34,6 +36,18 @@ const GalleryRoute = GalleryRouteImport.update({
   path: '/gallery',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DotwellKnownAppleAppSiteAssociationRoute =
+  DotwellKnownAppleAppSiteAssociationRouteImport.update({
+    id: '/.well-known/apple-app-site-association',
+    path: '/.well-known/apple-app-site-association',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const DotwellKnownAssetlinksDotjsonRoute =
+  DotwellKnownAssetlinksDotjsonRouteImport.update({
+    id: '/.well-known/assetlinks.json',
+    path: '/.well-known/assetlinks.json',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiHealthRoute = ApiHealthRouteImport.update({
   id: '/api/health',
   path: '/api/health',
@@ -98,6 +112,8 @@ const ApiAuthOauthExchangeRoute = ApiAuthOauthExchangeRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/gallery': typeof GalleryRoute
+  '/.well-known/apple-app-site-association': typeof DotwellKnownAppleAppSiteAssociationRoute
+  '/.well-known/assetlinks.json': typeof DotwellKnownAssetlinksDotjsonRoute
   '/api/health': typeof ApiHealthRoute
   '/auth/error': typeof AuthErrorRoute
   '/auth/phone-callback': typeof AuthPhoneCallbackRoute
@@ -114,6 +130,8 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/gallery': typeof GalleryRoute
+  '/.well-known/apple-app-site-association': typeof DotwellKnownAppleAppSiteAssociationRoute
+  '/.well-known/assetlinks.json': typeof DotwellKnownAssetlinksDotjsonRoute
   '/api/health': typeof ApiHealthRoute
   '/auth/error': typeof AuthErrorRoute
   '/auth/phone-callback': typeof AuthPhoneCallbackRoute
@@ -131,6 +149,8 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/gallery': typeof GalleryRoute
+  '/.well-known/apple-app-site-association': typeof DotwellKnownAppleAppSiteAssociationRoute
+  '/.well-known/assetlinks.json': typeof DotwellKnownAssetlinksDotjsonRoute
   '/api/health': typeof ApiHealthRoute
   '/auth/error': typeof AuthErrorRoute
   '/auth/phone-callback': typeof AuthPhoneCallbackRoute
@@ -149,6 +169,8 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/gallery'
+    | '/.well-known/apple-app-site-association'
+    | '/.well-known/assetlinks.json'
     | '/api/health'
     | '/auth/error'
     | '/auth/phone-callback'
@@ -165,6 +187,8 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/gallery'
+    | '/.well-known/apple-app-site-association'
+    | '/.well-known/assetlinks.json'
     | '/api/health'
     | '/auth/error'
     | '/auth/phone-callback'
@@ -181,6 +205,8 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/gallery'
+    | '/.well-known/apple-app-site-association'
+    | '/.well-known/assetlinks.json'
     | '/api/health'
     | '/auth/error'
     | '/auth/phone-callback'
@@ -198,6 +224,8 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   GalleryRoute: typeof GalleryRoute
+  DotwellKnownAppleAppSiteAssociationRoute: typeof DotwellKnownAppleAppSiteAssociationRoute
+  DotwellKnownAssetlinksDotjsonRoute: typeof DotwellKnownAssetlinksDotjsonRoute
   ApiHealthRoute: typeof ApiHealthRoute
   AuthErrorRoute: typeof AuthErrorRoute
   AuthPhoneCallbackRoute: typeof AuthPhoneCallbackRoute
@@ -226,6 +254,20 @@ declare module '@tanstack/react-router' {
       path: '/gallery'
       fullPath: '/gallery'
       preLoaderRoute: typeof GalleryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/.well-known/apple-app-site-association': {
+      id: '/.well-known/apple-app-site-association'
+      path: '/.well-known/apple-app-site-association'
+      fullPath: '/.well-known/apple-app-site-association'
+      preLoaderRoute: typeof DotwellKnownAppleAppSiteAssociationRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/.well-known/assetlinks.json': {
+      id: '/.well-known/assetlinks.json'
+      path: '/.well-known/assetlinks.json'
+      fullPath: '/.well-known/assetlinks.json'
+      preLoaderRoute: typeof DotwellKnownAssetlinksDotjsonRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/health': {
@@ -318,6 +360,9 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   GalleryRoute: GalleryRoute,
+  DotwellKnownAppleAppSiteAssociationRoute:
+    DotwellKnownAppleAppSiteAssociationRoute,
+  DotwellKnownAssetlinksDotjsonRoute: DotwellKnownAssetlinksDotjsonRoute,
   ApiHealthRoute: ApiHealthRoute,
   AuthErrorRoute: AuthErrorRoute,
   AuthPhoneCallbackRoute: AuthPhoneCallbackRoute,
