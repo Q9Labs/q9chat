@@ -13,14 +13,47 @@
     },
     {
       "ecosystem": "npm",
-      "id": "GHSA-86w9-cpqp-85rv",
-      "package": "node-forge",
+      "id": "GHSA-gcqx-w48m-w2h4",
+      "package": "deepmerge",
+      "severity": "LOW",
+      "source": "pnpm-lock.yaml",
+      "summary": "deepmerge mergeObject() allows prototype poisoning of returned objects",
+      "version": "4.3.1",
+      "acceptedAt": "2026-11-03T10:00:00.000Z",
+      "message": "deepmerge@4.3.1 (GHSA-gcqx-w48m-w2h4): deepmerge publishes no fixed 4.x release. It is a build-time dependency of the Expo CLI and never ships in the phone, web or Convex bundles. Remove when the Expo or eslint toolchain moves to a fixed release."
+    },
+    {
+      "ecosystem": "npm",
+      "id": "GHSA-3g3m-2fjr-6pw4",
+      "package": "glob",
+      "severity": "MODERATE",
+      "source": "pnpm-lock.yaml",
+      "summary": "Glob: AbortSignal cancellation bypass allows post-timeout filesystem traversal",
+      "version": "13.0.6",
+      "acceptedAt": "2026-11-03T10:00:00.000Z",
+      "message": "glob@13.0.6 (GHSA-3g3m-2fjr-6pw4): the fix needs glob 14, a major version the Expo CLI does not accept. It is a build-time dependency of the Expo CLI and never ships in the phone, web or Convex bundles. Remove when the Expo or eslint toolchain moves to a fixed release."
+    },
+    {
+      "ecosystem": "npm",
+      "id": "GHSA-g3hv-75wg-m249",
+      "package": "minimatch",
+      "severity": "MODERATE",
+      "source": "pnpm-lock.yaml",
+      "summary": "minimatch has potential denial of service via globparts amplification",
+      "version": "10.2.6",
+      "acceptedAt": "2026-11-03T10:00:00.000Z",
+      "message": "minimatch@10.2.6 (GHSA-g3hv-75wg-m249): the fix needs minimatch 11, a major version eslint does not accept. It is a development-only dependency of react-doctor through eslint and never ships in the phone, web or Convex bundles. Remove when the Expo or eslint toolchain moves to a fixed release."
+    },
+    {
+      "ecosystem": "npm",
+      "id": "GHSA-mrhx-c7xc-m3w5",
+      "package": "zod",
       "severity": "HIGH",
       "source": "pnpm-lock.yaml",
-      "summary": "node-forge RSA PKCS#1 v1.5 signature verification accepts extra nested DigestAlgorithm elements",
-      "version": "1.4.0",
-      "acceptedAt": "2026-10-18T15:00:00.000Z",
-      "message": "node-forge@1.4.0 (GHSA-86w9-cpqp-85rv) has no fixed release; it is a development-only dependency of the Expo CLI (local dev-server certificates) and never ships in the phone, web or Convex bundles. Remove when node-forge publishes a fix."
+      "summary": "Zod can exhaust memory while validating oversized constrained collections",
+      "version": "3.25.76",
+      "acceptedAt": "2026-11-03T10:00:00.000Z",
+      "message": "zod@3.25.76 (GHSA-mrhx-c7xc-m3w5): the fix needs zod 4. It is a build-time dependency of the Expo CLI and never ships in the phone, web or Convex bundles. Remove when the Expo or eslint toolchain moves to a fixed release."
     }
   ]
 }
