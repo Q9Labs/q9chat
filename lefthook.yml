@@ -1,4 +1,11 @@
+# Commit-time checks stay under a few seconds: the secret scan and the lanes that cost about a second.
+# Typecheck, tests, build and the slow scanners run in CI (`q9gate run --base origin/main`).
 pre-commit:
+  parallel: true
   commands:
+    secrets:
+      run: |
+        command -v gitleaks >/dev/null || { echo "gitleaks is not installed; run: brew install gitleaks" >&2; exit 1; }
+        gitleaks git --staged --redact --no-banner
     gate:
-      run: pnpm tracker:check && pnpm changelog:check && ./node_modules/.bin/q9gate run --staged
+      run: pnpm tracker:check && pnpm changelog:check && ./node_modules/.bin/q9gate run --staged --lane format --lane lint --lane hygiene --lane test-presence --lane syncpack
